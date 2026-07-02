@@ -242,3 +242,9 @@ Fee Collection Workflow Improvements completed:
 - Save & Print autoprint
 - Tests 21/21 passed
 - Desktop DB counts still 1213/364/849
+
+## Goal 3: Mobile Phase 1 (PWA)
+- Added manifest.webmanifest with theme color #004d40 and standalone display.
+- Added service-worker.js with static-cache-first and network-first strategies.
+- Updated core/urls.py and base.html to serve PWA components at root scope.
+- Verified mobile responsiveness for main pages.

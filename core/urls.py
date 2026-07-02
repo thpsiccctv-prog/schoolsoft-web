@@ -2,9 +2,15 @@ from django.urls import path
 
 from . import views
 
+from django.views.generic import TemplateView
+
 app_name = "core"
 
 urlpatterns = [
+    # PWA files
+    path("manifest.webmanifest", TemplateView.as_view(template_name="core/manifest.webmanifest", content_type="application/manifest+json"), name="manifest"),
+    path("service-worker.js", TemplateView.as_view(template_name="core/service-worker.js", content_type="application/javascript"), name="service_worker"),
+    
     path("", views.dashboard, name="dashboard"),
     path("school-profile/", views.school_profile_detail, name="school_profile_detail"),
     path("fee-structure/", views.fee_structure_report, name="fee_structure_report"),

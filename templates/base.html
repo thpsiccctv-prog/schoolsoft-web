@@ -4,6 +4,8 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#004d40">
+    <link rel="manifest" href="{% url 'core:manifest' %}">
     <title>{% block title %}SchoolSoft — THPS English Medium School{% endblock %}</title>
     <link rel="stylesheet" href="{% static 'core/styles.css' %}">
 </head>
@@ -118,6 +120,17 @@
         }
     });
 })();
+</script>
+<script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+            navigator.serviceWorker.register('{% url "core:service_worker" %}').then(function(registration) {
+                console.log('ServiceWorker registration successful with scope: ', registration.scope);
+            }, function(err) {
+                console.log('ServiceWorker registration failed: ', err);
+            });
+        });
+    }
 </script>
 {% block scripts %}{% endblock %}
 </body>
