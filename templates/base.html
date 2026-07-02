@@ -11,7 +11,7 @@
 <div class="app">
     <aside class="sidebar">
         <div class="brand">
-            <div class="brand-mark">TH</div>
+            <img class="brand-mark" src="{% static 'core/school_logo.png' %}" alt="THPS logo">
             <div class="brand-text">
                 <strong>THPS English Medium School</strong>
                 <span>Dudahi, Kushinagar</span>
@@ -19,16 +19,17 @@
         </div>
 
         <nav class="side-nav" aria-label="Primary">
-            <a href="{% url 'core:dashboard' %}">Dashboard</a>
-            <a href="{% url 'core:student_list' %}">Students</a>
-            <a href="{% url 'core:receipt_list' %}">Receipts</a>
-            <a href="{% url 'core:due_report' %}">Dues</a>
-            <a href="{% url 'core:collection_report' %}">Collection</a>
-            <a href="{% url 'core:marks_report' %}">Marks</a>
-            <a href="{% url 'core:fee_structure_report' %}">Fee Setup</a>
-            <a href="{% url 'core:staff_list' %}">Staff</a>
-            <a href="{% url 'core:transport_list' %}">Transport</a>
-            <a href="{% url 'core:school_profile_detail' %}">School Profile</a>
+            <a href="{% url 'core:dashboard' %}"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M9 20v-6h6v6"/></svg></span><span>Dashboard</span></a>
+            <a href="{% url 'core:receipt_create' %}"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M5 3h14v18l-2-1-2 1-2-1-2 1-2-1-2 1-2-1z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg></span><span>Fee Collection</span></a>
+            <a href="{% url 'core:receipt_list' %}"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M7 3h10v18H7z"/><path d="M10 7h4M10 11h4M10 15h3"/></svg></span><span>Receipts</span></a>
+            <a href="{% url 'core:due_report' %}"><span class="nav-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></span><span>Dues</span></a>
+            <a href="{% url 'core:student_list' %}"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M22 10 12 5 2 10l10 5 10-5z"/><path d="M6 12v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5"/></svg></span><span>Students</span></a>
+            <a href="{% url 'core:marks_report' %}"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 19V5h16v14z"/><path d="M8 15l3-4 2 2 3-5"/></svg></span><span>Marks</span></a>
+            <a href="{% url 'core:collection_report' %}"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg></span><span>Collection</span></a>
+            <a href="{% url 'core:fee_structure_report' %}"><span class="nav-icon"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg></span><span>Fee Setup</span></a>
+            <a href="{% url 'core:staff_list' %}"><span class="nav-icon"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="4"/><path d="M2 21c0-3.9 3.1-7 7-7s7 3.1 7 7"/><path d="M16 4c2.5.8 4 3.1 4 6"/></svg></span><span>Staff</span></a>
+            <a href="{% url 'core:transport_list' %}"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 4h16v11H4z"/><path d="M4 11h16"/><circle cx="8" cy="18.5" r="1.8"/><circle cx="16" cy="18.5" r="1.8"/></svg></span><span>Transport</span></a>
+            <a href="{% url 'core:school_profile_detail' %}"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-4h6v4"/></svg></span><span>School Profile</span></a>
         </nav>
 
         <div class="side-foot">
@@ -39,14 +40,25 @@
 
     <div class="main">
         <header class="main-topbar">
-            <button type="button" class="back-btn" onclick="history.back()"
-                    title="Go back" aria-label="Go back">&#8592; Back</button>
-            <span class="topbar-note">Student, fee, reports &amp; records workspace</span>
+            <div class="topbar-left">
+                <button type="button" class="back-btn" onclick="history.back()"
+                        title="Go back" aria-label="Go back">&#8592; Back (Esc)</button>
+                <span class="topbar-kicker">/ Search</span>
+            </div>
+            <div class="topbar-status" aria-label="Workspace status">
+                <span>Session 2026-27</span>
+                <span>F9 Save</span>
+            </div>
         </header>
 
         <main class="page">
             {% block content %}{% endblock %}
         </main>
+        <footer class="desktop-statusbar">
+            <span>SchoolSoft v1.x</span>
+            <span>Data: LOCALAPPDATA\SchoolSoft</span>
+            <span>Ctrl + scroll = zoom</span>
+        </footer>
     </div>
 </div>
 
@@ -62,6 +74,49 @@
         }
     });
     if (best) { best.classList.add("active"); }
+
+    var backButton = document.querySelector(".back-btn");
+    if (backButton && path === "/") {
+        backButton.hidden = true;
+    }
+
+    var searchHint = document.querySelector(".topbar-kicker");
+    if (searchHint && !document.querySelector("input[type='search'], [data-student-filter]")) {
+        searchHint.hidden = true;
+    }
+
+    var saveHint = document.querySelector(".topbar-status span:last-child");
+    if (saveHint && !document.querySelector(".classic-fee-form")) {
+        saveHint.hidden = true;
+    }
+
+    document.addEventListener("keydown", function (event) {
+        var target = event.target;
+        var isTyping = target && ["INPUT", "SELECT", "TEXTAREA"].indexOf(target.tagName) !== -1;
+
+        if (event.key === "Escape" && path !== "/") {
+            event.preventDefault();
+            history.back();
+            return;
+        }
+
+        if (event.key === "/" && !isTyping) {
+            var search = document.querySelector("input[type='search'], [data-student-filter]");
+            if (search) {
+                event.preventDefault();
+                search.focus();
+            }
+            return;
+        }
+
+        if (event.key === "F9") {
+            var feeForm = document.querySelector(".classic-fee-form");
+            if (feeForm) {
+                event.preventDefault();
+                feeForm.requestSubmit();
+            }
+        }
+    });
 })();
 </script>
 {% block scripts %}{% endblock %}

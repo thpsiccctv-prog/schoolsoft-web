@@ -1,19 +1,22 @@
 {% extends "base.html" %}
 {% load static %}
 
-{% block title %}New Fee Receipt | SchoolSoft Modernization{% endblock %}
+{% block title %}Fee Collection | SchoolSoft{% endblock %}
 
 {% block content %}
-<section class="section">
-    <div class="section-heading with-actions">
+<section class="section fee-desk">
+    <div class="classic-titlebar">
         <div>
-            <h2>New Fee Receipt</h2>
-            <p>Create a manual receipt in the new system.</p>
+            <strong>Fee Collection Master</strong>
+            <span>Manual receipt entry, fee heads, payment and recent register</span>
         </div>
-        <a class="button secondary" href="{% url 'core:receipt_list' %}">Back</a>
+        <div class="classic-title-actions">
+            <a class="mini-button" href="{% url 'core:receipt_list' %}">Receipt Register</a>
+            <a class="mini-button" href="{% url 'core:collection_report' %}">Collection Report</a>
+        </div>
     </div>
 
-    <form class="entry-form" method="post" data-fee-defaults-url-template="/api/students/__student__/fee-defaults/">
+    <form class="entry-form classic-fee-form" method="post" data-fee-defaults-url-template="/api/students/__student__/fee-defaults/">
         {% csrf_token %}
 
         {% if receipt_form.non_field_errors or line_form.non_field_errors %}
@@ -23,48 +26,146 @@
             </div>
         {% endif %}
 
-        <section class="form-panel">
-            <h3>Receipt Details</h3>
-            <label class="student-filter">
-                <span>Student Search</span>
-                <input class="form-control" type="search" data-student-filter placeholder="Type name, SID, admission no, class">
-            </label>
-            <div class="form-grid">
-                {% for field in receipt_form %}
-                    <label>
-                        <span>{{ field.label }}</span>
-                        {{ field }}
-                        {% if field.errors %}<small>{{ field.errors|striptags }}</small>{% endif %}
-                    </label>
-                {% endfor %}
-            </div>
-        </section>
+        <div class="fee-workbench">
+            <div class="fee-left-stack">
+                <section class="classic-panel student-console">
+                    <div class="classic-panel-title">Student & Receipt</div>
+                    <div class="student-filter classic-search">
+                        <label for="student-filter-box">Student Search</label>
+                        <input id="student-filter-box" class="form-control" type="search" data-student-filter placeholder="Name, SID, admission no, class">
+                    </div>
 
-        <section class="form-panel">
-            <div class="section-heading with-actions compact-row">
-                <h3>Fee Heads</h3>
-                <div class="total-strip" aria-live="polite">
-                    <span>Fee <strong data-fee-total>0.00</strong></span>
-                    <span>Net <strong data-net-total>0.00</strong></span>
-                    <span>Due <strong data-due-total>0.00</strong></span>
+                    <div class="receipt-main-grid">
+                        <label class="wide-field">
+                            <span>{{ receipt_form.student.label }}</span>
+                            {{ receipt_form.student }}
+                            {% if receipt_form.student.errors %}<small>{{ receipt_form.student.errors|striptags }}</small>{% endif %}
+                        </label>
+                        <label>
+                            <span>{{ receipt_form.session.label }}</span>
+                            {{ receipt_form.session }}
+                            {% if receipt_form.session.errors %}<small>{{ receipt_form.session.errors|striptags }}</small>{% endif %}
+                        </label>
+                        <label>
+                            <span>{{ receipt_form.receipt_date.label }}</span>
+                            {{ receipt_form.receipt_date }}
+                            {% if receipt_form.receipt_date.errors %}<small>{{ receipt_form.receipt_date.errors|striptags }}</small>{% endif %}
+                        </label>
+                        <label>
+                            <span>{{ receipt_form.from_month.label }}</span>
+                            {{ receipt_form.from_month }}
+                            {% if receipt_form.from_month.errors %}<small>{{ receipt_form.from_month.errors|striptags }}</small>{% endif %}
+                        </label>
+                        <label>
+                            <span>{{ receipt_form.to_month.label }}</span>
+                            {{ receipt_form.to_month }}
+                            {% if receipt_form.to_month.errors %}<small>{{ receipt_form.to_month.errors|striptags }}</small>{% endif %}
+                        </label>
+                        <label>
+                            <span>{{ receipt_form.payment_mode.label }}</span>
+                            {{ receipt_form.payment_mode }}
+                            {% if receipt_form.payment_mode.errors %}<small>{{ receipt_form.payment_mode.errors|striptags }}</small>{% endif %}
+                        </label>
+                    </div>
+
+                    <div class="selected-student-card" data-student-summary>
+                        <strong>Select a student</strong>
+                        <span>Fee structure will load automatically after selection.</span>
+                    </div>
+                </section>
+
+                <section class="classic-panel">
+                    <div class="classic-panel-title">Fee Heads</div>
+                    <div class="fee-head-grid classic-fee-heads">
+                        {% for field in line_form %}
+                            <label>
+                                <span>{{ field.label }}</span>
+                                {{ field }}
+                                {% if field.errors %}<small>{{ field.errors|striptags }}</small>{% endif %}
+                            </label>
+                        {% endfor %}
+                    </div>
+                </section>
+            </div>
+
+            <section class="classic-panel totals-console">
+                <div class="classic-panel-title">Payable</div>
+                <div class="pay-total-row">
+                    <span>Fees</span>
+                    <strong data-fee-total>0.00</strong>
                 </div>
-            </div>
-            <div class="fee-head-grid">
-                {% for field in line_form %}
-                    <label>
-                        <span>{{ field.label }}</span>
-                        {{ field }}
-                        {% if field.errors %}<small>{{ field.errors|striptags }}</small>{% endif %}
-                    </label>
-                {% endfor %}
-            </div>
-        </section>
-
-        <div class="form-actions">
-            <button type="submit">Save Receipt</button>
-            <a class="button secondary" href="{% url 'core:receipt_list' %}">Cancel</a>
+                <label>
+                    <span>{{ receipt_form.concession_amount.label }}</span>
+                    {{ receipt_form.concession_amount }}
+                    {% if receipt_form.concession_amount.errors %}<small>{{ receipt_form.concession_amount.errors|striptags }}</small>{% endif %}
+                </label>
+                <label>
+                    <span>{{ receipt_form.late_fee_amount.label }}</span>
+                    {{ receipt_form.late_fee_amount }}
+                    {% if receipt_form.late_fee_amount.errors %}<small>{{ receipt_form.late_fee_amount.errors|striptags }}</small>{% endif %}
+                </label>
+                <div class="pay-total-row net">
+                    <span>Net Total</span>
+                    <strong data-net-total>0.00</strong>
+                </div>
+                <label>
+                    <span>{{ receipt_form.received_amount.label }}</span>
+                    {{ receipt_form.received_amount }}
+                    {% if receipt_form.received_amount.errors %}<small>{{ receipt_form.received_amount.errors|striptags }}</small>{% endif %}
+                </label>
+                <div class="pay-total-row due">
+                    <span>Due</span>
+                    <strong data-due-total>0.00</strong>
+                </div>
+                <label>
+                    <span>{{ receipt_form.remarks.label }}</span>
+                    {{ receipt_form.remarks }}
+                    {% if receipt_form.remarks.errors %}<small>{{ receipt_form.remarks.errors|striptags }}</small>{% endif %}
+                </label>
+                <button class="save-print-button" type="submit">Save Receipt (F9)</button>
+                <a class="button secondary block-button" href="{% url 'core:receipt_list' %}">Cancel</a>
+            </section>
         </div>
     </form>
+
+    <section class="classic-panel recent-register">
+        <div class="classic-panel-title">Recent Receipts</div>
+        <div class="classic-summary-strip">
+            <span>Today receipts <strong>{{ today_totals.count|default:"0" }}</strong></span>
+            <span>Today received <strong>{{ today_totals.received|default:"0" }}</strong></span>
+            <span>Today due <strong>{{ today_totals.due|default:"0" }}</strong></span>
+        </div>
+        <div class="table-wrap compact-table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Receipt</th>
+                        <th>Date</th>
+                        <th>Student</th>
+                        <th>Class</th>
+                        <th>Paid</th>
+                        <th>Due</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for receipt in recent_receipts %}
+                        <tr>
+                            <td><a class="table-link" href="{% url 'core:receipt_detail' receipt.id %}">{{ receipt.receipt_no }}</a></td>
+                            <td>{{ receipt.receipt_date|date:"d-m-Y" }}</td>
+                            <td>{{ receipt.student.full_name }}</td>
+                            <td>{{ receipt.student.current_class|default:"" }}{% if receipt.student.current_section %}-{{ receipt.student.current_section.name }}{% endif %}</td>
+                            <td class="amount">{{ receipt.received_amount }}</td>
+                            <td class="amount{% if receipt.legacy_due_amount > 0 %} due-amount{% endif %}">{{ receipt.legacy_due_amount }}</td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="6">No receipts yet.</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
 </section>
 {% endblock %}
 

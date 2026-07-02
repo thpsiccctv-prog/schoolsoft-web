@@ -11,6 +11,7 @@
     function setupStudentFilter() {
         var filter = document.querySelector("[data-student-filter]");
         var select = document.querySelector("#id_student");
+        var summary = document.querySelector("[data-student-summary]");
         if (!filter || !select) {
             return;
         }
@@ -39,6 +40,32 @@
                 select.appendChild(node);
             });
         });
+
+        function updateSummary() {
+            if (!summary) {
+                return;
+            }
+
+            var selected = select.options[select.selectedIndex];
+            if (!selected || !selected.value) {
+                summary.innerHTML = "<strong>Select a student</strong><span>Fee structure will load automatically after selection.</span>";
+                return;
+            }
+
+            var label = selected.textContent || "";
+            var name = label;
+            var details = "";
+            var match = label.match(/^(.*)\s+\((.*)\)$/);
+            if (match) {
+                name = match[1];
+                details = match[2];
+            }
+
+            summary.innerHTML = "<strong>" + name + "</strong><span>" + details + "</span><em>Ready for fee entry</em>";
+        }
+
+        select.addEventListener("change", updateSummary);
+        updateSummary();
     }
 
     function setupTotals() {
@@ -116,6 +143,12 @@
                             input.dispatchEvent(new Event("input", {bubbles: true}));
                         }
                     });
+
+                    var summary = document.querySelector("[data-student-summary]");
+                    if (summary && data.student) {
+                        var section = data.section ? "-" + data.section : "";
+                        summary.innerHTML = "<strong>" + data.student + "</strong><span>Class " + (data.class || "") + section + "</span><em>Fee loaded</em>";
+                    }
                 })
                 .catch(function () {
                     // Keep manual entry usable if defaults are unavailable.

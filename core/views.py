@@ -46,8 +46,20 @@ def dashboard(request):
     audit_dir = settings.BASE_DIR.parent / "migration_audit"
     school7_tables = audit_dir / "school7_mdb" / "tables_summary.csv"
     school7_columns = audit_dir / "school7_mdb" / "columns_summary.csv"
+    today = timezone.localdate()
+    today_receipts = FeeReceipt.objects.filter(receipt_date=today)
+    today_totals = today_receipts.aggregate(received=Sum("received_amount"))
+    total_dues = FeeReceipt.objects.aggregate(due=Sum("legacy_due_amount"))
 
     context = {
+        "today": today,
+        "active_session": AcademicSession.objects.filter(is_active=True).order_by("-starts_on", "name").first(),
+        "dashboard_kpis": [
+            ("Today's Collection", today_totals["received"] or Decimal("0.00"), "success"),
+            ("Receipts Today", today_receipts.count(), "info"),
+            ("Total Dues", total_dues["due"] or Decimal("0.00"), "danger"),
+            ("Active Students", Student.objects.filter(is_active=True).count(), "neutral"),
+        ],
         "stats": [
             ("Students", Student.objects.count()),
             ("Classes", SchoolClass.objects.count()),
@@ -441,6 +453,17 @@ def get_due_report_rows(request):
 
 
 def receipt_create(request):
+    recent_receipts = FeeReceipt.objects.select_related(
+        "student",
+        "student__current_class",
+        "student__current_section",
+    ).order_by("-receipt_date", "-id")[:8]
+    today_totals = FeeReceipt.objects.filter(receipt_date=timezone.localdate()).aggregate(
+        received=Sum("received_amount"),
+        due=Sum("legacy_due_amount"),
+        count=Count("id"),
+    )
+
     if request.method == "POST":
         receipt_form = FeeReceiptEntryForm(request.POST)
         line_form = FeeReceiptLineEntryForm(request.POST)
@@ -472,6 +495,8 @@ def receipt_create(request):
         {
             "receipt_form": receipt_form,
             "line_form": line_form,
+            "recent_receipts": recent_receipts,
+            "today_totals": today_totals,
         },
     )
 

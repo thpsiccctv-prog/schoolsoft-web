@@ -69,6 +69,7 @@ exe = EXE(
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
+    icon=r'D:\english medium\schoolsoft_web\static\core\schoolsoft.ico',
     codesign_identity=None,
     entitlements_file=None,
 )

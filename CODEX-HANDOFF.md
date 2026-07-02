@@ -39,6 +39,12 @@ Tests: 21/21 pass (`manage.py test`).
 
 - EXE was GUI-tested end to end today (dashboard, students, receipts, dues, marks, back button, PDF downloads all verified working).
 
+- School logo/icon update:
+  - Source logo came from `D:\2025-2026 board exam\SCHOOL PHOTO\logo.jpeg`.
+  - App assets generated: `static/core/school_logo.png` and `static/core/schoolsoft.ico`.
+  - Sidebar brand mark uses the real THPS logo image instead of the old text-only `TH` mark.
+  - `SchoolSoft.spec` sets `icon='static/core/schoolsoft.ico'`, so rebuilt EXEs and shortcuts can show the school logo.
+
 ## settings.py key points
 
 - SQLite path via `SCHOOLSOFT_SQLITE_PATH` env (desktop sets it); `OPTIONS: {timeout: 20}` (waitress is multithreaded; prevents "database is locked").
