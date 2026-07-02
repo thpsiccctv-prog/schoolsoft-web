@@ -9,3 +9,6 @@ dist/
 *.egg-info/
 *.log
 debug-scripts/
+data.json
+git-out.txt
+*-out.txt

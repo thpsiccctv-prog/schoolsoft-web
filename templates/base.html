@@ -4,34 +4,66 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{% block title %}SchoolSoft Modernization{% endblock %}</title>
+    <title>{% block title %}SchoolSoft — THPS English Medium School{% endblock %}</title>
     <link rel="stylesheet" href="{% static 'core/styles.css' %}">
 </head>
 <body>
-    <header class="topbar">
-        <button type="button" class="back-btn" onclick="history.back()"
-                title="Go back" aria-label="Go back">&#8592; Back</button>
-        <div>
-            <h1>SchoolSoft Modernization</h1>
-            <p>Student, fee, reports, and migration workspace</p>
+<div class="app">
+    <aside class="sidebar">
+        <div class="brand">
+            <div class="brand-mark">TH</div>
+            <div class="brand-text">
+                <strong>THPS English Medium School</strong>
+                <span>Dudahi, Kushinagar</span>
+            </div>
         </div>
-        <nav class="topnav" aria-label="Primary">
+
+        <nav class="side-nav" aria-label="Primary">
             <a href="{% url 'core:dashboard' %}">Dashboard</a>
-            <a href="{% url 'core:school_profile_detail' %}">School</a>
             <a href="{% url 'core:student_list' %}">Students</a>
-            <a href="{% url 'core:fee_structure_report' %}">Fee Setup</a>
-            <a href="{% url 'core:marks_report' %}">Marks</a>
             <a href="{% url 'core:receipt_list' %}">Receipts</a>
             <a href="{% url 'core:due_report' %}">Dues</a>
             <a href="{% url 'core:collection_report' %}">Collection</a>
+            <a href="{% url 'core:marks_report' %}">Marks</a>
+            <a href="{% url 'core:fee_structure_report' %}">Fee Setup</a>
             <a href="{% url 'core:staff_list' %}">Staff</a>
             <a href="{% url 'core:transport_list' %}">Transport</a>
-            <a href="/admin/">Admin</a>
+            <a href="{% url 'core:school_profile_detail' %}">School Profile</a>
         </nav>
-    </header>
-    <main class="page">
-        {% block content %}{% endblock %}
-    </main>
-    {% block scripts %}{% endblock %}
+
+        <div class="side-foot">
+            <a href="/admin/">Admin</a>
+            <span>SchoolSoft</span>
+        </div>
+    </aside>
+
+    <div class="main">
+        <header class="main-topbar">
+            <button type="button" class="back-btn" onclick="history.back()"
+                    title="Go back" aria-label="Go back">&#8592; Back</button>
+            <span class="topbar-note">Student, fee, reports &amp; records workspace</span>
+        </header>
+
+        <main class="page">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+</div>
+
+<script>
+(function () {
+    var path = window.location.pathname;
+    var links = document.querySelectorAll(".side-nav a");
+    var best = null;
+    links.forEach(function (a) {
+        var href = a.getAttribute("href");
+        if (href === "/" ? path === "/" : path.indexOf(href) === 0) {
+            if (!best || href.length > best.getAttribute("href").length) { best = a; }
+        }
+    });
+    if (best) { best.classList.add("active"); }
+})();
+</script>
+{% block scripts %}{% endblock %}
 </body>
 </html>
