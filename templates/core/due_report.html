@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load schoolsoft_extras %}
 
 {% block title %}Due Report | SchoolSoft Modernization{% endblock %}
 
@@ -18,15 +19,15 @@
     <div class="stat-grid receipt-stats">
         <article class="stat">
             <span>Due</span>
-            <strong>{{ totals.due|default:"0" }}</strong>
+            <strong>{{ totals.due|default:"0"|indian_number }}</strong>
         </article>
         <article class="stat">
             <span>Net</span>
-            <strong>{{ totals.net|default:"0" }}</strong>
+            <strong>{{ totals.net|default:"0"|indian_number }}</strong>
         </article>
         <article class="stat">
             <span>Paid</span>
-            <strong>{{ totals.paid|default:"0" }}</strong>
+            <strong>{{ totals.paid|default:"0"|indian_number }}</strong>
         </article>
     </div>
 
@@ -66,9 +67,9 @@
                         <td>{{ row.student__father_name }}</td>
                         <td>{{ row.student__current_class__name }}{% if row.student__current_section__name %}-{{ row.student__current_section__name }}{% endif %}</td>
                         <td>{{ row.student__mobile_primary }}</td>
-                        <td class="amount">{{ row.net_amount }}</td>
-                        <td class="amount">{{ row.paid_amount }}</td>
-                        <td class="amount due-amount">{{ row.due_amount }}</td>
+                        <td class="amount">{{ row.net_amount|indian_number }}</td>
+                        <td class="amount">{{ row.paid_amount|indian_number }}</td>
+                        <td class="amount due-amount">{{ row.due_amount|indian_number }}</td>
                     </tr>
                 {% empty %}
                     <tr>

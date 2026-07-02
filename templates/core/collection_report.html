@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load schoolsoft_extras %}
 
 {% block title %}Collection Report | SchoolSoft Modernization{% endblock %}
 
@@ -18,15 +19,15 @@
     <div class="stat-grid receipt-stats">
         <article class="stat">
             <span>Total Received</span>
-            <strong>{{ total_received|default:"0" }}</strong>
+            <strong>{{ total_received|default:"0"|indian_number }}</strong>
         </article>
         <article class="stat">
             <span>Total Net</span>
-            <strong>{{ totals.total_legacy_net|default:"0" }}</strong>
+            <strong>{{ totals.total_legacy_net|default:"0"|indian_number }}</strong>
         </article>
         <article class="stat">
             <span>Total Concession</span>
-            <strong>{{ totals.total_concession|default:"0" }}</strong>
+            <strong>{{ totals.total_concession|default:"0"|indian_number }}</strong>
         </article>
     </div>
 
@@ -62,8 +63,8 @@
                         <td>{{ row.student.full_name }}</td>
                         <td>{{ row.student.current_class.name }}{% if row.student.current_section.name %}-{{ row.student.current_section.name }}{% endif %}</td>
                         <td>{{ row.get_payment_mode_display }}</td>
-                        <td class="amount">{{ row.legacy_net_total }}</td>
-                        <td class="amount">{{ row.received_amount }}</td>
+                        <td class="amount">{{ row.legacy_net_total|indian_number }}</td>
+                        <td class="amount">{{ row.received_amount|indian_number }}</td>
                     </tr>
                 {% empty %}
                     <tr>

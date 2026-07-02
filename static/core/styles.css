@@ -25,6 +25,12 @@
     box-sizing: border-box;
 }
 
+/* The hidden attribute must always win over component display rules
+   (topbar shortcut hints are hidden per-page via JS). */
+[hidden] {
+    display: none !important;
+}
+
 body {
     margin: 0;
     background: var(--bg);
@@ -91,6 +97,7 @@ body {
 .side-nav a {
     display: flex;
     align-items: center;
+    gap: 11px;
     min-height: 44px;
     padding: 0 14px;
     border-radius: 9px;
@@ -109,6 +116,31 @@ body {
     background: #ffffff;
     color: var(--accent-dark);
     font-weight: 700;
+}
+
+.nav-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    flex: 0 0 20px;
+    color: currentColor;
+    opacity: 0.82;
+}
+
+.nav-icon svg {
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.9;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.side-nav a.active .nav-icon {
+    opacity: 1;
 }
 
 .side-foot {
@@ -1716,6 +1748,10 @@ button:hover,
 
 .side-nav a::before {
     display: none;
+}
+
+.side-nav a.active .nav-icon {
+    opacity: 1;
 }
 
 .tile-grid {

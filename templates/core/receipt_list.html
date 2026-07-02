@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load schoolsoft_extras %}
 
 {% block title %}Fee Receipts | SchoolSoft Modernization{% endblock %}
 
@@ -15,15 +16,15 @@
     <div class="stat-grid receipt-stats">
         <article class="stat">
             <span>Received</span>
-            <strong>{{ totals.received|default:"0" }}</strong>
+            <strong>{{ totals.received|default:"0"|indian_number }}</strong>
         </article>
         <article class="stat">
             <span>Net</span>
-            <strong>{{ totals.net|default:"0" }}</strong>
+            <strong>{{ totals.net|default:"0"|indian_number }}</strong>
         </article>
         <article class="stat">
             <span>Due</span>
-            <strong>{{ totals.due|default:"0" }}</strong>
+            <strong>{{ totals.due|default:"0"|indian_number }}</strong>
         </article>
     </div>
 
@@ -81,8 +82,8 @@
                         </td>
                         <td>{{ receipt.student.current_class|default:"" }}{% if receipt.student.current_section %}-{{ receipt.student.current_section.name }}{% endif %}</td>
                         <td>{{ receipt.from_month }}{% if receipt.to_month and receipt.to_month != receipt.from_month %} to {{ receipt.to_month }}{% endif %}</td>
-                        <td class="amount">{{ receipt.received_amount }}</td>
-                        <td class="amount{% if receipt.legacy_due_amount > 0 %} due-amount{% endif %}">{{ receipt.legacy_due_amount }}</td>
+                        <td class="amount">{{ receipt.received_amount|indian_number }}</td>
+                        <td class="amount{% if receipt.legacy_due_amount > 0 %} due-amount{% endif %}">{{ receipt.legacy_due_amount|indian_number }}</td>
                         <td><a class="table-link" href="{% url 'core:receipt_detail' receipt.id %}">Open</a></td>
                     </tr>
                 {% empty %}
