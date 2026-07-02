@@ -6,6 +6,7 @@ from django.db import transaction
 from django.db.models import Count, Q, Sum
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 
 from .forms import FeeReceiptEntryForm, FeeReceiptLineEntryForm, SalaryPaymentForm, TransferCertificateForm
@@ -50,6 +51,8 @@ def dashboard(request):
     today_receipts = FeeReceipt.objects.filter(receipt_date=today)
     today_totals = today_receipts.aggregate(received=Sum("received_amount"))
     total_dues = FeeReceipt.objects.aggregate(due=Sum("legacy_due_amount"))
+    total_students = Student.objects.count()
+    active_students = Student.objects.filter(is_active=True).count()
 
     context = {
         "today": today,
@@ -58,15 +61,17 @@ def dashboard(request):
             ("Today's Collection", today_totals["received"] or Decimal("0.00"), "success"),
             ("Receipts Today", today_receipts.count(), "info"),
             ("Total Dues", total_dues["due"] or Decimal("0.00"), "danger"),
-            ("Active Students", Student.objects.filter(is_active=True).count(), "neutral"),
+            ("Active Students", active_students, "neutral"),
         ],
         "stats": [
-            ("Students", Student.objects.count()),
+            ("Students", total_students),
             ("Classes", SchoolClass.objects.count()),
             ("Fee heads", FeeHead.objects.count()),
             ("Receipts", FeeReceipt.objects.count()),
             ("Sessions", AcademicSession.objects.count()),
         ],
+        "student_total": total_students,
+        "student_active": active_students,
         "audit_files": [
             ("SCHOOL7 tables", school7_tables),
             ("SCHOOL7 columns", school7_columns),
@@ -87,6 +92,12 @@ def student_list(request):
     query = request.GET.get("q", "").strip()
     class_id = request.GET.get("class", "").strip()
     section_id = request.GET.get("section", "").strip()
+    status = request.GET.get("status", "active").strip() or "active"
+
+    all_students = Student.objects.all()
+    total_all_students = all_students.count()
+    total_active_students = all_students.filter(is_active=True).count()
+    total_inactive_students = total_all_students - total_active_students
 
     students = Student.objects.select_related("current_class", "current_section").order_by(
         "current_class__display_order",
@@ -94,6 +105,11 @@ def student_list(request):
         "roll_no",
         "full_name",
     )
+
+    if status == "active":
+        students = students.filter(is_active=True)
+    elif status == "inactive":
+        students = students.filter(is_active=False)
 
     if query:
         students = students.filter(
@@ -119,12 +135,16 @@ def student_list(request):
         "query": query,
         "selected_class": class_id,
         "selected_section": section_id,
+        "selected_status": status,
         "classes": SchoolClass.objects.order_by("display_order", "name"),
         "sections": Section.objects.select_related("school_class").order_by(
             "school_class__display_order",
             "name",
         ),
         "total_students": students.count(),
+        "total_all_students": total_all_students,
+        "total_active_students": total_active_students,
+        "total_inactive_students": total_inactive_students,
     }
     return render(request, "core/student_list.html", context)
 
@@ -484,6 +504,8 @@ def receipt_create(request):
                 for fee_head, amount in line_form.amounts():
                     receipt.lines.create(fee_head=fee_head, amount=amount)
 
+            if request.POST.get("action") == "save_print":
+                return redirect(f"{reverse('core:receipt_detail', kwargs={'pk': receipt.pk})}?autoprint=1")
             return redirect("core:receipt_detail", pk=receipt.pk)
     else:
         receipt_form = FeeReceiptEntryForm()
@@ -723,6 +745,53 @@ def marksheet_select(request, pk):
         tests__marks__student=student
     ).distinct().order_by("-session__name", "display_order")
     return render(request, "core/marksheet_select.html", {"student": student, "terms": terms})
+
+
+def check_duplicate_receipt(request):
+    student_id = request.GET.get("student")
+    session_id = request.GET.get("session")
+    from_m = request.GET.get("from_month", "").upper()
+    to_m = request.GET.get("to_month", "").upper()
+
+    if not all([student_id, session_id, from_m, to_m]):
+        return JsonResponse({"error": "Missing parameters"}, status=400)
+
+    academic_months = ["APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC", "JAN", "FEB", "MAR"]
+    try:
+        start_idx = academic_months.index(from_m)
+        end_idx = academic_months.index(to_m)
+        if start_idx > end_idx:
+            # Handle reverse range or wrap around if needed, but normally it shouldn't happen.
+            start_idx, end_idx = end_idx, start_idx
+    except ValueError:
+        return JsonResponse({"warning": False})
+
+    requested_range = set(range(start_idx, end_idx + 1))
+    
+    existing = FeeReceipt.objects.filter(
+        student_id=student_id,
+        session_id=session_id
+    ).values("receipt_no", "from_month", "to_month")
+
+    for receipt in existing:
+        r_from = receipt["from_month"].upper()
+        r_to = receipt["to_month"].upper()
+        try:
+            r_start = academic_months.index(r_from)
+            r_end = academic_months.index(r_to)
+            if r_start > r_end:
+                r_start, r_end = r_end, r_start
+            existing_range = set(range(r_start, r_end + 1))
+            
+            if requested_range.intersection(existing_range):
+                return JsonResponse({
+                    "warning": True, 
+                    "message": f"A receipt ({receipt['receipt_no']}) already covers {r_from} to {r_to} in this session."
+                })
+        except ValueError:
+            continue
+
+    return JsonResponse({"warning": False})
 
 
 def marksheet_pdf(request, pk, term_id):

@@ -18,6 +18,7 @@ urlpatterns = [
     path("receipts/<int:pk>/", views.receipt_detail, name="receipt_detail"),
     path("receipts/<int:pk>/pdf/", views.receipt_pdf, name="receipt_pdf"),
     path("api/students/<int:pk>/fee-defaults/", views.student_fee_defaults, name="student_fee_defaults"),
+    path("api/receipts/check-duplicate/", views.check_duplicate_receipt, name="check_duplicate_receipt"),
     path("collection/", views.collection_report, name="collection_report"),
     path("collection/pdf/", views.collection_report_pdf, name="collection_report_pdf"),
     path("students/<int:pk>/admission-form/pdf/", views.admission_form_pdf, name="admission_form_pdf"),

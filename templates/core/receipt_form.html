@@ -51,16 +51,31 @@
                             {{ receipt_form.receipt_date }}
                             {% if receipt_form.receipt_date.errors %}<small>{{ receipt_form.receipt_date.errors|striptags }}</small>{% endif %}
                         </label>
-                        <label>
-                            <span>{{ receipt_form.from_month.label }}</span>
-                            {{ receipt_form.from_month }}
-                            {% if receipt_form.from_month.errors %}<small>{{ receipt_form.from_month.errors|striptags }}</small>{% endif %}
-                        </label>
-                        <label>
-                            <span>{{ receipt_form.to_month.label }}</span>
-                            {{ receipt_form.to_month }}
-                            {% if receipt_form.to_month.errors %}<small>{{ receipt_form.to_month.errors|striptags }}</small>{% endif %}
-                        </label>
+                        <div class="month-range-group">
+                            <label>
+                                <span>{{ receipt_form.from_month.label }}</span>
+                                <div class="hidden-select-wrapper" style="display: none;">
+                                    {{ receipt_form.from_month }}
+                                    {{ receipt_form.to_month }}
+                                </div>
+                                <div class="month-chips" id="month-chips-container">
+                                    <button type="button" data-month="APR">APR</button>
+                                    <button type="button" data-month="MAY">MAY</button>
+                                    <button type="button" data-month="JUN">JUN</button>
+                                    <button type="button" data-month="JUL">JUL</button>
+                                    <button type="button" data-month="AUG">AUG</button>
+                                    <button type="button" data-month="SEP">SEP</button>
+                                    <button type="button" data-month="OCT">OCT</button>
+                                    <button type="button" data-month="NOV">NOV</button>
+                                    <button type="button" data-month="DEC">DEC</button>
+                                    <button type="button" data-month="JAN">JAN</button>
+                                    <button type="button" data-month="FEB">FEB</button>
+                                    <button type="button" data-month="MAR">MAR</button>
+                                </div>
+                                {% if receipt_form.from_month.errors %}<small>{{ receipt_form.from_month.errors|striptags }}</small>{% endif %}
+                                {% if receipt_form.to_month.errors %}<small>{{ receipt_form.to_month.errors|striptags }}</small>{% endif %}
+                            </label>
+                        </div>
                         <label>
                             <span>{{ receipt_form.payment_mode.label }}</span>
                             {{ receipt_form.payment_mode }}
@@ -122,7 +137,15 @@
                     {{ receipt_form.remarks }}
                     {% if receipt_form.remarks.errors %}<small>{{ receipt_form.remarks.errors|striptags }}</small>{% endif %}
                 </label>
-                <button class="save-print-button" type="submit">Save Receipt (F9)</button>
+                
+                <div id="duplicate-warning" class="warning-banner" style="display: none; background: #fff3cd; color: #856404; padding: 10px; border-radius: 4px; margin-bottom: 15px; border: 1px solid #ffeeba;">
+                    <strong>⚠️ Warning:</strong> <span id="duplicate-warning-text"></span>
+                </div>
+
+                <div class="form-actions" style="display: flex; gap: 10px; margin-bottom: 10px;">
+                    <button class="save-print-button" type="submit" name="action" value="save_print" style="flex: 1;">Save & Print (F9)</button>
+                    <button class="button primary" type="submit" name="action" value="save" style="flex: 1;">Save</button>
+                </div>
                 <a class="button secondary block-button" href="{% url 'core:receipt_list' %}">Cancel</a>
             </section>
         </div>

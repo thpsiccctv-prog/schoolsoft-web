@@ -17,7 +17,8 @@ class StudentChoiceField(forms.ModelChoiceField):
         sid = f"SID {obj.legacy_sid}" if obj.legacy_sid else "No SID"
         admission = f"Adm {obj.admission_no}" if obj.admission_no else ""
         details = " | ".join(part for part in [sid, class_label, admission] if part)
-        return f"{obj.full_name} ({details})"
+        status_marker = "" if obj.is_active else " [INACTIVE]"
+        return f"{obj.full_name}{status_marker} ({details})"
 
 
 class FeeReceiptEntryForm(forms.ModelForm):

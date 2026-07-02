@@ -124,3 +124,11 @@
     </footer>
 </section>
 {% endblock %}
+
+{% block scripts %}
+<script>
+    if (new URLSearchParams(window.location.search).get("autoprint") === "1") {
+        window.print();
+    }
+</script>
+{% endblock %}

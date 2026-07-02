@@ -113,9 +113,132 @@ Tests: 21/21 pass (`manage.py test`).
 4. Plan for DB expiry (Aug 1, 2026): either paid Postgres (~$7/mo) or recreate free DB monthly + rerun `migrate-data-fast.bat`.
 5. Optional cleanup: remove `git-out.txt` and `setup-git.bat` from the repo (committed accidentally, harmless).
 
+## 🚨 URGENT NEXT TASK — Student data is STALE, re-import from fresh SCHOOL7.mdb
+
+**Discovered July 2 evening. This is the top-priority job. Read carefully.**
+
+### The problem (verified with evidence)
+
+The legacy SchoolSOFT app shows: **TOTAL 1213 / BLOCKED 849 / UNBLOCKED (active) 364**.
+Our app shows 596 students, all active. Investigation proved BOTH numbers come from
+the same table, but our import used a **stale CSV export**:
+
+1. `migration_audit/exports/ADDMISSION.csv` (the file our importer used) has only
+   **592 rows** and its `TC_ISSUE` column says NO for 587 rows — it is an OLD export.
+2. The user opened the LIVE `SCHOOL7.mdb` in Access: `ADDMISSION` there has
+   **1213 rows** (v_no 1..1213, sid up to 2613, includes 2026-27 admissions
+   with `adm_year = 26`, e.g. SHIVAM KUMAR sid 2589 … ARABAJ sid 2613), and
+   **TC_ISSUE = YES on a large share of rows** (with TC_NO / TC_DATE filled).
+3. So: blocked = `TC_ISSUE = YES` (≈849), active = rest (≈364). Our DB is missing
+   ~617 students INCLUDING all new 2026-27 admissions, and marks everyone active.
+4. Other imported tables (StuFee = receipts 667, Marks, DUES, CLASS, FEE) came from
+   the SAME stale export folder — they are probably missing recent rows too.
+
+### Fresh data location (ready and waiting)
+
+The user copied the LIVE database to: **`D:\english medium\9\SCHOOL7.mdb`**
+(1.37 GB, copied 02/07/2026 20:07; ignore the .ldb lock file). Treat it as
+read-only source. NEVER commit it or any export of it to git.
+
+### Already done by Claude (do not redo)
+
+- `core/management/commands/import_legacy_students.py` fixed:
+  - `is_active` is now `NOT (tc == YES or TC_ISSUE == YES)` (was `tc` only).
+  - `read_csv` now tries utf-8-sig then cp1252 (Access text exports are cp1252).
+- `resync-students.bat` created: backs up the LIVE db
+  (`%LOCALAPPDATA%\SchoolSoft\db.sqlite3`), re-runs `import_legacy_students`
+  against `migration_audit/exports/`, then prints counts via `active_count.py`.
+- `active_count.py` created: prints TOTAL / ACTIVE / INACTIVE students.
+
+### What YOU must do (in order)
+
+1. **Re-export fresh CSVs** from `D:\english medium\9\SCHOOL7.mdb` into
+   `D:\english medium\migration_audit\exports\` (replace the stale files).
+   Easiest: reuse `migration_audit/export_mdb_tables.ps1` pointed at the new mdb
+   path (it exports via ADO/PowerShell; python has no pyodbc anymore).
+   Minimum tables: ADDMISSION, CLASS, StuFee, FEE, DUES, Marks, TEST,
+   Testmark1, Testmark2, Busmaster, RouteMaster, BUS_APPLICABLE, Emp_Mast.
+   Verify: fresh ADDMISSION.csv must have **1213 rows**.
+2. Run `resync-students.bat` → expect `TOTAL ≈ 1213, ACTIVE ≈ 364`.
+   If ACTIVE ≈ 364 matches the legacy toolbar, the mapping is proven correct.
+3. Re-run the other importers (import_legacy_fees, import_legacy_marks,
+   import_legacy_transport, import_legacy_staff, import_legacy_fee_structure,
+   import_legacy_school_profile) against the fresh exports — same
+   `SCHOOLSOFT_SQLITE_PATH=%LOCALAPPDATA%\SchoolSoft\db.sqlite3` env so the
+   EXE's live db gets the data. Check row deltas (receipts were 667 — live may
+   have more).
+4. **UI follow-ups:** student list should default to Active students with an
+   All/Active/Inactive filter; dashboard Active Students already filters
+   `is_active=True` so it will show ~364 automatically. Total-students tile
+   should say "1213 (364 active)" or similar — avoid the old confusion.
+5. `manage.py test` (21 tests) must stay green. Then push (push.bat) and
+   rebuild EXE (build-desktop.bat).
+6. **Render re-load:** Postgres still has the stale 596-student data. After
+   local resync: empty the Render DB (e.g. `manage.py flush` with DATABASE_URL
+   set to the External URL, or ask user to recreate the free db) and re-run
+   `fast-load.bat` (it refuses to load into a non-empty DB by design).
+7. Update this handoff file when done.
+
+### Key numbers to verify success
+
+| Metric | Legacy app | After resync |
+| --- | --- | --- |
+| Total students | 1213 | 1213 |
+| Active (unblocked) | 364 | ~364 |
+| Blocked/TC | 849 | ~849 |
+
 ## Rules for any future work
 
 - Never bundle or commit real databases. Seed db only.
 - User data dir `%LOCALAPPDATA%\SchoolSoft\` is sacred — nothing in the repo/build may overwrite it.
 - Desktop EXE is the primary system; online is read/report convenience.
+- `D:\english medium\9\SCHOOL7.mdb` (fresh legacy copy) is read-only source data — never commit it or its exports.
 - Test with `manage.py test` (21 tests) before any EXE rebuild; rebuild via `build-desktop.bat` only.
+
+## ✅ Fresh SCHOOL7 local resync completed (July 2, 2026 evening)
+
+- Fresh CSV exports were generated from `D:\english medium\9\SCHOOL7.mdb`.
+- `ADDMISSION.csv` now has 1213 rows:
+  - `TC_ISSUE=NO`: 364
+  - `TC_ISSUE=YES`: 849
+- `import_legacy_students.py` was corrected so `TC_ISSUE` is authoritative;
+  the older `tc` field is used only when `TC_ISSUE` is blank.
+- Desktop live SQLite was backed up before resync:
+  `C:\Users\Admin\AppData\Local\SchoolSoft\db.before-fresh-school7-20260702-202613.sqlite3`
+- Four stale fee-only placeholder students from the old import were removed:
+  `1913`, `1914`, `1915`, `1916`.
+- Local desktop DB now matches the legacy toolbar:
+  - Total students: 1213
+  - Active/unblocked: 364
+  - Inactive/TC: 849
+- Re-ran fresh importers:
+  - fee structure from `Cfee.csv`
+  - fee receipts from `StuFee.csv`
+  - staff from `Emp_Mast.csv`
+  - transport from `Busmaster`, `RouteMaster`, `BUS_APPLICABLE`
+- Marks were **not** re-imported because fresh `Testmark2.csv` exported 0 rows.
+  Existing 10,036 marks remain until the correct current marks source/mapping is
+  confirmed.
+- UI follow-up done:
+  - Students page defaults to Active
+  - Active / Inactive / All filter added
+  - dashboard student tile shows total and active count
+- Verification:
+  - `manage.py test`: 21/21 passed
+  - `/students/` renders 364 active records
+  - `/students/?status=all` renders 1213 records
+  - dashboard renders 1213 total / 364 active
+
+Still pending:
+- Rebuild EXE after this section if not already done in the latest session.
+- Push/deploy and reload Render PostgreSQL with the fresh data. Render reload
+  requires the current External Database URL or a recreated empty database.
+
+## Recent Updates
+Fee Collection Workflow Improvements completed:
+- Month chips
+- Duplicate overlap warning
+- Custom student dropdown
+- Save & Print autoprint
+- Tests 21/21 passed
+- Desktop DB counts still 1213/364/849

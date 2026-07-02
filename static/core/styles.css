@@ -1797,6 +1797,27 @@ th.amount,
     text-align: right;
 }
 
+.status-pill {
+    display: inline-flex;
+    align-items: center;
+    min-height: 26px;
+    padding: 0 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+.status-active {
+    background: #e6f4ea;
+    color: #067647;
+}
+
+.status-inactive {
+    background: #fff7df;
+    color: #8a5a12;
+}
+
 /* ============================= Responsive ============================= */
 
 @media (max-width: 960px) {
@@ -1952,4 +1973,80 @@ th.amount,
     th {
         position: static;
     }
+}
+
+/* Fee Collection Improvements */
+.student-custom-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    max-height: 250px;
+    overflow-y: auto;
+    background: #fff;
+    border: 1px solid #ccc;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    z-index: 100;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border-radius: 4px;
+}
+.student-custom-dropdown .dropdown-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    border-bottom: 1px solid #eee;
+}
+.student-custom-dropdown .dropdown-item:last-child {
+    border-bottom: none;
+}
+.student-custom-dropdown .dropdown-item.active,
+.student-custom-dropdown .dropdown-item:hover {
+    background: #f0f7ff;
+}
+.student-custom-dropdown .badge.inactive {
+    background: #ffeeba;
+    color: #856404;
+    font-size: 0.75rem;
+    padding: 2px 6px;
+    border-radius: 12px;
+    margin-left: 8px;
+    font-weight: 600;
+}
+.student-filter {
+    position: relative;
+}
+.student-filter input {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.month-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 5px;
+}
+.month-chips button {
+    background: #f8f9fa;
+    border: 1px solid #ddd;
+    border-radius: 16px;
+    padding: 4px 10px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: #333;
+}
+.month-chips button:hover {
+    background: #e9ecef;
+}
+.month-chips button.selected {
+    background: #0056b3;
+    color: white;
+    border-color: #004494;
+}
+.month-chips button.in-range {
+    background: #cce5ff;
+    color: #004085;
+    border-color: #b8daff;
 }

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load schoolsoft_extras %}
 
 {% block title %}Students | SchoolSoft Modernization{% endblock %}
 
@@ -7,12 +8,20 @@
     <div class="section-heading with-actions">
         <div>
             <h2>Students</h2>
-            <p>{{ total_students }} records from the migrated admission master.</p>
+            <p>
+                Showing {{ total_students|indian_number }} records.
+                Total {{ total_all_students|indian_number }} / Active {{ total_active_students|indian_number }} / Inactive {{ total_inactive_students|indian_number }}.
+            </p>
         </div>
     </div>
 
     <form class="filterbar" method="get">
         <input type="search" name="q" value="{{ query }}" placeholder="Search name, SID, admission no, mobile">
+        <select name="status" aria-label="Student status">
+            <option value="active" {% if selected_status == "active" %}selected{% endif %}>Active students</option>
+            <option value="inactive" {% if selected_status == "inactive" %}selected{% endif %}>Inactive / TC</option>
+            <option value="all" {% if selected_status == "all" %}selected{% endif %}>All students</option>
+        </select>
         <select name="class">
             <option value="">All classes</option>
             {% for class in classes %}
@@ -62,7 +71,11 @@
                         <td>{{ student.roll_no|default:"" }}</td>
                         <td>{{ student.admission_no }}</td>
                         <td>{{ student.mobile_primary }}</td>
-                        <td>{% if student.is_active %}Active{% else %}Inactive{% endif %}</td>
+                        <td>
+                            <span class="status-pill {% if student.is_active %}status-active{% else %}status-inactive{% endif %}">
+                                {% if student.is_active %}Active{% else %}Inactive{% endif %}
+                            </span>
+                        </td>
                         <td class="doc-links">
                             <a class="table-link" href="{% url 'core:admission_form_pdf' student.pk %}">Admission Form</a>
                             <a class="table-link" href="{% url 'core:character_certificate_pdf' student.pk %}">Character Cert.</a>

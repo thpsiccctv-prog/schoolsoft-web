@@ -90,8 +90,14 @@ class Command(BaseCommand):
             self.stdout.write(f"{key}: {value}")
 
     def read_csv(self, path):
-        with path.open("r", encoding="utf-8-sig", newline="") as handle:
-            return list(csv.DictReader(handle))
+        # Access text exports are often Windows-1252, ours are utf-8-sig.
+        for encoding in ("utf-8-sig", "cp1252"):
+            try:
+                with path.open("r", encoding=encoding, newline="") as handle:
+                    return list(csv.DictReader(handle))
+            except UnicodeDecodeError:
+                continue
+        raise CommandError(f"Could not decode {path} as utf-8 or cp1252")
 
     def import_classes(self, rows, dry_run, summary):
         class_map = {}
@@ -175,7 +181,7 @@ class Command(BaseCommand):
                 "current_class": school_class,
                 "current_section": section,
                 "admission_date": self.parse_date(row.get("v_date")),
-                "is_active": self.clean(row.get("tc")).upper() not in {"Y", "YES", "1", "TRUE"},
+                "is_active": not self.is_tc_issued(row),
             }
 
             Student.objects.update_or_create(
@@ -190,6 +196,14 @@ class Command(BaseCommand):
             return ""
 
         return CLASS_ALIASES.get(cleaned.lower(), cleaned)
+
+    def is_tc_issued(self, row):
+        # In the live Access app, blocked/unblocked matches TC_ISSUE exactly.
+        # The older tc flag can be stale, so only use it when TC_ISSUE is blank.
+        tc_issue = self.clean(row.get("TC_ISSUE")).upper()
+        if tc_issue:
+            return tc_issue in {"Y", "YES", "1", "TRUE"}
+        return self.clean(row.get("tc")).upper() in {"Y", "YES", "1", "TRUE"}
 
     def clean(self, value):
         if value is None:
