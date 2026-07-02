@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}Transfer Certificate | SchoolSoft Modernization{% endblock %}
+
+{% block content %}
+<section class="section">
+    <div class="section-heading with-actions">
+        <div>
+            <h2>Transfer Certificate - {{ student.full_name }}</h2>
+            <p>SID {{ student.legacy_sid|default:"-" }} | Admission No. {{ student.admission_no|default:"-" }}</p>
+        </div>
+        <div class="action-row">
+            {% if tc %}
+                <a class="button" href="{% url 'core:tc_pdf' student.pk %}">Download TC PDF</a>
+            {% endif %}
+            <a class="button secondary" href="{% url 'core:student_list' %}">Back</a>
+        </div>
+    </div>
+
+    {% if tc %}
+        <p class="hint">TC already issued: <strong>{{ tc.tc_number }}</strong> on {{ tc.issue_date }}. Editing below will update the same record.</p>
+    {% else %}
+        <p class="hint">No TC issued yet for this student. Fill in the details below to generate one.</p>
+    {% endif %}
+
+    <form class="entry-form" method="post">
+        {% csrf_token %}
+        {% if form.non_field_errors %}
+            <div class="form-errors">{{ form.non_field_errors }}</div>
+        {% endif %}
+        <section class="form-panel">
+            <h3>TC Details</h3>
+            <div class="form-grid">
+                {% for field in form %}
+                    <label>
+                        <span>{{ field.label }}</span>
+                        {{ field }}
+                        {% if field.errors %}<small>{{ field.errors|striptags }}</small>{% endif %}
+                    </label>
+                {% endfor %}
+            </div>
+        </section>
+        <div class="form-actions">
+            <button type="submit">Save TC</button>
+            <a class="button secondary" href="{% url 'core:student_list' %}">Cancel</a>
+        </div>
+    </form>
+</section>
+{% endblock %}

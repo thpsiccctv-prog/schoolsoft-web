@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}Marksheet | SchoolSoft Modernization{% endblock %}
+
+{% block content %}
+<section class="section">
+    <div class="section-heading with-actions">
+        <div>
+            <h2>Marksheet - {{ student.full_name }}</h2>
+            <p>SID {{ student.legacy_sid|default:"-" }} | Admission No. {{ student.admission_no|default:"-" }}</p>
+        </div>
+        <a class="button secondary" href="{% url 'core:student_detail' student.pk %}">Back</a>
+    </div>
+
+    {% if terms %}
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Session</th>
+                        <th>Term</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for term in terms %}
+                        <tr>
+                            <td>{{ term.session.name }}</td>
+                            <td>{{ term.name }}</td>
+                            <td><a class="button" href="{% url 'core:marksheet_pdf' student.pk term.pk %}">Download PDF</a></td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p class="hint">No marks entered yet for this student. Add marks via Admin &rarr; Exam Marks first.</p>
+    {% endif %}
+</section>
+{% endblock %}

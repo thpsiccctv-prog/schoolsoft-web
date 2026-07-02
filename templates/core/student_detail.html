@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+
+{% block title %}{{ student.full_name }} | Students{% endblock %}
+
+{% block content %}
+<section class="section">
+    <div class="section-heading with-actions">
+        <div>
+            <h2>{{ student.full_name }}</h2>
+            <p>
+                SID {{ student.legacy_sid|default:"-" }}
+                {% if student.admission_no %} | Admission {{ student.admission_no }}{% endif %}
+                {% if student.current_class %} | {{ student.current_class }}{% if student.current_section %}-{{ student.current_section.name }}{% endif %}{% endif %}
+            </p>
+        </div>
+        <div class="action-row">
+            <a class="button secondary" href="{% url 'core:student_list' %}">Back</a>
+            <a class="button secondary" href="/admin/core/student/{{ student.pk }}/change/">Edit</a>
+        </div>
+    </div>
+
+    <div class="detail-grid">
+        <section class="detail-panel">
+            <h3>Student</h3>
+            <dl class="detail-list">
+                <div>
+                    <dt>Status</dt>
+                    <dd>{% if student.is_active %}Active{% else %}Inactive{% endif %}</dd>
+                </div>
+                <div>
+                    <dt>Class</dt>
+                    <dd>{{ student.current_class|default:"-" }}{% if student.current_section %}-{{ student.current_section.name }}{% endif %}</dd>
+                </div>
+                <div>
+                    <dt>Roll No.</dt>
+                    <dd>{{ student.roll_no|default:"-" }}</dd>
+                </div>
+                <div>
+                    <dt>Gender</dt>
+                    <dd>{{ student.get_gender_display }}</dd>
+                </div>
+                <div>
+                    <dt>Date of Birth</dt>
+                    <dd>{{ student.date_of_birth|date:"d M Y"|default:"-" }}</dd>
+                </div>
+                <div>
+                    <dt>Admission Date</dt>
+                    <dd>{{ student.admission_date|date:"d M Y"|default:"-" }}</dd>
+                </div>
+            </dl>
+        </section>
+
+        <section class="detail-panel">
+            <h3>Parents & Contact</h3>
+            <dl class="detail-list">
+                <div>
+                    <dt>Father</dt>
+                    <dd>{{ student.father_name|default:"-" }}</dd>
+                </div>
+                <div>
+                    <dt>Mother</dt>
+                    <dd>{{ student.mother_name|default:"-" }}</dd>
+                </div>
+                <div>
+                    <dt>Mobile</dt>
+                    <dd>{{ student.mobile_primary|default:"-" }}</dd>
+                </div>
+                <div>
+                    <dt>Alternate Mobile</dt>
+                    <dd>{{ student.mobile_secondary|default:"-" }}</dd>
+                </div>
+                <div>
+                    <dt>Aadhaar</dt>
+                    <dd>{{ student.aadhaar_no|default:"-" }}</dd>
+                </div>
+                <div>
+                    <dt>Category</dt>
+                    <dd>{{ student.category|default:"-" }}</dd>
+                </div>
+            </dl>
+        </section>
+
+        <section class="detail-panel detail-panel-wide">
+            <h3>Address</h3>
+            <dl class="detail-list detail-list-wide">
+                <div>
+                    <dt>Permanent</dt>
+                    <dd>{{ student.address_permanent|default:"-" }}</dd>
+                </div>
+                <div>
+                    <dt>Local</dt>
+                    <dd>{{ student.address_local|default:"-" }}</dd>
+                </div>
+            </dl>
+        </section>
+
+        <section class="detail-panel detail-panel-wide">
+            <h3>Documents</h3>
+            <div class="action-row detail-actions">
+                <a class="button" href="{% url 'core:admission_form_pdf' student.pk %}">Admission Form</a>
+                <a class="button" href="{% url 'core:character_certificate_pdf' student.pk %}">Character Cert.</a>
+                <a class="button" href="{% url 'core:tc_detail' student.pk %}">Transfer Certificate</a>
+                <a class="button" href="{% url 'core:marksheet_select' student.pk %}">Marksheet</a>
+            </div>
+        </section>
+    </div>
+</section>
+{% endblock %}

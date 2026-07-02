@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block title %}Staff | SchoolSoft Modernization{% endblock %}
+
+{% block content %}
+<section class="section">
+    <div class="section-heading with-actions">
+        <div>
+            <h2>Staff</h2>
+            <p>{{ total_staff }} matching records. {{ active_staff }} active staff. {{ salary_payments_count }} salary payments recorded.</p>
+        </div>
+        <a class="button" href="{% url 'core:salary_payment_create' %}">New Salary Payment</a>
+    </div>
+
+    <p class="hint">Imported Basic Pay values are legacy placeholders until corrected in Admin.</p>
+
+    <form class="filterbar staff-filter" method="get">
+        <input type="search" name="q" value="{{ query }}" placeholder="Search name, designation, phone, code">
+        <select name="staff_type">
+            <option value="">All staff types</option>
+            {% for value,label in staff_types %}
+                <option value="{{ value }}" {% if selected_staff_type == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+        <select name="status">
+            <option value="active" {% if selected_status == "active" %}selected{% endif %}>Active only</option>
+            <option value="all" {% if selected_status == "all" %}selected{% endif %}>All status</option>
+            <option value="left" {% if selected_status == "left" %}selected{% endif %}>Left only</option>
+        </select>
+        <button type="submit">Search</button>
+        <a class="button secondary" href="{% url 'core:staff_list' %}">Reset</a>
+    </form>
+
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Code</th>
+                    <th>Name</th>
+                    <th>Designation</th>
+                    <th>Qualification</th>
+                    <th>Phone</th>
+                    <th>Basic Pay</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for staff in page.object_list %}
+                    <tr>
+                        <td>{{ staff.legacy_emp_code|default:"" }}</td>
+                        <td>
+                            <a class="table-link" href="{% url 'core:staff_detail' staff.pk %}">
+                                {{ staff.full_name }}
+                            </a>
+                        </td>
+                        <td>{{ staff.designation }}</td>
+                        <td>{{ staff.qualification }}</td>
+                        <td>{{ staff.phone }}</td>
+                        <td>{{ staff.basic_pay }}</td>
+                        <td>{% if staff.is_active %}Active{% else %}Left{% endif %}</td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="7">No staff found.</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% include "core/includes/pagination.html" with page=page %}
+</section>
+{% endblock %}

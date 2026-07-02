@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block title %}New Salary Payment | SchoolSoft Modernization{% endblock %}
+
+{% block content %}
+<section class="section">
+    <div class="section-heading with-actions">
+        <div>
+            <h2>New Salary Payment</h2>
+            <p>Record a monthly salary payslip for a staff member.</p>
+        </div>
+        <a class="button secondary" href="{% url 'core:staff_list' %}">Back</a>
+    </div>
+
+    {{ staff_defaults|json_script:"staff-defaults-data" }}
+
+    <form class="entry-form" method="post" id="salary-payment-form">
+        {% csrf_token %}
+        {% if form.non_field_errors %}
+            <div class="form-errors">{{ form.non_field_errors }}</div>
+        {% endif %}
+        <section class="form-panel">
+            <h3>Payslip Details</h3>
+            <div class="form-grid">
+                {% for field in form %}
+                    <label>
+                        <span>{{ field.label }}</span>
+                        {{ field }}
+                        {% if field.errors %}<small>{{ field.errors|striptags }}</small>{% endif %}
+                    </label>
+                {% endfor %}
+            </div>
+        </section>
+        <div class="form-actions">
+            <button type="submit">Save &amp; Generate Payslip</button>
+            <a class="button secondary" href="{% url 'core:staff_list' %}">Cancel</a>
+        </div>
+    </form>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    var dataEl = document.getElementById("staff-defaults-data");
+    if (!dataEl) return;
+    var staffDefaults = JSON.parse(dataEl.textContent);
+    var form = document.getElementById("salary-payment-form");
+    var staffField = form.querySelector("#id_staff");
+    var basicField = form.querySelector("#id_basic_pay");
+    var daField = form.querySelector("#id_da");
+    var allowField = form.querySelector("#id_other_allowances");
+
+    if (!staffField) return;
+
+    staffField.addEventListener("change", function () {
+        var defaults = staffDefaults[staffField.value];
+        if (!defaults) return;
+        if (basicField && (!basicField.value || basicField.value === "0" || basicField.value === "0.00")) {
+            basicField.value = defaults.basic_pay;
+        }
+        if (daField && (!daField.value || daField.value === "0" || daField.value === "0.00")) {
+            daField.value = defaults.da;
+        }
+        if (allowField && (!allowField.value || allowField.value === "0" || allowField.value === "0.00")) {
+            allowField.value = defaults.other_allowances;
+        }
+    });
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+
+{% block title %}Transport | SchoolSoft Modernization{% endblock %}
+
+{% block content %}
+<section class="section">
+    <div class="section-heading">
+        <h2>Transport</h2>
+        <p>
+            {{ total_assignments }} matching assignments,
+            {{ active_assignments }} active,
+            {{ enabled_assignments }} transport enabled,
+            {{ total_routes }} routes,
+            {{ total_buses }} buses.
+        </p>
+        <p class="warning-hint">
+            Legacy BUS_APPLICABLE rows can contain old student names or route/bus text that does not exactly match the
+            student master. Those imported labels are kept visible for checking.
+        </p>
+    </div>
+
+    <form class="filterbar transport-filter" method="get">
+        <input type="search" name="q" value="{{ query }}" placeholder="Search student, SID, route, bus, stop">
+        <select name="route">
+            <option value="">All routes</option>
+            {% for route in routes %}
+                <option value="{{ route.id }}" {% if selected_route == route.id|stringformat:"s" %}selected{% endif %}>
+                    {{ route.name }}
+                </option>
+            {% endfor %}
+        </select>
+        <select name="status">
+            <option value="active" {% if selected_status == "active" %}selected{% endif %}>Active only</option>
+            <option value="all" {% if selected_status == "all" %}selected{% endif %}>All status</option>
+            <option value="inactive" {% if selected_status == "inactive" %}selected{% endif %}>Inactive only</option>
+            <option value="enabled" {% if selected_status == "enabled" %}selected{% endif %}>Enabled only</option>
+            <option value="disabled" {% if selected_status == "disabled" %}selected{% endif %}>Disabled only</option>
+        </select>
+        <button type="submit">Search</button>
+        <a class="button secondary" href="{% url 'core:transport_list' %}">Reset</a>
+    </form>
+
+    <div class="stat-grid compact-stats">
+        {% for route in route_summary %}
+            <article>
+                <strong>{{ route.assignment_count }}</strong>
+                <span>{{ route.name }}</span>
+                <small>{{ route.monthly_charge }} monthly</small>
+            </article>
+        {% empty %}
+            <article>
+                <strong>0</strong>
+                <span>No routes imported</span>
+                <small>Import transport route master first</small>
+            </article>
+        {% endfor %}
+    </div>
+
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>SID</th>
+                    <th>Student</th>
+                    <th>Class</th>
+                    <th>Route</th>
+                    <th>Bus</th>
+                    <th>Stop</th>
+                    <th>Charge</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for assignment in page.object_list %}
+                    <tr>
+                        <td>{{ assignment.student.legacy_sid|default:"" }}</td>
+                        <td>
+                            <a href="{% url 'core:student_detail' assignment.student.pk %}">
+                                {{ assignment.student.full_name }}
+                            </a>
+                            {% if assignment.student.father_name %}
+                                <span class="muted-cell">{{ assignment.student.father_name }}</span>
+                            {% endif %}
+                            {% if assignment.legacy_student_name %}
+                                <span class="muted-cell">Legacy row: {{ assignment.legacy_student_name }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {{ assignment.student.current_class|default:"" }}
+                            {% if assignment.student.current_section %}-{{ assignment.student.current_section.name }}{% endif %}
+                        </td>
+                        <td>{{ assignment.route|default:assignment.legacy_route_name }}</td>
+                        <td>{{ assignment.bus|default:assignment.legacy_bus_label }}</td>
+                        <td>{{ assignment.stop_name }}</td>
+                        <td class="amount">
+                            {% if assignment.route %}{{ assignment.route.monthly_charge }}{% endif %}
+                        </td>
+                        <td>
+                            {% if assignment.is_active %}Active{% else %}Inactive{% endif %}
+                            <span class="muted-cell">
+                                {% if assignment.is_transport_enabled %}Enabled{% else %}Disabled{% endif %}
+                            </span>
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="8">No transport assignments found.</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% include "core/includes/pagination.html" with page=page %}
+</section>
+{% endblock %}

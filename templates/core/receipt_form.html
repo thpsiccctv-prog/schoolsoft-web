@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}New Fee Receipt | SchoolSoft Modernization{% endblock %}
+
+{% block content %}
+<section class="section">
+    <div class="section-heading with-actions">
+        <div>
+            <h2>New Fee Receipt</h2>
+            <p>Create a manual receipt in the new system.</p>
+        </div>
+        <a class="button secondary" href="{% url 'core:receipt_list' %}">Back</a>
+    </div>
+
+    <form class="entry-form" method="post" data-fee-defaults-url-template="/api/students/__student__/fee-defaults/">
+        {% csrf_token %}
+
+        {% if receipt_form.non_field_errors or line_form.non_field_errors %}
+            <div class="form-errors">
+                {{ receipt_form.non_field_errors }}
+                {{ line_form.non_field_errors }}
+            </div>
+        {% endif %}
+
+        <section class="form-panel">
+            <h3>Receipt Details</h3>
+            <label class="student-filter">
+                <span>Student Search</span>
+                <input class="form-control" type="search" data-student-filter placeholder="Type name, SID, admission no, class">
+            </label>
+            <div class="form-grid">
+                {% for field in receipt_form %}
+                    <label>
+                        <span>{{ field.label }}</span>
+                        {{ field }}
+                        {% if field.errors %}<small>{{ field.errors|striptags }}</small>{% endif %}
+                    </label>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="form-panel">
+            <div class="section-heading with-actions compact-row">
+                <h3>Fee Heads</h3>
+                <div class="total-strip" aria-live="polite">
+                    <span>Fee <strong data-fee-total>0.00</strong></span>
+                    <span>Net <strong data-net-total>0.00</strong></span>
+                    <span>Due <strong data-due-total>0.00</strong></span>
+                </div>
+            </div>
+            <div class="fee-head-grid">
+                {% for field in line_form %}
+                    <label>
+                        <span>{{ field.label }}</span>
+                        {{ field }}
+                        {% if field.errors %}<small>{{ field.errors|striptags }}</small>{% endif %}
+                    </label>
+                {% endfor %}
+            </div>
+        </section>
+
+        <div class="form-actions">
+            <button type="submit">Save Receipt</button>
+            <a class="button secondary" href="{% url 'core:receipt_list' %}">Cancel</a>
+        </div>
+    </form>
+</section>
+{% endblock %}
+
+{% block scripts %}
+    <script src="{% static 'core/receipt-form.js' %}"></script>
+{% endblock %}

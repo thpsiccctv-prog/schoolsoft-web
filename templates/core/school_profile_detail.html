@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+
+{% block title %}School Profile | SchoolSoft Modernization{% endblock %}
+
+{% block content %}
+<section class="section">
+    <div class="section-heading with-actions">
+        <div>
+            <h2>School Profile</h2>
+            <p>Active school identity used on receipts, certificates, and reports.</p>
+        </div>
+        <div class="action-row">
+            {% if profile %}
+                <a class="button secondary" href="/admin/core/schoolprofile/{{ profile.pk }}/change/">Edit</a>
+            {% endif %}
+            <a class="button secondary" href="/admin/core/schoolprofile/">Admin List</a>
+        </div>
+    </div>
+
+    {% if profile %}
+        <div class="detail-grid">
+            <section class="detail-panel detail-panel-wide profile-identity">
+                <span>Active Profile</span>
+                <h3>{{ profile.name }}</h3>
+                <p>{{ profile.address|default:"Address not set" }}</p>
+            </section>
+
+            <section class="detail-panel">
+                <h3>Contact</h3>
+                <dl class="detail-list">
+                    <div>
+                        <dt>Phone</dt>
+                        <dd>{{ profile.phone|default:"-" }}</dd>
+                    </div>
+                    <div>
+                        <dt>Email</dt>
+                        <dd>{{ profile.email|default:"-" }}</dd>
+                    </div>
+                    <div>
+                        <dt>Current Year</dt>
+                        <dd>{{ profile.current_year|default:"-" }}</dd>
+                    </div>
+                    <div>
+                        <dt>Legacy Code</dt>
+                        <dd>{{ profile.legacy_comp_code|default:"-" }}</dd>
+                    </div>
+                </dl>
+            </section>
+
+            <section class="detail-panel">
+                <h3>Address Lines</h3>
+                <dl class="detail-list detail-list-wide">
+                    <div>
+                        <dt>Line 1</dt>
+                        <dd>{{ profile.address_line1|default:"-" }}</dd>
+                    </div>
+                    <div>
+                        <dt>Line 2</dt>
+                        <dd>{{ profile.address_line2|default:"-" }}</dd>
+                    </div>
+                    <div>
+                        <dt>Line 3</dt>
+                        <dd>{{ profile.address_line3|default:"-" }}</dd>
+                    </div>
+                </dl>
+            </section>
+
+            <section class="detail-panel detail-panel-wide">
+                <h3>Profile Records</h3>
+                <div class="table-wrap embedded-table">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Legacy Code</th>
+                                <th>Year</th>
+                                <th>Phone</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in all_profiles %}
+                                <tr>
+                                    <td>{{ row.name }}</td>
+                                    <td>{{ row.legacy_comp_code|default:"" }}</td>
+                                    <td>{{ row.current_year }}</td>
+                                    <td>{{ row.phone }}</td>
+                                    <td>{% if row.is_active %}Active{% else %}Inactive{% endif %}</td>
+                                </tr>
+                            {% empty %}
+                                <tr>
+                                    <td colspan="5">No school profile records found.</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+    {% else %}
+        <section class="detail-panel">
+            <h3>No Active School Profile</h3>
+            <p class="hint">Import or create a school profile before generating final receipts and certificates.</p>
+            <a class="button" href="/admin/core/schoolprofile/add/">Add School Profile</a>
+        </section>
+    {% endif %}
+</section>
+{% endblock %}

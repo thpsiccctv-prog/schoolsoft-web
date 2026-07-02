@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard | SchoolSoft Modernization{% endblock %}
+
+{% block content %}
+<section class="section">
+    <div class="section-heading">
+        <h2>Phase 1 Dashboard</h2>
+        <p>Clean prototype foundation for the new Python, website, and future mobile system.</p>
+    </div>
+
+    <div class="stat-grid">
+        {% for label, value in stats %}
+            <article class="stat">
+                <span>{{ label }}</span>
+                <strong>{{ value }}</strong>
+            </article>
+        {% endfor %}
+    </div>
+</section>
+
+<section class="section two-column">
+    <div>
+        <div class="section-heading compact">
+            <h2>Audit Files</h2>
+            <p>Legacy Access database scan outputs used for migration planning.</p>
+        </div>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>File</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for label, path in audit_files %}
+                        <tr>
+                            <td>{{ label }}</td>
+                            <td>{% if path.exists %}Ready{% else %}Missing{% endif %}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div>
+        <div class="section-heading compact">
+            <h2>Next Actions</h2>
+            <p>Keep the first build focused on student and fee workflow.</p>
+        </div>
+        <ol class="action-list">
+            {% for action in next_actions %}
+                <li>{{ action }}</li>
+            {% endfor %}
+        </ol>
+    </div>
+</section>
+{% endblock %}

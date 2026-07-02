@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block title %}Due Report | SchoolSoft Modernization{% endblock %}
+
+{% block content %}
+<section class="section">
+    <div class="section-heading with-actions">
+        <div>
+            <h2>Due Report</h2>
+            <p>{{ total_students }} students with pending dues.</p>
+        </div>
+        <div class="action-row no-print">
+            <a class="button secondary" href="{% url 'core:due_report_pdf' %}{% if request.GET.urlencode %}?{{ request.GET.urlencode }}{% endif %}">PDF</a>
+            <button type="button" onclick="window.print()">Print</button>
+        </div>
+    </div>
+
+    <div class="stat-grid receipt-stats">
+        <article class="stat">
+            <span>Due</span>
+            <strong>{{ totals.due|default:"0" }}</strong>
+        </article>
+        <article class="stat">
+            <span>Net</span>
+            <strong>{{ totals.net|default:"0" }}</strong>
+        </article>
+        <article class="stat">
+            <span>Paid</span>
+            <strong>{{ totals.paid|default:"0" }}</strong>
+        </article>
+    </div>
+
+    <form class="filterbar compact-filter no-print" method="get">
+        <input type="search" name="q" value="{{ query }}" placeholder="Search student, father, SID, admission no">
+        <select name="class">
+            <option value="">All classes</option>
+            {% for class in classes %}
+                <option value="{{ class.id }}" {% if selected_class == class.id|stringformat:"s" %}selected{% endif %}>
+                    {{ class.name }}
+                </option>
+            {% endfor %}
+        </select>
+        <button type="submit">Search</button>
+        <a class="button secondary" href="{% url 'core:due_report' %}">Reset</a>
+    </form>
+
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>SID</th>
+                    <th>Student</th>
+                    <th>Father</th>
+                    <th>Class</th>
+                    <th>Mobile</th>
+                    <th class="amount">Net</th>
+                    <th class="amount">Paid</th>
+                    <th class="amount">Due</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in page.object_list %}
+                    <tr>
+                        <td>{{ row.student__legacy_sid }}</td>
+                        <td>{{ row.student__full_name }}</td>
+                        <td>{{ row.student__father_name }}</td>
+                        <td>{{ row.student__current_class__name }}{% if row.student__current_section__name %}-{{ row.student__current_section__name }}{% endif %}</td>
+                        <td>{{ row.student__mobile_primary }}</td>
+                        <td class="amount">{{ row.net_amount }}</td>
+                        <td class="amount">{{ row.paid_amount }}</td>
+                        <td class="amount due-amount">{{ row.due_amount }}</td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="8">No dues found.</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% include "core/includes/pagination.html" with page=page %}
+</section>
+{% endblock %}

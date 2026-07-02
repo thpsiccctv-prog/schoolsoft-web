@@ -1,0 +1,38 @@
+# Render Blueprint - https://render.com/docs/blueprint-spec
+#
+# Usage:
+#   1. Push this schoolsoft_web/ folder to a GitHub repo.
+#   2. In Render, "New +" -> "Blueprint" -> pick that repo.
+#   3. Render reads this file and creates the web service + free PostgreSQL below.
+#   4. After the first deploy, point english-medium.thpsic.com (a subdomain of
+#      thpsic.com, which stays on Netlify) at the Render service via CNAME,
+#      and add that same hostname as a Custom Domain on the Render service.
+
+databases:
+  - name: schoolsoft-db
+    plan: free
+    databaseName: schoolsoft
+    user: schoolsoft
+
+services:
+  - type: web
+    name: schoolsoft-english-medium
+    runtime: python
+    plan: free
+    buildCommand: "pip install -r requirements.txt && python manage.py collectstatic --noinput && python manage.py migrate"
+    startCommand: "gunicorn schoolsoft.wsgi:application"
+    envVars:
+      - key: SCHOOLSOFT_SECRET_KEY
+        generateValue: true
+      - key: SCHOOLSOFT_DEBUG
+        value: "False"
+      - key: SCHOOLSOFT_ALLOWED_HOSTS
+        value: "english-medium.thpsic.com"
+      - key: SCHOOLSOFT_CSRF_TRUSTED_ORIGINS
+        value: "https://english-medium.thpsic.com"
+      - key: PYTHON_VERSION
+        value: "3.12.6"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: schoolsoft-db
+          property: connectionString
