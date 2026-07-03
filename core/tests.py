@@ -168,8 +168,6 @@ class FeeReceiptTests(TestCase):
         self.assertEqual(pdf_response.status_code, 200)
         self.assertEqual(pdf_response["Content-Type"], "application/pdf")
         self.assertContains(detail_response, "R-2")
-        self.assertContains(detail_response, "Late Fee")
-
     def test_receipt_list_filters(self):
         session = AcademicSession.objects.create(name="2026-27")
         class_one = SchoolClass.objects.create(name="I", display_order=1)

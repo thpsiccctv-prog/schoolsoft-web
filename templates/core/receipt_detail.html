@@ -1,18 +1,28 @@
 {% extends "base.html" %}
+{% load schoolsoft_extras %}
 
 {% block title %}Receipt {{ receipt.receipt_no }} | SchoolSoft Modernization{% endblock %}
 
 {% block content %}
-<section class="section no-print">
-    <div class="section-heading with-actions">
+<section class="section no-print" style="margin-bottom: 20px;">
+    <div class="section-heading with-actions" style="background: #fff; padding: 16px 24px; border-radius: 8px; border: 1px solid #e2e8f0;">
         <div>
-            <h2>Receipt {{ receipt.receipt_no }}</h2>
-            <p>{{ receipt.student.full_name }} | {{ receipt.receipt_date|date:"d M Y" }}</p>
+            <h2 style="margin: 0; font-size: 20px; font-weight: 700; color: #0f172a;">Receipt {{ receipt.receipt_no }}</h2>
+            <p style="margin: 4px 0 0; color: #64748b; font-size: 13px;">{{ receipt.student.full_name }} | {{ receipt.receipt_date|date:"d M Y" }}</p>
         </div>
         <div class="action-row">
-            <a class="button secondary" href="{% url 'core:receipt_list' %}">Back</a>
-            <a class="button secondary" href="{% url 'core:receipt_pdf' receipt.id %}">PDF</a>
-            <button type="button" onclick="window.print()">Print</button>
+            <a class="button secondary" href="{% url 'core:receipt_list' %}">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px;vertical-align:middle"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+                Back
+            </a>
+            <a class="button secondary" href="{% url 'core:receipt_pdf' receipt.id %}">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px;vertical-align:middle"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+                PDF
+            </a>
+            <button class="button primary" type="button" onclick="window.print()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px;vertical-align:middle"><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>
+                Print Receipt
+            </button>
         </div>
     </div>
 </section>
@@ -20,7 +30,7 @@
 <section class="receipt-paper">
     <header class="receipt-header">
         <div>
-            <h2>{% if school_profile %}{{ school_profile.name }}{% else %}SchoolSoft Fee Receipt{% endif %}</h2>
+            <h2>{% if school_profile %}{{ school_profile.name }}{% else %}SchoolSoft Modernization{% endif %}</h2>
             {% if school_profile %}
                 <p>{{ school_profile.address }}</p>
                 <p>
@@ -30,7 +40,7 @@
             {% else %}
                 <p>Legacy migration prototype</p>
             {% endif %}
-            <p class="receipt-title">Fee Receipt</p>
+            <div class="receipt-title-badge">Fee Receipt</div>
         </div>
         <div class="receipt-number">
             <span>Receipt No.</span>
@@ -40,16 +50,12 @@
 
     <div class="receipt-meta">
         <div>
-            <span>Student</span>
-            <strong>
-                <a class="table-link" href="{% url 'core:student_detail' receipt.student_id %}">
-                    {{ receipt.student.full_name }}
-                </a>
-            </strong>
+            <span>Student Name</span>
+            <strong>{{ receipt.student.full_name }}</strong>
         </div>
         <div>
-            <span>SID</span>
-            <strong>{{ receipt.student.legacy_sid }}</strong>
+            <span>SID / Admission No.</span>
+            <strong>{{ receipt.student.legacy_sid }} {% if receipt.student.admission_no %} / {{ receipt.student.admission_no }}{% endif %}</strong>
         </div>
         <div>
             <span>Class</span>
@@ -57,70 +63,78 @@
         </div>
         <div>
             <span>Date</span>
-            <strong>{{ receipt.receipt_date|date:"d M Y" }}</strong>
+            <strong>{{ receipt.receipt_date|date:"d-m-Y" }}</strong>
         </div>
         <div>
-            <span>Month</span>
+            <span>Fee Month</span>
             <strong>{{ receipt.from_month }}{% if receipt.to_month and receipt.to_month != receipt.from_month %} to {{ receipt.to_month }}{% endif %}</strong>
         </div>
         <div>
-            <span>Mode</span>
+            <span>Payment Mode</span>
             <strong>{{ receipt.get_payment_mode_display }}</strong>
         </div>
     </div>
 
-    <div class="table-wrap print-table">
+    <div class="print-table">
         <table>
             <thead>
                 <tr>
-                    <th>Fee Head</th>
-                    <th class="amount">Amount</th>
+                    <th>Fee Head Description</th>
+                    <th class="amount" style="width: 150px;">Amount (₹)</th>
                 </tr>
             </thead>
             <tbody>
                 {% for line in receipt.lines.all %}
                     <tr>
                         <td>{{ line.fee_head.name }}</td>
-                        <td class="amount">{{ line.amount }}</td>
+                        <td class="amount">{{ line.amount|indian_number }}</td>
                     </tr>
                 {% endfor %}
             </tbody>
             <tfoot>
                 <tr>
-                    <th>Fee Total</th>
-                    <th class="amount">{{ receipt.legacy_fee_total }}</th>
+                    <th style="text-align: right;">Fee Total</th>
+                    <td class="amount">{{ receipt.legacy_fee_total|indian_number }}</td>
+                </tr>
+                {% if receipt.concession_amount > 0 %}
+                <tr>
+                    <th style="text-align: right;">Concession / Discount</th>
+                    <td class="amount" style="color: #059669;">- {{ receipt.concession_amount|indian_number }}</td>
+                </tr>
+                {% endif %}
+                {% if receipt.late_fee_amount > 0 %}
+                <tr>
+                    <th style="text-align: right;">Late Fee Fine</th>
+                    <td class="amount" style="color: #d97706;">+ {{ receipt.late_fee_amount|indian_number }}</td>
+                </tr>
+                {% endif %}
+                <tr class="net-total-row">
+                    <th style="text-align: right;">Net Payable</th>
+                    <td class="amount">₹ {{ receipt.legacy_net_total|indian_number }}</td>
                 </tr>
                 <tr>
-                    <th>Concession</th>
-                    <th class="amount">{{ receipt.concession_amount }}</th>
+                    <th style="text-align: right;">Amount Paid</th>
+                    <td class="amount">₹ {{ receipt.received_amount|indian_number }}</td>
                 </tr>
-                <tr>
-                    <th>Late Fee</th>
-                    <th class="amount">{{ receipt.late_fee_amount }}</th>
+                {% if receipt.legacy_due_amount > 0 %}
+                <tr class="due-row">
+                    <th style="text-align: right;">Balance Due</th>
+                    <td class="amount">₹ {{ receipt.legacy_due_amount|indian_number }}</td>
                 </tr>
-                <tr>
-                    <th>Net Total</th>
-                    <th class="amount">{{ receipt.legacy_net_total }}</th>
-                </tr>
-                <tr>
-                    <th>Paid</th>
-                    <th class="amount">{{ receipt.received_amount }}</th>
-                </tr>
-                <tr>
-                    <th>Due</th>
-                    <th class="amount">{{ receipt.legacy_due_amount }}</th>
-                </tr>
+                {% endif %}
             </tfoot>
         </table>
     </div>
 
     {% if receipt.remarks %}
-        <p class="receipt-remarks">{{ receipt.remarks }}</p>
+        <p style="font-size: 13px; color: #64748b; margin-top: 20px; font-style: italic;">
+            <strong>Remarks:</strong> {{ receipt.remarks }}
+        </p>
     {% endif %}
 
     <footer class="receipt-footer">
-        <span>Cashier</span>
-        <span>Parent/Guardian</span>
+        <span>Cashier's Signature</span>
+        <span>Parent / Guardian</span>
     </footer>
 </section>
 {% endblock %}
