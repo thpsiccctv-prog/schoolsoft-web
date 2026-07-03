@@ -3042,3 +3042,488 @@ th.amount,
 .student-entry .recent-admissions-table tbody tr:hover td {
     background: #f2f9f6;
 }
+
+/* ============================================================
+   PREMIUM FEE COLLECTION LAYER (appended override) v1
+   Brings the fee/receipt page in line with the admission form.
+   CSS-only: no markup or JS hooks touched.
+   ============================================================ */
+.fee-desk{
+    --fa:#0f766e; --fad:#0b4f4a; --fdeep:#14342a;
+    --fline:#e4ede8; --fline2:#d3e0d9;
+    --ffield:#f7fbf9; --ffieldline:#d0ded7;
+    --flabel:#5f7069; --fink:#0f2620;
+    background:
+        radial-gradient(1100px 420px at 82% -10%, rgba(15,118,110,.10), transparent 62%),
+        linear-gradient(180deg,#eef5f1 0%, #e6f0eb 100%);
+}
+
+/* Hero titlebar */
+.fee-desk .classic-titlebar{
+    background:linear-gradient(135deg,rgba(15,118,110,.12),rgba(20,52,42,.04)),#ffffff;
+    border:1px solid #cfe3db;border-radius:16px;padding:16px 22px;
+    box-shadow:0 14px 34px rgba(15,52,42,.08);
+}
+.fee-desk .classic-titlebar strong{color:var(--fink);font-size:19px;font-weight:800;letter-spacing:-.2px}
+.fee-desk .classic-titlebar span{color:#5b6b64;font-size:12.5px}
+.fee-desk .mini-button{
+    background:#fff;border:1px solid var(--fline2);color:var(--fa);
+    font-weight:700;border-radius:10px;padding:8px 14px;
+}
+.fee-desk .mini-button:hover{background:#f0f8f5;border-color:var(--fa)}
+
+/* Panels -> premium cards */
+.fee-desk .classic-panel{
+    position:relative;overflow:hidden;
+    background:linear-gradient(180deg,#ffffff,#f9fdfb);
+    border:1px solid var(--fline);border-radius:14px;padding:16px 18px;
+    box-shadow:0 10px 26px rgba(15,52,42,.05);
+}
+.fee-desk .classic-panel::before{
+    content:"";position:absolute;top:0;left:0;right:0;height:3px;
+    background:linear-gradient(90deg,#2dd4bf,#0f766e 55%,#14342a);opacity:.9;
+}
+.fee-desk .classic-panel-title{
+    display:flex;align-items:center;gap:10px;min-height:0;
+    margin:0 0 14px;padding:0 0 12px;
+    border:none;border-bottom:1px solid var(--fline);border-radius:0;
+    background:none;color:var(--fad);font-size:14px;font-weight:800;
+}
+.fee-desk .classic-panel-title::before{
+    content:"";width:4px;height:16px;border-radius:4px;flex:0 0 auto;
+    background:linear-gradient(180deg,#2dd4bf,#0f766e);box-shadow:0 2px 6px rgba(15,118,110,.4);
+}
+
+/* Labels + inputs */
+.fee-desk .classic-fee-form label span,
+.fee-desk .classic-search label{
+    color:var(--flabel);font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;
+}
+.fee-desk .classic-fee-form .form-control,
+.fee-desk .classic-fee-form input,
+.fee-desk .classic-fee-form select,
+.fee-desk .classic-search input{
+    min-height:38px;padding:0 11px;border:1px solid var(--ffieldline);border-radius:10px;
+    background:var(--ffield);color:var(--fink);font-size:14px;
+    transition:border-color .15s ease, box-shadow .15s ease, background .15s ease;
+}
+.fee-desk .classic-fee-form select{background-color:var(--ffield)}
+.fee-desk .classic-fee-form .form-control:focus,
+.fee-desk .classic-fee-form input:focus,
+.fee-desk .classic-fee-form select:focus,
+.fee-desk .classic-search input:focus{
+    outline:none;background:#fff;border-color:var(--fa);box-shadow:0 0 0 3px rgba(15,118,110,.16);
+}
+.fee-desk .classic-fee-heads .amount-input,
+.fee-desk .totals-console label .form-control{min-height:34px}
+
+/* Selected student card */
+.fee-desk .selected-student-card{
+    border:1px solid #cfe3db;border-radius:12px;
+    background:linear-gradient(180deg,#f3faf7,#eaf4ef);color:var(--fink);
+}
+.fee-desk .selected-student-card span{color:#5b6b64}
+.fee-desk .selected-student-card em{color:var(--fad);font-weight:800}
+
+/* Month chips */
+.fee-desk .month-chips button{
+    border:1px solid var(--ffieldline);background:#fff;color:#5b6b64;
+    border-radius:8px;font-weight:700;
+}
+.fee-desk .month-chips button:hover{border-color:var(--fa);color:var(--fa)}
+.fee-desk .month-chips button.selected{background:var(--fa);border-color:var(--fa);color:#fff}
+.fee-desk .month-chips button.in-range{background:#dcefe8;border-color:#9fd3c4;color:var(--fad)}
+
+/* Totals */
+.fee-desk .pay-total-row{
+    border:1px solid #d7e7e0;border-radius:10px;background:#f4faf7;color:var(--fink);
+}
+.fee-desk .pay-total-row.net{background:linear-gradient(135deg,#e6f5ef,#d7efe6);border-color:#a9d8c9}
+.fee-desk .pay-total-row.net strong{color:var(--fad)}
+.fee-desk .pay-total-row.due{background:#fff4dc;border-color:#f0d99a}
+.fee-desk .pay-total-row.due strong{color:#9a3412}
+
+/* Buttons */
+.fee-desk .save-print-button{
+    background:linear-gradient(135deg,#0f766e 0%,#0b5f57 55%,#14342a 100%);
+    border:none;border-radius:11px;color:#fff;font-weight:800;
+    box-shadow:0 6px 16px rgba(11,79,74,.32),inset 0 1px 0 rgba(255,255,255,.15);
+}
+.fee-desk .save-print-button:hover{filter:brightness(1.06)}
+.fee-desk .button.primary{
+    background:#fff;border:1px solid var(--fline2);color:var(--fa);
+    border-radius:11px;font-weight:700;
+}
+.fee-desk .button.primary:hover{background:#f0f8f5;border-color:var(--fa)}
+.fee-desk .button.secondary{
+    background:#fff;border:1px solid var(--fline2);color:#5b6b64;border-radius:11px;
+}
+.fee-desk .button.secondary:hover{background:#f4f8f6}
+
+/* Summary chips */
+.fee-desk .classic-summary-strip span{
+    border:1px solid #cfe3db;background:#fff;color:#5b6b64;border-radius:999px;
+}
+.fee-desk .classic-summary-strip strong{color:var(--fad)}
+
+/* Recent receipts table */
+.fee-desk .compact-table-wrap thead th{
+    background:linear-gradient(180deg,#eef6f2,#e3f0ea);color:var(--fad);
+    text-transform:uppercase;font-size:11px;letter-spacing:.5px;border-bottom:1px solid var(--fline);
+}
+.fee-desk .compact-table-wrap tbody tr:hover td{background:#f2f9f6}
+.fee-desk .table-link{color:var(--fa);font-weight:700}
+.fee-desk .due-amount{color:#9a3412;font-weight:700}
+
+/* Duplicate warning -> softer amber */
+.fee-desk #duplicate-warning{
+    background:#fff4dc !important;color:#8a5a08 !important;border:1px solid #f0d99a !important;border-radius:10px !important;
+}
+
+/* ============================================================
+   FEE COLLECTION — layout fixes (overlap + sticky payable) v1
+   ============================================================ */
+/* Fee heads: stop label/input overlap, keep compact 3-col */
+.fee-desk .classic-fee-heads{
+    grid-template-columns:repeat(3, minmax(0,1fr));
+    gap:9px 14px;
+}
+.fee-desk .classic-fee-heads label{
+    grid-template-columns:minmax(0,1fr) 78px;
+    gap:8px;align-items:center;min-width:0;
+}
+.fee-desk .classic-fee-heads label span{
+    text-transform:none;font-size:11.5px;letter-spacing:.2px;line-height:1.15;
+    min-width:0;overflow-wrap:anywhere;
+}
+.fee-desk .classic-fee-heads .amount-input{
+    width:100%;min-width:0;min-height:34px;padding:0 8px;text-align:right;
+}
+
+/* Payable panel: float/stick while scrolling the fee heads */
+.fee-desk .fee-workbench{align-items:start}
+.fee-desk .totals-console{
+    position:sticky;top:70px;align-self:start;z-index:2;
+}
+
+
+/* ============================================================
+   DASHBOARD — PREMIUM REDESIGN
+   Cohesive with the dark-green sidebar + entry-* design tokens
+   ============================================================ */
+
+/* ─── Header ─── */
+.dash-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 28px 28px 24px;
+    background: linear-gradient(135deg, #14342a 0%, #1b6b52 60%, #0f766e 100%);
+    border-radius: 16px;
+    margin-bottom: 20px;
+    color: #fff;
+    box-shadow: 0 4px 20px rgba(20, 52, 42, 0.25);
+}
+
+.dash-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    background: rgba(255,255,255,0.12);
+    backdrop-filter: blur(4px);
+    border-radius: 999px;
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    color: rgba(255,255,255,0.85);
+}
+
+.dash-title {
+    margin: 10px 0 0;
+    font-size: 28px;
+    font-weight: 800;
+    color: #fff;
+    letter-spacing: -0.3px;
+}
+
+.dash-subtitle {
+    margin: 6px 0 0;
+    font-size: 14px;
+    color: rgba(255,255,255,0.65);
+    font-weight: 500;
+}
+
+.dash-header-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-shrink: 0;
+    margin-top: 12px;
+}
+
+.dash-action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 18px;
+    height: 40px;
+    border-radius: 10px;
+    font-size: 13.5px;
+    font-weight: 700;
+    text-decoration: none;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.dash-action-primary {
+    background: #fff;
+    color: #14342a;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+}
+.dash-action-primary:hover {
+    background: #e8f3ee;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.18);
+    transform: translateY(-1px);
+}
+
+.dash-action-outline {
+    background: rgba(255,255,255,0.1);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.25);
+}
+.dash-action-outline:hover {
+    background: rgba(255,255,255,0.18);
+    border-color: rgba(255,255,255,0.4);
+}
+
+/* ─── KPI Strip ─── */
+.dash-kpi-strip {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 16px;
+    margin-bottom: 28px;
+}
+
+.dash-kpi {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 18px 20px;
+    background: #fff;
+    border: 1px solid #dce5e1;
+    border-radius: 14px;
+    box-shadow: 0 1px 3px rgba(16,40,32,0.04), 0 4px 12px rgba(16,40,32,0.05);
+    transition: box-shadow 0.2s ease, transform 0.15s ease;
+}
+.dash-kpi:hover {
+    box-shadow: 0 2px 6px rgba(16,40,32,0.06), 0 8px 20px rgba(16,40,32,0.08);
+    transform: translateY(-2px);
+}
+
+.dash-kpi-icon {
+    flex-shrink: 0;
+    width: 42px;
+    height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 11px;
+}
+.dash-kpi-icon svg {
+    width: 22px;
+    height: 22px;
+}
+
+.dash-kpi-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.dash-kpi-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    color: #5b6b64;
+    line-height: 1.2;
+}
+
+.dash-kpi-value {
+    display: block;
+    margin-top: 6px;
+    font-size: 26px;
+    font-weight: 800;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    color: #0f2620;
+}
+
+/* KPI tones */
+.dash-kpi-success .dash-kpi-icon {
+    background: #ecfdf5;
+    color: #059669;
+}
+.dash-kpi-success .dash-kpi-value { color: #047857; }
+
+.dash-kpi-info .dash-kpi-icon {
+    background: #eff6ff;
+    color: #2563eb;
+}
+.dash-kpi-info .dash-kpi-value { color: #1d4ed8; }
+
+.dash-kpi-danger .dash-kpi-icon {
+    background: #fef2f2;
+    color: #dc2626;
+}
+.dash-kpi-danger .dash-kpi-value { color: #b91c1c; }
+
+.dash-kpi-neutral .dash-kpi-icon {
+    background: #e8f3ee;
+    color: #0f766e;
+}
+.dash-kpi-neutral .dash-kpi-value { color: #14342a; }
+
+/* ─── Section Label ─── */
+.dash-section-label {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: #5b6b64;
+    margin-bottom: 14px;
+    padding-left: 2px;
+}
+
+/* ─── Quick Access Tiles ─── */
+.dash-tiles {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 14px;
+    margin-bottom: 20px;
+}
+
+.dash-tile {
+    display: flex;
+    flex-direction: column;
+    padding: 18px 16px 16px;
+    background: #fff;
+    border: 1px solid #dce5e1;
+    border-radius: 14px;
+    text-decoration: none;
+    box-shadow: 0 1px 3px rgba(16,40,32,0.03), 0 3px 10px rgba(16,40,32,0.04);
+    transition: all 0.18s ease;
+    position: relative;
+    overflow: hidden;
+}
+.dash-tile::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #0f766e, #2fa37c);
+    opacity: 0;
+    transition: opacity 0.18s ease;
+}
+.dash-tile:hover {
+    border-color: #b9cbd6;
+    box-shadow: 0 2px 6px rgba(16,40,32,0.06), 0 8px 24px rgba(16,40,32,0.09);
+    transform: translateY(-3px);
+}
+.dash-tile:hover::before {
+    opacity: 1;
+}
+
+.dash-tile-icon {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    margin-bottom: 12px;
+}
+.dash-tile-icon svg {
+    width: 22px;
+    height: 22px;
+}
+
+/* Tile icon color variants */
+.dash-tile-green  { background: #ecfdf5; color: #059669; }
+.dash-tile-teal   { background: #e8f3ee; color: #0f766e; }
+.dash-tile-blue   { background: #eff6ff; color: #2563eb; }
+.dash-tile-amber  { background: #fffbeb; color: #d97706; }
+.dash-tile-purple { background: #f5f3ff; color: #7c3aed; }
+
+.dash-tile-count {
+    font-size: 22px;
+    font-weight: 800;
+    color: #0f2620;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    margin-bottom: 2px;
+}
+
+.dash-tile-label {
+    font-size: 14px;
+    font-weight: 700;
+    color: #1e293b;
+    margin-top: 2px;
+}
+
+.dash-tile-sub {
+    font-size: 12px;
+    color: #8a978f;
+    margin-top: 4px;
+}
+
+/* ─── Responsive ─── */
+@media (max-width: 1100px) {
+    .dash-tiles {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 768px) {
+    .dash-header {
+        flex-direction: column;
+        padding: 20px;
+        border-radius: 12px;
+    }
+    .dash-header-actions {
+        width: 100%;
+        margin-top: 16px;
+    }
+    .dash-action-btn {
+        flex: 1;
+        justify-content: center;
+    }
+    .dash-kpi-strip {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+    }
+    .dash-kpi {
+        padding: 14px 16px;
+    }
+    .dash-kpi-value {
+        font-size: 22px;
+    }
+    .dash-tiles {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+    }
+}
+
+@media (max-width: 480px) {
+    .dash-kpi-strip {
+        grid-template-columns: 1fr 1fr;
+    }
+    .dash-tiles {
+        grid-template-columns: 1fr 1fr;
+    }
+    .dash-tile {
+        padding: 14px 12px 12px;
+    }
+}

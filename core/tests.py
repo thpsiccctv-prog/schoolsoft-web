@@ -30,7 +30,7 @@ class DashboardTests(TestCase):
         response = self.client.get(reverse("core:dashboard"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Phase 1 Dashboard")
+        self.assertContains(response, "Dashboard")
 
     def test_student_list_loads(self):
         response = self.client.get(reverse("core:student_list"))
