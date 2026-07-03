@@ -23,6 +23,10 @@ from .models import (
     TransportRoute,
 )
 
+admin.site.site_header = "SchoolSoft Admin"
+admin.site.site_title = "SchoolSoft Admin"
+admin.site.index_title = "SchoolSoft Control Center"
+
 
 @admin.register(AcademicSession)
 class AcademicSessionAdmin(admin.ModelAdmin):

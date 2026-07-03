@@ -1,0 +1,61 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+
+{% block bodyclass %}{{ block.super }} login schoolsoft-login-page{% endblock %}
+{% block nav-sidebar %}{% endblock %}
+{% block breadcrumbs %}{% endblock %}
+{% block content_title %}{% endblock %}
+
+{% block content %}
+<div class="schoolsoft-login-shell">
+    <section class="schoolsoft-login-hero">
+        <img src="{% static 'core/school_logo.png' %}" alt="THPS logo">
+        <p class="schoolsoft-login-kicker">Secure Administration</p>
+        <h1>SchoolSoft Control Center</h1>
+        <p>Student, fees, marks, staff and school records management for THPS English Medium School.</p>
+    </section>
+
+    <section class="schoolsoft-login-card">
+        <div class="schoolsoft-login-title">
+            <span>Admin Login</span>
+            <strong>Sign in to continue</strong>
+        </div>
+
+        {% if form.errors and not form.non_field_errors %}
+        <p class="errornote">
+            {% blocktranslate count counter=form.errors.items|length %}Please correct the error below.{% plural %}Please correct the errors below.{% endblocktranslate %}
+        </p>
+        {% endif %}
+
+        {% if form.non_field_errors %}
+        {% for error in form.non_field_errors %}
+        <p class="errornote">{{ error }}</p>
+        {% endfor %}
+        {% endif %}
+
+        <form action="{{ app_path }}" method="post" id="login-form">
+            {% csrf_token %}
+            <div class="form-row">
+                {{ form.username.errors }}
+                {{ form.username.label_tag }}
+                {{ form.username }}
+            </div>
+            <div class="form-row">
+                {{ form.password.errors }}
+                {{ form.password.label_tag }}
+                {{ form.password }}
+                <input type="hidden" name="next" value="{{ next }}">
+            </div>
+            {% url 'admin_password_reset' as password_reset_url %}
+            {% if password_reset_url %}
+            <div class="password-reset-link">
+                <a href="{{ password_reset_url }}">{% translate 'Forgotten your password or username?' %}</a>
+            </div>
+            {% endif %}
+            <div class="submit-row">
+                <input type="submit" value="{% translate 'Log in' %}">
+            </div>
+        </form>
+    </section>
+</div>
+{% endblock %}
