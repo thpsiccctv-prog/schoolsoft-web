@@ -3882,3 +3882,193 @@ th.amount,
     color: #0f172a;
     margin-left: 8px;
 }
+
+/* ============================================================
+   FINAL PRINT OVERRIDES - Receipt + reports
+   Keep this block at the end so it wins over older print rules.
+   ============================================================ */
+
+@media print {
+    @page {
+        size: A4 portrait;
+        margin: 8mm;
+    }
+
+    html,
+    body {
+        width: auto !important;
+        min-width: 0 !important;
+        height: auto !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #ffffff !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    .app,
+    .main,
+    .page {
+        display: block !important;
+        width: auto !important;
+        min-width: 0 !important;
+        min-height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #ffffff !important;
+    }
+
+    .sidebar,
+    .main-topbar,
+    .desktop-statusbar,
+    .no-print,
+    .pagination {
+        display: none !important;
+    }
+
+    .receipt-paper {
+        width: 178mm !important;
+        max-width: 178mm !important;
+        min-height: 0 !important;
+        margin: 0 auto !important;
+        padding: 8mm 10mm 7mm !important;
+        border: 1px solid #d7e3ea !important;
+        border-top: 4px solid #0f766e !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+        overflow: hidden !important;
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+        color: #0f172a !important;
+        font-size: 9pt !important;
+    }
+
+    .receipt-paper::before {
+        font-size: 54pt !important;
+        color: rgba(15, 118, 110, 0.035) !important;
+    }
+
+    .receipt-header {
+        gap: 8mm !important;
+        margin-bottom: 5mm !important;
+        padding-bottom: 4mm !important;
+        border-bottom: 1px solid #e2e8f0 !important;
+    }
+
+    .receipt-header h2 {
+        margin: 0 0 1.5mm !important;
+        font-size: 15pt !important;
+        line-height: 1.15 !important;
+        letter-spacing: 0.2px !important;
+    }
+
+    .receipt-header p {
+        margin: 1mm 0 0 !important;
+        font-size: 7.5pt !important;
+        line-height: 1.25 !important;
+    }
+
+    .receipt-title-badge {
+        margin-top: 3mm !important;
+        padding: 1.5mm 4mm !important;
+        border-radius: 999px !important;
+        font-size: 7.5pt !important;
+        letter-spacing: 0.4px !important;
+    }
+
+    .receipt-number {
+        min-width: 28mm !important;
+        padding: 3mm 5mm !important;
+        border-radius: 2mm !important;
+    }
+
+    .receipt-number span {
+        margin-bottom: 1mm !important;
+        font-size: 6.8pt !important;
+    }
+
+    .receipt-number strong {
+        font-size: 13pt !important;
+    }
+
+    .receipt-meta {
+        grid-template-columns: repeat(3, 1fr) !important;
+        gap: 3mm 5mm !important;
+        margin-bottom: 5mm !important;
+        padding: 4mm !important;
+        border-radius: 2mm !important;
+    }
+
+    .receipt-meta span {
+        margin-bottom: 1mm !important;
+        font-size: 6.7pt !important;
+    }
+
+    .receipt-meta strong {
+        font-size: 8.5pt !important;
+        line-height: 1.2 !important;
+    }
+
+    .print-table table {
+        margin-bottom: 3mm !important;
+    }
+
+    .print-table th {
+        padding: 2mm 3mm !important;
+        font-size: 7.5pt !important;
+        line-height: 1.2 !important;
+    }
+
+    .print-table td {
+        padding: 2.2mm 3mm !important;
+        font-size: 8pt !important;
+        line-height: 1.2 !important;
+    }
+
+    .print-table tfoot th,
+    .print-table tfoot td {
+        padding: 1.7mm 3mm !important;
+        font-size: 8pt !important;
+    }
+
+    .print-table tfoot tr:first-child th,
+    .print-table tfoot tr:first-child td {
+        padding-top: 3mm !important;
+    }
+
+    .print-table tfoot .net-total-row th,
+    .print-table tfoot .net-total-row td {
+        padding: 2.2mm 3mm !important;
+        font-size: 10pt !important;
+    }
+
+    .receipt-paper p {
+        margin-top: 4mm !important;
+        font-size: 7.5pt !important;
+        line-height: 1.25 !important;
+    }
+
+    .receipt-footer {
+        margin-top: 9mm !important;
+        padding-top: 5mm !important;
+        border-top: 1px solid #e2e8f0 !important;
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+    }
+
+    .receipt-footer span {
+        width: 42mm !important;
+        padding-top: 2mm !important;
+        font-size: 7.8pt !important;
+        line-height: 1.2 !important;
+    }
+
+    .table-wrap {
+        overflow: visible !important;
+        box-shadow: none !important;
+    }
+
+    th {
+        position: static !important;
+    }
+}
