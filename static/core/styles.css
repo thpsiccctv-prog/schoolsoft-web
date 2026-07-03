@@ -1822,34 +1822,86 @@ th.amount,
 
 @media (max-width: 960px) {
     .app {
-        grid-template-columns: 1fr;
+        display: block;
+        min-height: 100dvh;
     }
 
     .sidebar {
-        gap: 12px;
+        position: static;
+        display: block;
+        height: auto;
+        min-height: 0;
         padding: 14px;
+        box-shadow: none;
     }
 
     .brand {
-        padding-bottom: 12px;
+        padding: 4px 6px 14px;
     }
 
     .side-nav {
-        flex-direction: row;
-        flex-wrap: wrap;
-        gap: 6px;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        flex: none;
+        align-content: start;
+        margin-top: 12px;
     }
 
     .side-nav a {
-        flex: 1 1 calc(33.333% - 6px);
-        justify-content: center;
-        min-height: 42px;
-        padding: 0 10px;
+        justify-content: flex-start;
+        min-width: 0;
+        min-height: 46px;
+        padding: 0 12px;
         font-size: 14px;
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.05);
+        box-shadow: none;
+        transform: none;
+    }
+
+    .side-nav a:hover {
+        transform: none;
+    }
+
+    .side-nav a.active {
+        box-shadow: none;
+    }
+
+    .side-foot,
+    .desktop-statusbar {
+        display: none;
+    }
+
+    .main {
+        display: block;
     }
 
     .main-topbar {
+        min-height: auto;
         padding: 10px 16px;
+        background: #ffffff;
+        backdrop-filter: none;
+    }
+
+    .dashboard-page .main-topbar {
+        display: none;
+    }
+
+    .topbar-left {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .topbar-kicker,
+    .topbar-status {
+        display: none !important;
+    }
+
+    .back-btn {
+        min-height: 42px;
+        padding: 0 16px;
+        border-radius: 12px;
     }
 
     .topbar-note {
@@ -1901,9 +1953,7 @@ th.amount,
     }
 
     .ops-header,
-    .ops-actions,
-    .topbar-left,
-    .topbar-status {
+    .ops-actions {
         flex-direction: column;
         align-items: stretch;
     }

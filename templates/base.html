@@ -85,6 +85,7 @@
     var backButton = document.querySelector(".back-btn");
     if (backButton && path === "/") {
         backButton.hidden = true;
+        document.body.classList.add("dashboard-page");
     }
 
     var searchHint = document.querySelector(".topbar-kicker");
