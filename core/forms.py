@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from django import forms
+from django.db.models import Max
 from django.utils import timezone
 
 from .models import AcademicSession, FeeHead, FeeReceipt, SalaryPayment, Staff, Student, TransferCertificate
@@ -19,6 +20,51 @@ class StudentChoiceField(forms.ModelChoiceField):
         details = " | ".join(part for part in [sid, class_label, admission] if part)
         status_marker = "" if obj.is_active else " [INACTIVE]"
         return f"{obj.full_name}{status_marker} ({details})"
+
+
+class StudentForm(forms.ModelForm):
+    class Meta:
+        model = Student
+        fields = [
+            "registration_no",
+            "admission_no",
+            "legacy_sid",
+            "admission_date",
+            "full_name",
+            "current_class",
+            "current_section",
+            "date_of_birth",
+            "gender",
+            "father_name",
+            "mother_name",
+            "category",
+            "religion",
+            "mobile_primary",
+            "mobile_secondary",
+            "aadhaar_no",
+            "address_local",
+            "address_permanent",
+            "is_active",
+        ]
+        widgets = {
+            "admission_date": forms.DateInput(attrs={"type": "date"}),
+            "date_of_birth": forms.DateInput(attrs={"type": "date"}),
+            "address_local": forms.Textarea(attrs={"rows": 2}),
+            "address_permanent": forms.Textarea(attrs={"rows": 2}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not self.instance.pk:
+            if "admission_date" not in self.initial:
+                self.fields["admission_date"].initial = timezone.localdate()
+            if "legacy_sid" not in self.initial:
+                max_sid = Student.objects.aggregate(max_sid=Max("legacy_sid"))["max_sid"]
+                self.fields["legacy_sid"].initial = (max_sid or 0) + 1
+            
+        for field_name, field in self.fields.items():
+            if field_name != "is_active":
+                field.widget.attrs.setdefault("class", "form-control")
 
 
 class FeeReceiptEntryForm(forms.ModelForm):

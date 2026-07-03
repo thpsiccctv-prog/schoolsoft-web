@@ -15,7 +15,7 @@
         </div>
         <div class="action-row">
             <a class="button secondary" href="{% url 'core:student_list' %}">Back</a>
-            <a class="button secondary" href="/admin/core/student/{{ student.pk }}/change/">Edit</a>
+            <a class="button secondary" href="{% url 'core:student_update' student.pk %}">Edit</a>
         </div>
     </div>
 

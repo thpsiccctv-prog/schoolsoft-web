@@ -13,6 +13,12 @@
                 Total {{ total_all_students|indian_number }} / Active {{ total_active_students|indian_number }} / Inactive {{ total_inactive_students|indian_number }}.
             </p>
         </div>
+        <div class="action-row" style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <a class="button" href="{% url 'core:student_create' %}">New Admission</a>
+            <a class="button secondary" href="{% url 'core:student_register' %}?{{ request.GET.urlencode }}" target="_blank">Print Register</a>
+            <button type="button" class="button secondary" disabled title="Coming Soon">Export Excel</button>
+            <a class="button secondary" href="{% url 'core:student_list' %}">Reset Filters</a>
+        </div>
     </div>
 
     <form class="filterbar student-filterbar" method="get">
@@ -77,6 +83,7 @@
                             </span>
                         </td>
                         <td data-label="Documents" class="doc-links">
+                            <a class="table-link" href="{% url 'core:student_update' student.pk %}">Edit</a>
                             <a class="table-link" href="{% url 'core:admission_form_pdf' student.pk %}">Admission Form</a>
                             <a class="table-link" href="{% url 'core:character_certificate_pdf' student.pk %}">Character Cert.</a>
                             <a class="table-link" href="{% url 'core:tc_detail' student.pk %}">TC</a>

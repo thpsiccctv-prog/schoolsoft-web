@@ -9,7 +9,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 
-from .forms import FeeReceiptEntryForm, FeeReceiptLineEntryForm, SalaryPaymentForm, TransferCertificateForm
+from .forms import FeeReceiptEntryForm, FeeReceiptLineEntryForm, SalaryPaymentForm, StudentForm, TransferCertificateForm
 from .models import (
     AcademicSession,
     ExamMark,
@@ -127,11 +127,18 @@ def student_list(request):
     if section_id:
         students = students.filter(current_section_id=section_id)
 
-    paginator = Paginator(students, 50)
+    try:
+        per_page = int(request.GET.get("per_page", 50))
+    except ValueError:
+        per_page = 50
+        
+    paginator = Paginator(students, per_page)
     page = paginator.get_page(request.GET.get("page"))
 
     context = {
         "page": page,
+        "per_page": per_page,
+        "total_students": students.count(),
         "query": query,
         "selected_class": class_id,
         "selected_section": section_id,
@@ -977,3 +984,141 @@ def salary_payslip_pdf(request, pk):
     response = HttpResponse(pdf_bytes, content_type="application/pdf")
     response["Content-Disposition"] = f'attachment; filename="{payment.slip_no}.pdf"'
     return response
+
+def student_create(request):
+    if request.method == "POST":
+        form = StudentForm(request.POST)
+        if form.is_valid():
+            student = form.save()
+            action = request.POST.get("action")
+            if action == "save_new":
+                return redirect("core:student_create")
+            return redirect("core:student_detail", pk=student.pk)
+    else:
+        form = StudentForm()
+        
+    recent_students = Student.objects.order_by("-id")[:5]
+    context = {
+        "form": form,
+        "recent_students": recent_students,
+        "is_edit": False,
+    }
+    return render(request, "core/student_form.html", context)
+
+
+def student_update(request, pk):
+    student = get_object_or_404(Student, pk=pk)
+    if request.method == "POST":
+        form = StudentForm(request.POST, instance=student)
+        if form.is_valid():
+            form.save()
+            return redirect("core:student_detail", pk=student.pk)
+    else:
+        form = StudentForm(instance=student)
+        
+    recent_students = Student.objects.order_by("-id")[:5]
+    context = {
+        "form": form,
+        "student": student,
+        "recent_students": recent_students,
+        "is_edit": True,
+    }
+    return render(request, "core/student_form.html", context)
+
+
+def check_student_duplicate(request):
+    """Async endpoint to check for duplicate students."""
+    field = request.GET.get("field")
+    value = request.GET.get("value", "").strip()
+    exclude_id = request.GET.get("exclude_id")
+    
+    if not value or not field:
+        return JsonResponse({"duplicate": False})
+        
+    query = Q()
+    if field == "legacy_sid":
+        query = Q(legacy_sid=value)
+    elif field == "admission_no":
+        query = Q(admission_no=value)
+    elif field == "mobile":
+        query = Q(mobile_primary=value) | Q(mobile_secondary=value)
+    else:
+        return JsonResponse({"duplicate": False})
+        
+    qs = Student.objects.filter(query)
+    if exclude_id and exclude_id.isdigit():
+        qs = qs.exclude(pk=exclude_id)
+        
+    matches = qs.values_list("full_name", "current_class__name")[:3]
+    
+    if matches:
+        names = [f"{m[0]} ({m[1] or 'No class'})" for m in matches]
+        return JsonResponse({
+            "duplicate": True, 
+            "message": f"Found existing student(s) with this {field}: " + ", ".join(names)
+        })
+        
+    return JsonResponse({"duplicate": False})
+
+def student_register(request):
+    """
+    Renders a printable student register with the exact same filtering as student_list.
+    """
+    query = request.GET.get("q", "").strip()
+    class_id = request.GET.get("class", "").strip()
+    section_id = request.GET.get("section", "").strip()
+    status = request.GET.get("status", "active").strip() or "active"
+
+    students = Student.objects.select_related("current_class", "current_section").order_by(
+        "current_class__display_order",
+        "current_section__name",
+        "roll_no",
+        "full_name",
+    )
+
+    if status == "active":
+        students = students.filter(is_active=True)
+    elif status == "inactive":
+        students = students.filter(is_active=False)
+
+    if query:
+        students = students.filter(
+            Q(full_name__icontains=query)
+            | Q(father_name__icontains=query)
+            | Q(mother_name__icontains=query)
+            | Q(admission_no__icontains=query)
+            | Q(legacy_sid__icontains=query)
+            | Q(mobile_primary__icontains=query)
+        )
+
+    if class_id:
+        students = students.filter(current_class_id=class_id)
+
+    if section_id:
+        students = students.filter(current_section_id=section_id)
+
+    # Determine filter description for header
+    filter_description = []
+    if class_id:
+        cls = SchoolClass.objects.filter(pk=class_id).first()
+        if cls:
+            filter_description.append(f"Class: {cls.name}")
+    if section_id:
+        sec = Section.objects.filter(pk=section_id).first()
+        if sec:
+            filter_description.append(f"Section: {sec.name}")
+    filter_description.append(f"Status: {status.title()}")
+    if query:
+        filter_description.append(f"Search: '{query}'")
+
+    context = {
+        "students": students,
+        "filter_description": " | ".join(filter_description),
+        "total_students": students.count(),
+        "print_date": timezone.now(),
+        "query": query,
+        "selected_class": class_id,
+        "selected_section": section_id,
+        "selected_status": status,
+    }
+    return render(request, "core/student_register_report.html", context)
