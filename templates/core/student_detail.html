@@ -13,9 +13,10 @@
                 {% if student.current_class %} | {{ student.current_class }}{% if student.current_section %}-{{ student.current_section.name }}{% endif %}{% endif %}
             </p>
         </div>
-        <div class="action-row">
-            <a class="button secondary" href="{% url 'core:student_list' %}">Back</a>
+        <div class="classic-title-actions">
             <a class="button secondary" href="{% url 'core:student_update' student.pk %}">Edit</a>
+            <a class="button secondary" href="{% url 'core:student_delete' student.pk %}" style="background: #ffebee; color: #d32f2f; border-color: #ffcdd2;">Delete</a>
+            <a class="button secondary" href="{% url 'core:student_list' %}">Back to List</a>
         </div>
     </div>
 

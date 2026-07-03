@@ -11,6 +11,7 @@
         </div>
         <div class="classic-title-actions">
             {% if is_edit %}
+                <a class="mini-button" href="{% url 'core:student_delete' student.pk %}" style="background: #d32f2f; color: white; border-color: #d32f2f;">Delete</a>
                 <a class="mini-button" href="{% url 'core:student_detail' student.pk %}">Cancel</a>
             {% else %}
                 <a class="mini-button" href="{% url 'core:student_list' %}">Student List</a>
@@ -181,6 +182,7 @@
                             <th>Student's Name</th>
                             <th>Class</th>
                             <th>Father's Name</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -191,6 +193,10 @@
                                 <td><a href="{% url 'core:student_detail' st.pk %}">{{ st.full_name }}</a></td>
                                 <td>{{ st.current_class|default:"" }}{% if st.current_section %}-{{ st.current_section }}{% endif %}</td>
                                 <td>{{ st.father_name }}</td>
+                                <td>
+                                    <a class="table-link" href="{% url 'core:student_update' st.pk %}" style="margin-right: 5px;">Edit</a>
+                                    <a class="table-link" href="{% url 'core:student_delete' st.pk %}" style="color: #d32f2f;">Delete</a>
+                                </td>
                             </tr>
                         {% endfor %}
                     </tbody>

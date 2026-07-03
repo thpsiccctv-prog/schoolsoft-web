@@ -2,9 +2,10 @@ import csv
 from decimal import Decimal
 
 from django.conf import settings
+from django.contrib import messages
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Count, Q, Sum
+from django.db.models import Count, ProtectedError, Q, Sum
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -1170,3 +1171,16 @@ def student_export_csv(request):
         ])
         
     return response
+
+def student_delete(request, pk):
+    student = get_object_or_404(Student, pk=pk)
+    
+    if request.method == "POST":
+        try:
+            student.delete()
+            messages.success(request, f"Student {student.full_name} deleted successfully.")
+        except ProtectedError:
+            messages.error(request, f"Cannot delete {student.full_name} because they have fee receipts or marks. Please mark them as Inactive instead.")
+        return redirect("core:student_list")
+        
+    return render(request, "core/student_confirm_delete.html", {"student": student})

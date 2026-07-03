@@ -21,6 +21,7 @@ urlpatterns = [
     path("students/new/", views.student_create, name="student_create"),
     path("students/<int:pk>/", views.student_detail, name="student_detail"),
     path("students/<int:pk>/edit/", views.student_update, name="student_update"),
+    path("students/<int:pk>/delete/", views.student_delete, name="student_delete"),
     path("api/students/check-duplicate/", views.check_student_duplicate, name="check_student_duplicate"),
     path("receipts/", views.receipt_list, name="receipt_list"),
     path("receipts/new/", views.receipt_create, name="receipt_create"),

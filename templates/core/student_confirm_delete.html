@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}Delete Student | SchoolSoft{% endblock %}
+
+{% block content %}
+<section class="section">
+    <div class="classic-titlebar">
+        <div>
+            <strong>Delete Student</strong>
+            <span>Are you sure you want to delete this record?</span>
+        </div>
+    </div>
+
+    <div class="classic-panel" style="max-width: 600px; margin: 20px auto; padding: 20px;">
+        <h3 style="color: #d32f2f; margin-bottom: 15px;">Warning: You are about to delete {{ student.full_name }}</h3>
+        
+        <p>This action cannot be undone.</p>
+        <p><strong>Note:</strong> If this student has any fee receipts or exam marks recorded in the system, they <strong>cannot</strong> be deleted to preserve accounting integrity. In that case, you should edit the student and mark them as <strong>Inactive</strong> instead.</p>
+        
+        <div style="margin-top: 25px; padding-top: 15px; border-top: 1px solid #eee; display: flex; gap: 10px;">
+            <form method="post" style="margin: 0;">
+                {% csrf_token %}
+                <button type="submit" class="button primary" style="background: #d32f2f; border-color: #d32f2f;">Yes, Delete Student</button>
+            </form>
+            <a href="javascript:history.back()" class="button secondary">Cancel</a>
+        </div>
+    </div>
+</section>
+{% endblock %}
