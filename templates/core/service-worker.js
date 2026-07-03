@@ -1,7 +1,9 @@
-const CACHE_NAME = 'schoolsoft-v1';
+const CACHE_NAME = 'schoolsoft-v2';
 const STATIC_ASSETS = [
     '/static/core/styles.css',
-    '/static/core/school_logo.png'
+    '/static/core/school_logo.png',
+    '/static/core/pwa-icon-192.png',
+    '/static/core/pwa-icon-512.png'
 ];
 
 // Install Event
@@ -12,6 +14,7 @@ self.addEventListener('install', (event) => {
             return cache.addAll(STATIC_ASSETS);
         })
     );
+    self.skipWaiting();
 });
 
 // Activate Event
@@ -27,6 +30,7 @@ self.addEventListener('activate', (event) => {
             );
         })
     );
+    self.clients.claim();
 });
 
 // Fetch Event
