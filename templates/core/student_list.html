@@ -4,7 +4,7 @@
 {% block title %}Students | SchoolSoft Modernization{% endblock %}
 
 {% block content %}
-<section class="section">
+<section class="section student-list-page">
     <div class="section-heading with-actions">
         <div>
             <h2>Students</h2>
@@ -15,7 +15,7 @@
         </div>
     </div>
 
-    <form class="filterbar" method="get">
+    <form class="filterbar student-filterbar" method="get">
         <input type="search" name="q" value="{{ query }}" placeholder="Search name, SID, admission no, mobile">
         <select name="status" aria-label="Student status">
             <option value="active" {% if selected_status == "active" %}selected{% endif %}>Active students</option>
@@ -42,8 +42,8 @@
         <a class="button secondary" href="{% url 'core:student_list' %}">Reset</a>
     </form>
 
-    <div class="table-wrap">
-        <table>
+    <div class="table-wrap student-table-wrap">
+        <table class="student-card-table">
             <thead>
                 <tr>
                     <th>SID</th>
@@ -60,23 +60,23 @@
             <tbody>
                 {% for student in page.object_list %}
                     <tr>
-                        <td>{{ student.legacy_sid|default:"" }}</td>
-                        <td>
+                        <td data-label="SID">{{ student.legacy_sid|default:"" }}</td>
+                        <td data-label="Name" class="student-name-cell">
                             <a class="table-link" href="{% url 'core:student_detail' student.pk %}">
                                 {{ student.full_name }}
                             </a>
                         </td>
-                        <td>{{ student.father_name }}</td>
-                        <td>{{ student.current_class|default:"" }}{% if student.current_section %}-{{ student.current_section.name }}{% endif %}</td>
-                        <td>{{ student.roll_no|default:"" }}</td>
-                        <td>{{ student.admission_no }}</td>
-                        <td>{{ student.mobile_primary }}</td>
-                        <td>
+                        <td data-label="Father">{{ student.father_name }}</td>
+                        <td data-label="Class">{{ student.current_class|default:"" }}{% if student.current_section %}-{{ student.current_section.name }}{% endif %}</td>
+                        <td data-label="Roll">{{ student.roll_no|default:"" }}</td>
+                        <td data-label="Admission">{{ student.admission_no }}</td>
+                        <td data-label="Mobile">{{ student.mobile_primary }}</td>
+                        <td data-label="Status">
                             <span class="status-pill {% if student.is_active %}status-active{% else %}status-inactive{% endif %}">
                                 {% if student.is_active %}Active{% else %}Inactive{% endif %}
                             </span>
                         </td>
-                        <td class="doc-links">
+                        <td data-label="Documents" class="doc-links">
                             <a class="table-link" href="{% url 'core:admission_form_pdf' student.pk %}">Admission Form</a>
                             <a class="table-link" href="{% url 'core:character_certificate_pdf' student.pk %}">Character Cert.</a>
                             <a class="table-link" href="{% url 'core:tc_detail' student.pk %}">TC</a>
