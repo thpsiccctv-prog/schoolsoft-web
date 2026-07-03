@@ -1975,10 +1975,21 @@ th.amount,
 
     .classic-titlebar {
         align-items: stretch;
+        flex-direction: column;
     }
 
     .classic-title-actions {
-        flex-direction: column;
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 8px;
+        width: 100%;
+    }
+
+    .classic-title-actions .mini-button {
+        flex: 1 1 calc(50% - 4px);
+        min-height: 40px;
+        padding: 0 8px;
+        text-align: center;
     }
 
     .ops-header,
@@ -1988,15 +1999,61 @@ th.amount,
     }
 
     .receipt-main-grid .wide-field {
-        grid-column: auto;
+        grid-column: 1 / -1;
+    }
+
+    .receipt-main-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    .month-range-group {
+        grid-column: 1 / -1;
+    }
+
+    .month-chips {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
     }
 
     .classic-fee-heads {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+    }
+
+    .classic-fee-heads label {
+        gap: 4px;
+    }
+
+    .classic-fee-heads label span {
+        overflow: hidden;
+        font-size: 11px;
+        line-height: 1.2;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .classic-fee-heads .amount-input {
+        min-height: 34px;
+        padding: 0 6px;
     }
 
     .form-actions {
-        flex-direction: column;
+        flex-direction: row;
+        gap: 8px !important;
+    }
+
+    .form-actions button {
+        min-width: 0;
+        min-height: 42px;
+        padding-right: 8px;
+        padding-left: 8px;
+        font-size: 13px;
+    }
+
+    .compact-table-wrap table th,
+    .compact-table-wrap table td {
+        padding: 8px 10px;
+        font-size: 12px;
     }
 
     .receipt-meta,
@@ -2128,4 +2185,19 @@ th.amount,
     background: #cce5ff;
     color: #004085;
     border-color: #b8daff;
+}
+
+@media (max-width: 960px) {
+    .month-chips {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 6px;
+    }
+
+    .month-chips button {
+        min-height: 34px;
+        padding: 0 4px;
+        border-radius: 10px;
+        font-size: 12px;
+    }
 }
