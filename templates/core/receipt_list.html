@@ -28,7 +28,7 @@
         </article>
     </div>
 
-    <form class="filterbar receipt-filter" method="get">
+    <form class="filterbar receipt-filterbar" method="get">
         <input type="search" name="q" value="{{ query }}" placeholder="Search receipt no, student, SID, admission no">
         <input type="date" name="date_from" value="{{ date_from }}" aria-label="From date">
         <input type="date" name="date_to" value="{{ date_to }}" aria-label="To date">
@@ -52,8 +52,8 @@
         <a class="button secondary" href="{% url 'core:receipt_list' %}">Reset</a>
     </form>
 
-    <div class="table-wrap">
-        <table>
+    <div class="table-wrap receipt-table-wrap">
+        <table class="receipt-card-table">
             <thead>
                 <tr>
                     <th>Receipt</th>
@@ -69,22 +69,22 @@
             <tbody>
                 {% for receipt in page.object_list %}
                     <tr>
-                        <td>
+                        <td data-label="Receipt" class="receipt-no-cell">
                             <a class="table-link" href="{% url 'core:receipt_detail' receipt.id %}">
                                 {{ receipt.receipt_no }}
                             </a>
                         </td>
-                        <td>{{ receipt.receipt_date|date:"d M Y" }}</td>
-                        <td>
+                        <td data-label="Date">{{ receipt.receipt_date|date:"d M Y" }}</td>
+                        <td data-label="Student">
                             <a class="table-link" href="{% url 'core:student_detail' receipt.student_id %}">
                                 {{ receipt.student.full_name }}
                             </a>
                         </td>
-                        <td>{{ receipt.student.current_class|default:"" }}{% if receipt.student.current_section %}-{{ receipt.student.current_section.name }}{% endif %}</td>
-                        <td>{{ receipt.from_month }}{% if receipt.to_month and receipt.to_month != receipt.from_month %} to {{ receipt.to_month }}{% endif %}</td>
-                        <td class="amount">{{ receipt.received_amount|indian_number }}</td>
-                        <td class="amount{% if receipt.legacy_due_amount > 0 %} due-amount{% endif %}">{{ receipt.legacy_due_amount|indian_number }}</td>
-                        <td><a class="table-link" href="{% url 'core:receipt_detail' receipt.id %}">Open</a></td>
+                        <td data-label="Class">{{ receipt.student.current_class|default:"" }}{% if receipt.student.current_section %}-{{ receipt.student.current_section.name }}{% endif %}</td>
+                        <td data-label="Month">{{ receipt.from_month }}{% if receipt.to_month and receipt.to_month != receipt.from_month %} to {{ receipt.to_month }}{% endif %}</td>
+                        <td data-label="Paid" class="amount">{{ receipt.received_amount|indian_number }}</td>
+                        <td data-label="Due" class="amount{% if receipt.legacy_due_amount > 0 %} due-amount{% endif %}">{{ receipt.legacy_due_amount|indian_number }}</td>
+                        <td data-label="Action" class="action-links"><a class="table-link" href="{% url 'core:receipt_detail' receipt.id %}">Open</a></td>
                     </tr>
                 {% empty %}
                     <tr>

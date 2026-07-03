@@ -2184,6 +2184,167 @@ th.amount,
         font-size: 12px;
     }
 
+    /* ---- Receipts list + Collection report: compact filter bars ---- */
+
+    .receipt-filterbar,
+    .collection-filterbar {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        padding: 10px;
+    }
+
+    .receipt-filterbar input[type="search"] {
+        grid-column: 1 / -1;
+    }
+
+    .receipt-filterbar button,
+    .receipt-filterbar .button,
+    .collection-filterbar button,
+    .collection-filterbar .button {
+        min-height: 42px;
+        padding-right: 10px;
+        padding-left: 10px;
+    }
+
+    .collection-filterbar label {
+        align-self: center;
+        margin: 0;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+    }
+
+    /* ---- Receipts list + Collection report: table -> mobile cards ---- */
+
+    .receipt-table-wrap,
+    .collection-table-wrap {
+        overflow: visible;
+        border: 0;
+        background: transparent;
+        box-shadow: none;
+    }
+
+    .receipt-card-table,
+    .receipt-card-table tbody,
+    .receipt-card-table tr,
+    .receipt-card-table td,
+    .collection-card-table,
+    .collection-card-table tbody,
+    .collection-card-table tr,
+    .collection-card-table td {
+        display: block;
+        width: 100%;
+    }
+
+    .receipt-card-table thead,
+    .collection-card-table thead {
+        display: none;
+    }
+
+    .receipt-card-table tbody,
+    .collection-card-table tbody {
+        display: grid;
+        gap: 12px;
+    }
+
+    .receipt-card-table tr,
+    .collection-card-table tr {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px 10px;
+        padding: 13px;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: #ffffff;
+        box-shadow: var(--shadow-soft);
+    }
+
+    .receipt-card-table td,
+    .collection-card-table td {
+        min-height: 36px;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        color: var(--text);
+        font-size: 13px;
+        text-align: left;
+        white-space: normal;
+    }
+
+    .receipt-card-table td::before,
+    .collection-card-table td::before {
+        content: attr(data-label);
+        display: block;
+        margin-bottom: 3px;
+        color: var(--muted);
+        font-size: 10.5px;
+        font-weight: 800;
+        text-transform: uppercase;
+    }
+
+    /* Receipts: receipt no on top, student name under it, both full width */
+    .receipt-card-table .receipt-no-cell {
+        grid-column: 1 / -1;
+        order: -3;
+    }
+
+    .receipt-card-table .receipt-no-cell::before {
+        display: none;
+    }
+
+    .receipt-card-table .receipt-no-cell .table-link {
+        font-size: 18px;
+        line-height: 1.25;
+    }
+
+    .receipt-card-table td[data-label="Student"] {
+        grid-column: 1 / -1;
+        order: -2;
+        padding-bottom: 8px;
+        border-bottom: 1px solid var(--line);
+    }
+
+    .receipt-card-table .action-links {
+        grid-column: 1 / -1;
+        padding-top: 8px;
+        border-top: 1px solid var(--line);
+    }
+
+    .receipt-card-table .action-links::before {
+        display: none;
+    }
+
+    .receipt-card-table .action-links .table-link {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        min-height: 40px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--panel-soft);
+        font-size: 13px;
+    }
+
+    /* Collection: student name on top, full width */
+    .collection-card-table .student-name-cell {
+        grid-column: 1 / -1;
+        order: -3;
+        padding-bottom: 8px;
+        border-bottom: 1px solid var(--line);
+        font-size: 16px;
+        font-weight: 700;
+    }
+
+    .collection-card-table .student-name-cell::before {
+        display: none;
+    }
+
+    .collection-card-table .receipt-no-cell {
+        order: -2;
+    }
+
     .receipt-meta,
     .receipt-stats {
         grid-template-columns: 1fr;

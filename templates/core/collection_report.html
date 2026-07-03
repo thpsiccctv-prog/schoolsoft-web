@@ -31,7 +31,7 @@
         </article>
     </div>
 
-    <form class="filterbar compact-filter no-print" method="get">
+    <form class="filterbar compact-filter collection-filterbar no-print" method="get">
         <label>From Date:</label>
         <input type="date" name="date_from" value="{{ date_from_str }}">
         <label>To Date:</label>
@@ -40,8 +40,8 @@
         <a class="button secondary" href="{% url 'core:collection_report' %}">Reset</a>
     </form>
 
-    <div class="table-wrap">
-        <table>
+    <div class="table-wrap collection-table-wrap">
+        <table class="collection-card-table">
             <thead>
                 <tr>
                     <th>Date</th>
@@ -57,14 +57,14 @@
             <tbody>
                 {% for row in receipts %}
                     <tr>
-                        <td>{{ row.receipt_date|date:"d-m-Y" }}</td>
-                        <td><a href="{% url 'core:receipt_detail' row.pk %}">{{ row.receipt_no }}</a></td>
-                        <td>{{ row.student.legacy_sid }}</td>
-                        <td>{{ row.student.full_name }}</td>
-                        <td>{{ row.student.current_class.name }}{% if row.student.current_section.name %}-{{ row.student.current_section.name }}{% endif %}</td>
-                        <td>{{ row.get_payment_mode_display }}</td>
-                        <td class="amount">{{ row.legacy_net_total|indian_number }}</td>
-                        <td class="amount">{{ row.received_amount|indian_number }}</td>
+                        <td data-label="Date">{{ row.receipt_date|date:"d-m-Y" }}</td>
+                        <td data-label="Receipt" class="receipt-no-cell"><a class="table-link" href="{% url 'core:receipt_detail' row.pk %}">{{ row.receipt_no }}</a></td>
+                        <td data-label="SID">{{ row.student.legacy_sid }}</td>
+                        <td data-label="Student" class="student-name-cell">{{ row.student.full_name }}</td>
+                        <td data-label="Class">{{ row.student.current_class.name }}{% if row.student.current_section.name %}-{{ row.student.current_section.name }}{% endif %}</td>
+                        <td data-label="Mode">{{ row.get_payment_mode_display }}</td>
+                        <td data-label="Net" class="amount">{{ row.legacy_net_total|indian_number }}</td>
+                        <td data-label="Received" class="amount">{{ row.received_amount|indian_number }}</td>
                     </tr>
                 {% empty %}
                     <tr>
