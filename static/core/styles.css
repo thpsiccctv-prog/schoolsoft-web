@@ -2491,181 +2491,246 @@ th.amount,
     }
 }
 
-/* ==========================================================================
-   PREMIUM UI - MODERN COMPACT DATA ENTRY FORM
-   ========================================================================== */
 
-.premium-form {
-    font-family: inherit;
+
+/* ============================================================
+   SchoolSoft — Premium UI Polish (Vanilla CSS)
+   Student Admission Entry & shared form styles
+   Drop-in improvements. Adjust the class names in the
+   "HOOKS" comments to match your existing markup.
+   ============================================================ */
+
+/* ---------- 1. DESIGN TOKENS (single source of truth) ---------- */
+:root {
+  /* Brand — anchored to the dark-green sidebar */
+  --brand-900: #14342a;   /* sidebar / darkest */
+  --brand-800: #17563f;
+  --brand-700: #1b6b52;   /* primary actions */
+  --brand-600: #218a68;
+  --brand-500: #2fa37c;   /* accent / gradient end */
+  --brand-050: #e8f3ee;   /* tint fills, focus glow */
+
+  /* Neutrals (slightly warm/green-tinted for cohesion) */
+  --ink-900: #0f2620;     /* headings */
+  --ink-700: #33413c;     /* body text */
+  --ink-500: #5b6b64;     /* labels */
+  --ink-400: #8a978f;     /* placeholder */
+  --line:    #dce5e1;     /* borders */
+  --line-strong: #c4d2cb; /* hover borders */
+  --surface: #ffffff;     /* cards / inputs */
+  --canvas:  #eef3f1;     /* page background */
+
+  /* Semantic */
+  --danger:  #b4453c;     /* muted, not harsh */
+  --focus-ring: 0 0 0 3px rgba(47, 163, 124, 0.22);
+
+  /* System */
+  --radius:   12px;
+  --radius-sm: 9px;
+  --shadow-card: 0 1px 2px rgba(16,40,32,.04), 0 6px 18px rgba(16,40,32,.06);
+  --shadow-pop:  0 8px 24px rgba(16,40,32,.12);
+  --field-h: 42px;
+  --gap-x: 22px;
+  --gap-y: 16px;
 }
 
-.premium-card {
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    padding: 16px;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.04), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
-    margin-bottom: 16px;
+/* ---------- 2. PAGE CANVAS ---------- */
+/* HOOK: your main content wrapper */
+.content-area {
+  background: var(--canvas);
+  color: var(--ink-700);
+  font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
-.premium-card-title {
-    font-size: 15px;
-    font-weight: 700;
-    color: #1e293b;
-    margin-bottom: 14px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid #f1f5f9;
-    display: flex;
-    align-items: center;
-    gap: 8px;
+/* ---------- 3. CARDS ---------- */
+/* HOOK: each white section box */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+  padding: 22px 24px 24px;
+  margin-bottom: 18px;
 }
 
-/* Optional icon styling in title */
-.premium-card-title::before {
-    content: "";
-    display: block;
-    width: 6px;
-    height: 16px;
-    background: var(--accent);
-    border-radius: 3px;
+/* Section title with refined accent bar */
+/* HOOK: the "Identity & Enrollment" etc. heading row */
+.card-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: .2px;
+  color: var(--ink-900);
+  margin: 0 0 20px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+.card-title::before {
+  content: "";
+  width: 4px;
+  height: 18px;
+  border-radius: 4px;
+  background: linear-gradient(180deg, var(--brand-500), var(--brand-700));
 }
 
-.premium-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 12px;
+/* ---------- 4. THE ONE GRID (fixes all alignment) ---------- */
+/* HOOK: wrap the label+input pairs of a section in .form-grid */
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--gap-y) var(--gap-x);
+  align-items: start;
+}
+.form-grid .col-span-2 { grid-column: span 2; }
+.form-grid .col-span-full { grid-column: 1 / -1; }
+
+/* one field = label stacked over input */
+.field { display: flex; flex-direction: column; gap: 6px; }
+
+/* ---------- 5. LABELS & TYPOGRAPHY ---------- */
+.field > label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .3px;
+  color: var(--ink-500);
+}
+.field .hint { font-size: 11px; color: var(--ink-400); }
+
+/* ---------- 6. UNIFIED INPUTS (the biggest visual win) ---------- */
+/* HOOK: applies to all your text inputs, selects, date fields */
+.field input,
+.field select,
+.field textarea {
+  width: 100%;
+  min-height: var(--field-h);
+  padding: 0 12px;
+  font-size: 14px;
+  color: var(--ink-900);
+  background: var(--surface);        /* kill the random grey fills */
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  box-shadow: inset 0 1px 1px rgba(16,40,32,.02);
+  transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+  box-sizing: border-box;
+}
+.field textarea { min-height: 76px; padding: 10px 12px; resize: vertical; }
+.field select { appearance: none; padding-right: 34px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%235b6b64' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 11px center;
+}
+.field input::placeholder,
+.field textarea::placeholder { color: var(--ink-400); }
+
+/* hover + focus: clear target for fast data entry */
+.field input:hover,
+.field select:hover,
+.field textarea:hover { border-color: var(--line-strong); }
+
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+  outline: none;
+  border-color: var(--brand-500);
+  box-shadow: var(--focus-ring);
+  background: #fff;
 }
 
-.premium-field {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
+/* read-only / legacy values look intentional, not broken */
+.field input[readonly] {
+  background: var(--brand-050);
+  color: var(--ink-700);
+  border-color: var(--line);
 }
 
-.premium-field label {
-    font-size: 12px;
-    font-weight: 600;
-    color: #475569;
-    text-transform: none;
-    letter-spacing: 0.2px;
+/* ---------- 7. BUTTONS ---------- */
+/* Primary Save — richer gradient + depth */
+.btn-primary {
+  width: 100%;
+  height: 44px;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: .3px;
+  color: #fff;
+  cursor: pointer;
+  background: linear-gradient(135deg, var(--brand-700) 0%, var(--brand-500) 100%);
+  box-shadow: 0 4px 12px rgba(27,107,82,.28), inset 0 1px 0 rgba(255,255,255,.18);
+  transition: transform .06s ease, box-shadow .15s ease, filter .15s ease;
 }
+.btn-primary:hover { filter: brightness(1.04); box-shadow: 0 6px 16px rgba(27,107,82,.34); }
+.btn-primary:active { transform: translateY(1px); }
 
-.premium-field input,
-.premium-field select,
-.premium-field textarea {
-    width: 100%;
-    min-height: 38px;
-    padding: 0 10px;
-    border: 1px solid #cbd5e1;
-    border-radius: 6px;
-    background: #f8fafc;
-    color: #0f172a;
-    font-size: 13.5px;
-    font-family: inherit;
-    transition: all 0.2s ease-in-out;
+/* Secondary / outline (Save & New, Student List) */
+.btn-outline {
+  width: 100%;
+  height: 42px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--brand-700);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease;
 }
+.btn-outline:hover { background: var(--brand-050); border-color: var(--brand-500); }
 
-.premium-field input:focus,
-.premium-field select:focus,
-.premium-field textarea:focus {
-    background: #ffffff;
-    border-color: var(--accent);
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
-    outline: none;
+/* ---------- 8. RIGHT RAIL (photo + actions) ---------- */
+/* Shrink the empty photo card so Save sits higher = faster */
+.photo-card {
+  padding: 14px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  text-align: center;
 }
+.photo-card .drop { aspect-ratio: 1 / 1; max-height: 190px; }
 
-.premium-field input:disabled,
-.premium-field select:disabled {
-    background: #e2e8f0;
-    color: #64748b;
-    cursor: not-allowed;
+.active-toggle {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  font-weight: 600; color: var(--ink-900);
 }
+.active-toggle input[type="checkbox"] { accent-color: var(--brand-600); width:18px; height:18px; }
 
-.premium-field .help-text {
-    font-size: 11px;
-    color: #64748b;
-    margin-top: 2px;
+/* ---------- 9. COLOR COHESION: links & table ---------- */
+/* Student name links + Edit → brand green (was blue) */
+a.record-link, .table-actions .edit {
+  color: var(--brand-700);
+  font-weight: 600;
+  text-decoration: none;
 }
+a.record-link:hover, .table-actions .edit:hover { text-decoration: underline; }
+.table-actions .delete { color: var(--danger); font-weight: 600; }
 
-.premium-field .error-text {
-    font-size: 11.5px;
-    color: #dc2626;
-    font-weight: 500;
-    margin-top: 2px;
+/* Recent Admissions table */
+.data-table { width: 100%; border-collapse: separate; border-spacing: 0; }
+.data-table thead th {
+  font-size: 11px; letter-spacing: .6px; text-transform: uppercase;
+  color: var(--ink-500); text-align: left;
+  padding: 10px 14px; border-bottom: 1px solid var(--line);
 }
+.data-table tbody td {
+  padding: 12px 14px; font-size: 14px; color: var(--ink-700);
+  border-bottom: 1px solid var(--line);
+}
+.data-table tbody tr:hover { background: var(--brand-050); }
 
-/* Form Actions Bar */
-.premium-form-actions {
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-    align-items: center;
-    padding: 16px;
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    margin-top: 10px;
+/* ---------- 10. PAGE HEADER STRIP ---------- */
+.page-header {
+  background: linear-gradient(180deg, #ffffff, #f4f8f6);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 18px 22px;
+  box-shadow: var(--shadow-card);
 }
+.page-header h1 { font-size: 20px; font-weight: 700; color: var(--ink-900); margin: 0; }
+.page-header p  { font-size: 13px; color: var(--ink-500); margin: 4px 0 0; }
 
-.premium-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0 16px;
-    min-height: 40px;
-    border-radius: 8px;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    border: 1px solid transparent;
-}
-
-.premium-btn-primary {
-    background: linear-gradient(135deg, var(--accent) 0%, #1d4ed8 100%);
-    color: #ffffff;
-    box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
-}
-
-.premium-btn-primary:hover {
-    background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
-    box-shadow: 0 4px 6px rgba(37, 99, 235, 0.3);
-    transform: translateY(-1px);
-}
-
-.premium-btn-secondary {
-    background: #ffffff;
-    color: #334155;
-    border-color: #cbd5e1;
-}
-
-.premium-btn-secondary:hover {
-    background: #f1f5f9;
-    border-color: #94a3b8;
-    color: #0f172a;
-}
-
-.premium-photo-card {
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    padding: 12px;
-    text-align: center;
-    box-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.03);
-    position: sticky;
-    top: 20px;
-}
-
-.premium-photo-placeholder {
-    width: 140px;
-    height: 175px;
-    margin: 0 auto 12px auto;
-    background: #f1f5f9;
-    border: 2px dashed #cbd5e1;
-    border-radius: 8px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    color: #94a3b8;
-}

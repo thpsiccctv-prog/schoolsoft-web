@@ -3,23 +3,23 @@
 {% block title %}{% if is_edit %}Edit Student{% else %}Student Admission Entry{% endif %} | SchoolSoft{% endblock %}
 
 {% block content %}
-<section class="section student-entry">
-    <div class="classic-titlebar" style="margin-bottom: 20px;">
+<section class="section student-entry content-area">
+    <div class="page-header" >
         <div>
             <strong>{% if is_edit %}Edit Student: {{ student.full_name }}{% else %}Student Admission Entry{% endif %}</strong>
             <span>{% if is_edit %}Update student details{% else %}Enter new student admission details{% endif %}</span>
         </div>
         <div class="classic-title-actions">
             {% if is_edit %}
-                <a class="premium-btn premium-btn-secondary" href="{% url 'core:student_delete' student.pk %}" style="color: #d32f2f; border-color: #ffcdd2; background: #fff5f5;">Delete</a>
-                <a class="premium-btn premium-btn-secondary" href="{% url 'core:student_detail' student.pk %}">Cancel</a>
+                <a class="btn-outline" href="{% url 'core:student_delete' student.pk %}" >Delete</a>
+                <a class="btn-outline" href="{% url 'core:student_detail' student.pk %}">Cancel</a>
             {% else %}
-                <a class="premium-btn premium-btn-secondary" href="{% url 'core:student_list' %}">Student List</a>
+                <a class="btn-outline" href="{% url 'core:student_list' %}">Student List</a>
             {% endif %}
         </div>
     </div>
 
-    <form class="premium-form" method="post">
+    <form class="entry-form" method="post">
         {% csrf_token %}
 
         {% if form.non_field_errors %}
@@ -34,25 +34,25 @@
         <div class="student-workbench" style="display: grid; gap: 20px; grid-template-columns: minmax(0, 1fr) 220px;">
             <div class="student-left-stack" style="display: flex; flex-direction: column; gap: 16px;">
                 
-                <section class="premium-card">
-                    <div class="premium-card-title">Identity & Enrollment</div>
-                    <div class="premium-grid">
-                        <div class="premium-field">
+                <section class="card">
+                    <div class="card-title">Identity & Enrollment</div>
+                    <div class="form-grid">
+                        <div class="field">
                             <label>{{ form.registration_no.label }}</label>
                             {{ form.registration_no }}
                             {% if form.registration_no.errors %}<div class="error-text">{{ form.registration_no.errors|striptags }}</div>{% endif %}
                         </div>
-                        <div class="premium-field">
+                        <div class="field">
                             <label>{{ form.admission_no.label }}</label>
                             {{ form.admission_no }}
                             {% if form.admission_no.errors %}<div class="error-text">{{ form.admission_no.errors|striptags }}</div>{% endif %}
                         </div>
-                        <div class="premium-field">
+                        <div class="field">
                             <label>{{ form.legacy_sid.label }}</label>
                             {{ form.legacy_sid }}
                             {% if form.legacy_sid.errors %}<div class="error-text">{{ form.legacy_sid.errors|striptags }}</div>{% endif %}
                         </div>
-                        <div class="premium-field">
+                        <div class="field">
                             <label>{{ form.admission_date.label }}</label>
                             {{ form.admission_date }}
                             {% if form.admission_date.errors %}<div class="error-text">{{ form.admission_date.errors|striptags }}</div>{% endif %}
@@ -60,35 +60,35 @@
                     </div>
                 </section>
                 
-                <section class="premium-card">
-                    <div class="premium-card-title">Personal Information</div>
-                    <div class="premium-grid">
-                        <div class="premium-field" style="grid-column: 1 / -1;">
+                <section class="card">
+                    <div class="card-title">Personal Information</div>
+                    <div class="form-grid">
+                        <div class="field" class="col-span-full">
                             <label>{{ form.full_name.label }}</label>
                             {{ form.full_name }}
                             {% if form.full_name.errors %}<div class="error-text">{{ form.full_name.errors|striptags }}</div>{% endif %}
                         </div>
-                        <div class="premium-field">
+                        <div class="field">
                             <label>{{ form.current_class.label }}</label>
                             {{ form.current_class }}
                             {% if form.current_class.errors %}<div class="error-text">{{ form.current_class.errors|striptags }}</div>{% endif %}
                         </div>
-                        <div class="premium-field">
+                        <div class="field">
                             <label>{{ form.current_section.label }}</label>
                             {{ form.current_section }}
                             {% if form.current_section.errors %}<div class="error-text">{{ form.current_section.errors|striptags }}</div>{% endif %}
                         </div>
-                        <div class="premium-field">
+                        <div class="field">
                             <label>{{ form.date_of_birth.label }}</label>
                             {{ form.date_of_birth }}
                             {% if form.date_of_birth.errors %}<div class="error-text">{{ form.date_of_birth.errors|striptags }}</div>{% endif %}
                         </div>
-                        <div class="premium-field">
+                        <div class="field">
                             <label>{{ form.gender.label }}</label>
                             {{ form.gender }}
                             {% if form.gender.errors %}<div class="error-text">{{ form.gender.errors|striptags }}</div>{% endif %}
                         </div>
-                        <div class="premium-field">
+                        <div class="field">
                             <label>{{ form.aadhaar_no.label }}</label>
                             {{ form.aadhaar_no }}
                             {% if form.aadhaar_no.errors %}<div class="error-text">{{ form.aadhaar_no.errors|striptags }}</div>{% endif %}
@@ -96,25 +96,25 @@
                     </div>
                 </section>
                 
-                <section class="premium-card">
-                    <div class="premium-card-title">Family Details</div>
-                    <div class="premium-grid">
-                        <div class="premium-field" style="grid-column: span 2;">
+                <section class="card">
+                    <div class="card-title">Family Details</div>
+                    <div class="form-grid">
+                        <div class="field" class="col-span-2">
                             <label>{{ form.father_name.label }}</label>
                             {{ form.father_name }}
                             {% if form.father_name.errors %}<div class="error-text">{{ form.father_name.errors|striptags }}</div>{% endif %}
                         </div>
-                        <div class="premium-field" style="grid-column: span 2;">
+                        <div class="field" class="col-span-2">
                             <label>{{ form.mother_name.label }}</label>
                             {{ form.mother_name }}
                             {% if form.mother_name.errors %}<div class="error-text">{{ form.mother_name.errors|striptags }}</div>{% endif %}
                         </div>
-                        <div class="premium-field">
+                        <div class="field">
                             <label>{{ form.category.label }}</label>
                             {{ form.category }}
                             {% if form.category.errors %}<div class="error-text">{{ form.category.errors|striptags }}</div>{% endif %}
                         </div>
-                        <div class="premium-field">
+                        <div class="field">
                             <label>{{ form.religion.label }}</label>
                             {{ form.religion }}
                             {% if form.religion.errors %}<div class="error-text">{{ form.religion.errors|striptags }}</div>{% endif %}
@@ -122,25 +122,25 @@
                     </div>
                 </section>
                 
-                <section class="premium-card">
-                    <div class="premium-card-title">Contact & Address</div>
-                    <div class="premium-grid">
-                        <div class="premium-field">
+                <section class="card">
+                    <div class="card-title">Contact & Address</div>
+                    <div class="form-grid">
+                        <div class="field">
                             <label>{{ form.mobile_primary.label }}</label>
                             {{ form.mobile_primary }}
                             {% if form.mobile_primary.errors %}<div class="error-text">{{ form.mobile_primary.errors|striptags }}</div>{% endif %}
                         </div>
-                        <div class="premium-field">
+                        <div class="field">
                             <label>{{ form.mobile_secondary.label }}</label>
                             {{ form.mobile_secondary }}
                             {% if form.mobile_secondary.errors %}<div class="error-text">{{ form.mobile_secondary.errors|striptags }}</div>{% endif %}
                         </div>
-                        <div class="premium-field" style="grid-column: 1 / -1;">
+                        <div class="field" class="col-span-full">
                             <label>{{ form.address_local.label }}</label>
                             {{ form.address_local }}
                             {% if form.address_local.errors %}<div class="error-text">{{ form.address_local.errors|striptags }}</div>{% endif %}
                         </div>
-                        <div class="premium-field" style="grid-column: 1 / -1;">
+                        <div class="field" class="col-span-full">
                             <label>{{ form.address_permanent.label }}</label>
                             {{ form.address_permanent }}
                             {% if form.address_permanent.errors %}<div class="error-text">{{ form.address_permanent.errors|striptags }}</div>{% endif %}
@@ -150,8 +150,8 @@
             </div>
             
             <div class="student-right-stack" style="display: flex; flex-direction: column; gap: 16px;">
-                <div class="premium-photo-card">
-                    <div class="premium-photo-placeholder">
+                <div class="photo-card">
+                    <div class="drop">
                         <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="margin-bottom: 8px; opacity: 0.5;">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                         </svg>
@@ -160,18 +160,18 @@
                     <div style="font-size: 11px; color: #64748b;">(Upload coming soon)</div>
                 </div>
                 
-                <div class="premium-card" style="padding: 12px; margin-bottom: 0;">
-                    <label style="display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 14px; color: #334155; cursor: pointer; margin: 0;">
+                <div>
+                    <label class="active-toggle">
                         {{ form.is_active }}
                         <span>Active Student</span>
                     </label>
                     {% if form.is_active.errors %}<div class="error-text">{{ form.is_active.errors|striptags }}</div>{% endif %}
                 </div>
 
-                <div class="premium-form-actions" style="display: flex; flex-direction: column; gap: 10px; padding: 16px;">
-                    <button class="premium-btn premium-btn-primary" type="submit" name="action" value="save" style="width: 100%;">Save</button>
+                <div style="display: flex; flex-direction: column; gap: 10px; padding: 16px;">
+                    <button class="btn-primary" type="submit" name="action" value="save" style="width: 100%;">Save</button>
                     {% if not is_edit %}
-                        <button class="premium-btn premium-btn-secondary" type="submit" name="action" value="save_new" style="width: 100%;">Save & New</button>
+                        <button class="btn-outline" type="submit" name="action" value="save_new" style="width: 100%;">Save & New</button>
                     {% endif %}
                 </div>
             </div>
@@ -179,31 +179,31 @@
     </form>
 
     {% if not is_edit and recent_students %}
-        <section class="premium-card" style="margin-top: 24px;">
-            <div class="premium-card-title">Recent Admissions</div>
+        <section class="card" style="margin-top: 24px;">
+            <div class="card-title">Recent Admissions</div>
             <div class="table-wrap compact-table-wrap" style="margin: 0; border: none; box-shadow: none;">
-                <table style="margin-bottom: 0;">
+                <table class="data-table">
                     <thead>
                         <tr>
-                            <th style="background: #f8fafc; border-bottom: 2px solid #e2e8f0; color: #475569; font-weight: 600;">SID</th>
-                            <th style="background: #f8fafc; border-bottom: 2px solid #e2e8f0; color: #475569; font-weight: 600;">Date</th>
-                            <th style="background: #f8fafc; border-bottom: 2px solid #e2e8f0; color: #475569; font-weight: 600;">Student's Name</th>
-                            <th style="background: #f8fafc; border-bottom: 2px solid #e2e8f0; color: #475569; font-weight: 600;">Class</th>
-                            <th style="background: #f8fafc; border-bottom: 2px solid #e2e8f0; color: #475569; font-weight: 600;">Father's Name</th>
-                            <th style="background: #f8fafc; border-bottom: 2px solid #e2e8f0; color: #475569; font-weight: 600;">Actions</th>
+                            <th >SID</th>
+                            <th >Date</th>
+                            <th >Student's Name</th>
+                            <th >Class</th>
+                            <th >Father's Name</th>
+                            <th >Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for st in recent_students %}
                             <tr>
-                                <td style="border-bottom: 1px solid #f1f5f9;">{{ st.legacy_sid|default:"" }}</td>
-                                <td style="border-bottom: 1px solid #f1f5f9;">{{ st.admission_date|date:"d/m/Y"|default:"" }}</td>
-                                <td style="border-bottom: 1px solid #f1f5f9;"><a href="{% url 'core:student_detail' st.pk %}" style="color: #2563eb; font-weight: 500;">{{ st.full_name }}</a></td>
-                                <td style="border-bottom: 1px solid #f1f5f9;">{{ st.current_class|default:"" }}{% if st.current_section %}-{{ st.current_section }}{% endif %}</td>
-                                <td style="border-bottom: 1px solid #f1f5f9;">{{ st.father_name }}</td>
-                                <td style="border-bottom: 1px solid #f1f5f9;">
-                                    <a class="table-link" href="{% url 'core:student_update' st.pk %}" style="margin-right: 8px; color: #2563eb;">Edit</a>
-                                    <a class="table-link" href="{% url 'core:student_delete' st.pk %}" style="color: #ef4444;">Delete</a>
+                                <td >{{ st.legacy_sid|default:"" }}</td>
+                                <td >{{ st.admission_date|date:"d/m/Y"|default:"" }}</td>
+                                <td ><a href="{% url 'core:student_detail' st.pk %}" style="color: #2563eb; font-weight: 500;">{{ st.full_name }}</a></td>
+                                <td >{{ st.current_class|default:"" }}{% if st.current_section %}-{{ st.current_section }}{% endif %}</td>
+                                <td >{{ st.father_name }}</td>
+                                <td >
+                                    <a class="record-link edit" href="{% url 'core:student_update' st.pk %}">Edit</a>
+                                    <a class="record-link delete" href="{% url 'core:student_delete' st.pk %}">Delete</a>
                                 </td>
                             </tr>
                         {% endfor %}
