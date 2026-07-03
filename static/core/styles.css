@@ -1912,8 +1912,37 @@ th.amount,
         padding: 18px 16px 36px;
     }
 
+    .dashboard-page .page {
+        padding-top: 18px;
+    }
+
+    .dashboard-page .kpi-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    .dashboard-page .kpi {
+        min-height: 84px;
+        padding: 13px 14px;
+        border-radius: 14px;
+    }
+
+    .dashboard-page .kpi span {
+        font-size: 10.5px;
+        line-height: 1.2;
+    }
+
+    .dashboard-page .kpi strong {
+        margin-top: 8px;
+        font-size: 23px;
+    }
+
+    .dashboard-page .tile-grid,
+    .dashboard-page .audit-fold {
+        display: none;
+    }
+
     .stat-grid,
-    .kpi-grid,
     .two-column,
     .detail-grid {
         grid-template-columns: 1fr;
