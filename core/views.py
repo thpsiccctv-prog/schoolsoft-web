@@ -1,3 +1,4 @@
+import csv
 from decimal import Decimal
 
 from django.conf import settings
@@ -88,16 +89,11 @@ def dashboard(request):
     return render(request, "core/dashboard.html", context)
 
 
-def student_list(request):
+def _get_filtered_students(request):
     query = request.GET.get("q", "").strip()
     class_id = request.GET.get("class", "").strip()
     section_id = request.GET.get("section", "").strip()
     status = request.GET.get("status", "active").strip() or "active"
-
-    all_students = Student.objects.all()
-    total_all_students = all_students.count()
-    total_active_students = all_students.filter(is_active=True).count()
-    total_inactive_students = total_all_students - total_active_students
 
     students = Student.objects.select_related("current_class", "current_section").order_by(
         "current_class__display_order",
@@ -126,6 +122,17 @@ def student_list(request):
 
     if section_id:
         students = students.filter(current_section_id=section_id)
+
+    return students, query, class_id, section_id, status
+
+
+def student_list(request):
+    students, query, class_id, section_id, status = _get_filtered_students(request)
+
+    all_students = Student.objects.all()
+    total_all_students = all_students.count()
+    total_active_students = all_students.filter(is_active=True).count()
+    total_inactive_students = total_all_students - total_active_students
 
     try:
         per_page = int(request.GET.get("per_page", 50))
@@ -1064,38 +1071,7 @@ def student_register(request):
     """
     Renders a printable student register with the exact same filtering as student_list.
     """
-    query = request.GET.get("q", "").strip()
-    class_id = request.GET.get("class", "").strip()
-    section_id = request.GET.get("section", "").strip()
-    status = request.GET.get("status", "active").strip() or "active"
-
-    students = Student.objects.select_related("current_class", "current_section").order_by(
-        "current_class__display_order",
-        "current_section__name",
-        "roll_no",
-        "full_name",
-    )
-
-    if status == "active":
-        students = students.filter(is_active=True)
-    elif status == "inactive":
-        students = students.filter(is_active=False)
-
-    if query:
-        students = students.filter(
-            Q(full_name__icontains=query)
-            | Q(father_name__icontains=query)
-            | Q(mother_name__icontains=query)
-            | Q(admission_no__icontains=query)
-            | Q(legacy_sid__icontains=query)
-            | Q(mobile_primary__icontains=query)
-        )
-
-    if class_id:
-        students = students.filter(current_class_id=class_id)
-
-    if section_id:
-        students = students.filter(current_section_id=section_id)
+    students, query, class_id, section_id, status = _get_filtered_students(request)
 
     # Determine filter description for header
     filter_description = []
@@ -1122,3 +1098,75 @@ def student_register(request):
         "selected_status": status,
     }
     return render(request, "core/student_register_report.html", context)
+
+def student_export_csv(request):
+    """
+    Exports the currently filtered students to a CSV file.
+    """
+    students, query, class_id, section_id, status = _get_filtered_students(request)
+    
+    # Generate filename
+    date_str = timezone.now().strftime("%Y%m%d")
+    status_str = status.title()
+    filename = f"Students_{status_str}_{date_str}.csv"
+    
+    response = HttpResponse(content_type="text/csv")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    
+    # Write UTF-8 BOM for Excel compatibility with Hindi/Unicode characters
+    response.write('\ufeff')
+    
+    writer = csv.writer(response)
+    # Header row
+    writer.writerow([
+        "Registration No",
+        "Admission No",
+        "SID",
+        "Admission Date",
+        "Student Name",
+        "Class",
+        "Section",
+        "DOB",
+        "Gender",
+        "Father's Name",
+        "Mother's Name",
+        "Category",
+        "Religion",
+        "Aadhaar Number",
+        "Mobile Primary",
+        "Mobile Secondary",
+        "Address",
+        "Status"
+    ])
+    
+    for st in students:
+        class_name = st.current_class.name if st.current_class else ""
+        section_name = st.current_section.name if st.current_section else ""
+        adm_date = st.admission_date.strftime("%d/%m/%Y") if st.admission_date else ""
+        dob = st.date_of_birth.strftime("%d/%m/%Y") if st.date_of_birth else ""
+        status_text = "Active" if st.is_active else "Inactive"
+        
+        address = st.address_local or st.address_permanent or ""
+        
+        writer.writerow([
+            st.registration_no,
+            st.admission_no,
+            st.legacy_sid,
+            adm_date,
+            st.full_name,
+            class_name,
+            section_name,
+            dob,
+            st.get_gender_display(),
+            st.father_name,
+            st.mother_name,
+            st.category,
+            st.religion,
+            st.aadhaar_no,
+            st.mobile_primary,
+            st.mobile_secondary,
+            address.replace("\n", " ").replace("\r", ""),
+            status_text
+        ])
+        
+    return response

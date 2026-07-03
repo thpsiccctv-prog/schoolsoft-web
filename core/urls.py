@@ -17,6 +17,7 @@ urlpatterns = [
     path("marks/", views.marks_report, name="marks_report"),
     path("students/", views.student_list, name="student_list"),
     path("students/register/", views.student_register, name="student_register"),
+    path("students/export/", views.student_export_csv, name="student_export_csv"),
     path("students/new/", views.student_create, name="student_create"),
     path("students/<int:pk>/", views.student_detail, name="student_detail"),
     path("students/<int:pk>/edit/", views.student_update, name="student_update"),

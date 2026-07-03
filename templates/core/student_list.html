@@ -16,7 +16,7 @@
         <div class="action-row" style="display: flex; gap: 8px; flex-wrap: wrap;">
             <a class="button" href="{% url 'core:student_create' %}">New Admission</a>
             <a class="button secondary" href="{% url 'core:student_register' %}?{{ request.GET.urlencode }}" target="_blank">Print Register</a>
-            <button type="button" class="button secondary" disabled title="Coming Soon">Export Excel</button>
+            <a class="button secondary" href="{% url 'core:student_export_csv' %}?{{ request.GET.urlencode }}">Export Excel</a>
             <a class="button secondary" href="{% url 'core:student_list' %}">Reset Filters</a>
         </div>
     </div>
