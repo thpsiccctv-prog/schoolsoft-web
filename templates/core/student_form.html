@@ -3,205 +3,207 @@
 {% block title %}{% if is_edit %}Edit Student{% else %}Student Admission Entry{% endif %} | SchoolSoft{% endblock %}
 
 {% block content %}
-<section class="section student-entry content-area">
-    <div class="page-header" >
+<section class="section student-entry">
+    <div class="student-entry-header">
         <div>
-            <strong>{% if is_edit %}Edit Student: {{ student.full_name }}{% else %}Student Admission Entry{% endif %}</strong>
-            <span>{% if is_edit %}Update student details{% else %}Enter new student admission details{% endif %}</span>
-        </div>
-        <div class="classic-title-actions">
+            <span class="entry-kicker">{% if is_edit %}Student Record{% else %}Admission Desk{% endif %}</span>
+            <h1>{% if is_edit %}Edit Student{% else %}Student Admission Entry{% endif %}</h1>
             {% if is_edit %}
-                <a class="btn-outline" href="{% url 'core:student_delete' student.pk %}" >Delete</a>
-                <a class="btn-outline" href="{% url 'core:student_detail' student.pk %}">Cancel</a>
+                <p>{{ student.full_name }}{% if student.current_class %} | {{ student.current_class }}{% if student.current_section %}-{{ student.current_section }}{% endif %}{% endif %}</p>
             {% else %}
-                <a class="btn-outline" href="{% url 'core:student_list' %}">Student List</a>
+                <p>New admission details</p>
+            {% endif %}
+        </div>
+        <div class="entry-header-actions">
+            {% if is_edit %}
+                <a class="entry-btn entry-btn-danger" href="{% url 'core:student_delete' student.pk %}">Delete</a>
+                <a class="entry-btn entry-btn-secondary" href="{% url 'core:student_detail' student.pk %}">Cancel</a>
+            {% else %}
+                <a class="entry-btn entry-btn-secondary" href="{% url 'core:student_list' %}">Student List</a>
             {% endif %}
         </div>
     </div>
 
-    <form class="entry-form" method="post">
+    <form class="entry-form student-entry-form" method="post">
         {% csrf_token %}
 
         {% if form.non_field_errors %}
-            <div class="form-errors" style="background: #fee2e2; border: 1px solid #fca5a5; padding: 12px; border-radius: 8px; margin-bottom: 16px; color: #991b1b;">
+            <div class="entry-alert entry-alert-danger">
                 {{ form.non_field_errors }}
             </div>
         {% endif %}
-        
-        <div id="duplicate-warning" class="warning-banner" style="display: none; padding: 12px; background: #fffbeb; color: #b45309; border: 1px solid #fde68a; border-radius: 8px; margin-bottom: 16px; font-weight: 600; font-size: 14px;">
-        </div>
 
-        <div class="student-workbench" style="display: grid; gap: 20px; grid-template-columns: minmax(0, 1fr) 220px;">
-            <div class="student-left-stack" style="display: flex; flex-direction: column; gap: 16px;">
-                
-                <section class="card">
-                    <div class="card-title">Identity & Enrollment</div>
-                    <div class="form-grid">
-                        <div class="field">
-                            <label>{{ form.registration_no.label }}</label>
+        <div id="duplicate-warning" class="entry-alert entry-alert-warning" hidden></div>
+
+        <div class="student-admission-shell">
+            <div class="student-admission-main">
+                <section class="entry-card">
+                    <div class="entry-card-title">Identity & Enrollment</div>
+                    <div class="entry-grid entry-grid-four">
+                        <div class="entry-field">
+                            <label for="{{ form.registration_no.id_for_label }}">{{ form.registration_no.label }}</label>
                             {{ form.registration_no }}
                             {% if form.registration_no.errors %}<div class="error-text">{{ form.registration_no.errors|striptags }}</div>{% endif %}
                         </div>
-                        <div class="field">
-                            <label>{{ form.admission_no.label }}</label>
+                        <div class="entry-field">
+                            <label for="{{ form.admission_no.id_for_label }}">{{ form.admission_no.label }}</label>
                             {{ form.admission_no }}
                             {% if form.admission_no.errors %}<div class="error-text">{{ form.admission_no.errors|striptags }}</div>{% endif %}
                         </div>
-                        <div class="field">
-                            <label>{{ form.legacy_sid.label }}</label>
+                        <div class="entry-field">
+                            <label for="{{ form.legacy_sid.id_for_label }}">{{ form.legacy_sid.label }}</label>
                             {{ form.legacy_sid }}
                             {% if form.legacy_sid.errors %}<div class="error-text">{{ form.legacy_sid.errors|striptags }}</div>{% endif %}
                         </div>
-                        <div class="field">
-                            <label>{{ form.admission_date.label }}</label>
+                        <div class="entry-field">
+                            <label for="{{ form.admission_date.id_for_label }}">{{ form.admission_date.label }}</label>
                             {{ form.admission_date }}
                             {% if form.admission_date.errors %}<div class="error-text">{{ form.admission_date.errors|striptags }}</div>{% endif %}
                         </div>
                     </div>
                 </section>
-                
-                <section class="card">
-                    <div class="card-title">Personal Information</div>
-                    <div class="form-grid">
-                        <div class="field" class="col-span-full">
-                            <label>{{ form.full_name.label }}</label>
+
+                <section class="entry-card">
+                    <div class="entry-card-title">Personal Information</div>
+                    <div class="entry-grid entry-grid-four">
+                        <div class="entry-field entry-span-2">
+                            <label for="{{ form.full_name.id_for_label }}">{{ form.full_name.label }}</label>
                             {{ form.full_name }}
                             {% if form.full_name.errors %}<div class="error-text">{{ form.full_name.errors|striptags }}</div>{% endif %}
                         </div>
-                        <div class="field">
-                            <label>{{ form.current_class.label }}</label>
+                        <div class="entry-field">
+                            <label for="{{ form.current_class.id_for_label }}">{{ form.current_class.label }}</label>
                             {{ form.current_class }}
                             {% if form.current_class.errors %}<div class="error-text">{{ form.current_class.errors|striptags }}</div>{% endif %}
                         </div>
-                        <div class="field">
-                            <label>{{ form.current_section.label }}</label>
+                        <div class="entry-field">
+                            <label for="{{ form.current_section.id_for_label }}">{{ form.current_section.label }}</label>
                             {{ form.current_section }}
                             {% if form.current_section.errors %}<div class="error-text">{{ form.current_section.errors|striptags }}</div>{% endif %}
                         </div>
-                        <div class="field">
-                            <label>{{ form.date_of_birth.label }}</label>
+                        <div class="entry-field">
+                            <label for="{{ form.date_of_birth.id_for_label }}">{{ form.date_of_birth.label }}</label>
                             {{ form.date_of_birth }}
                             {% if form.date_of_birth.errors %}<div class="error-text">{{ form.date_of_birth.errors|striptags }}</div>{% endif %}
                         </div>
-                        <div class="field">
-                            <label>{{ form.gender.label }}</label>
+                        <div class="entry-field">
+                            <label for="{{ form.gender.id_for_label }}">{{ form.gender.label }}</label>
                             {{ form.gender }}
                             {% if form.gender.errors %}<div class="error-text">{{ form.gender.errors|striptags }}</div>{% endif %}
                         </div>
-                        <div class="field">
-                            <label>{{ form.aadhaar_no.label }}</label>
+                        <div class="entry-field entry-span-2">
+                            <label for="{{ form.aadhaar_no.id_for_label }}">{{ form.aadhaar_no.label }}</label>
                             {{ form.aadhaar_no }}
                             {% if form.aadhaar_no.errors %}<div class="error-text">{{ form.aadhaar_no.errors|striptags }}</div>{% endif %}
                         </div>
                     </div>
                 </section>
-                
-                <section class="card">
-                    <div class="card-title">Family Details</div>
-                    <div class="form-grid">
-                        <div class="field" class="col-span-2">
-                            <label>{{ form.father_name.label }}</label>
+
+                <section class="entry-card">
+                    <div class="entry-card-title">Family Details</div>
+                    <div class="entry-grid entry-grid-four">
+                        <div class="entry-field entry-span-2">
+                            <label for="{{ form.father_name.id_for_label }}">{{ form.father_name.label }}</label>
                             {{ form.father_name }}
                             {% if form.father_name.errors %}<div class="error-text">{{ form.father_name.errors|striptags }}</div>{% endif %}
                         </div>
-                        <div class="field" class="col-span-2">
-                            <label>{{ form.mother_name.label }}</label>
+                        <div class="entry-field entry-span-2">
+                            <label for="{{ form.mother_name.id_for_label }}">{{ form.mother_name.label }}</label>
                             {{ form.mother_name }}
                             {% if form.mother_name.errors %}<div class="error-text">{{ form.mother_name.errors|striptags }}</div>{% endif %}
                         </div>
-                        <div class="field">
-                            <label>{{ form.category.label }}</label>
+                        <div class="entry-field">
+                            <label for="{{ form.category.id_for_label }}">{{ form.category.label }}</label>
                             {{ form.category }}
                             {% if form.category.errors %}<div class="error-text">{{ form.category.errors|striptags }}</div>{% endif %}
                         </div>
-                        <div class="field">
-                            <label>{{ form.religion.label }}</label>
+                        <div class="entry-field">
+                            <label for="{{ form.religion.id_for_label }}">{{ form.religion.label }}</label>
                             {{ form.religion }}
                             {% if form.religion.errors %}<div class="error-text">{{ form.religion.errors|striptags }}</div>{% endif %}
                         </div>
                     </div>
                 </section>
-                
-                <section class="card">
-                    <div class="card-title">Contact & Address</div>
-                    <div class="form-grid">
-                        <div class="field">
-                            <label>{{ form.mobile_primary.label }}</label>
+
+                <section class="entry-card">
+                    <div class="entry-card-title">Contact & Address</div>
+                    <div class="entry-grid entry-grid-four">
+                        <div class="entry-field">
+                            <label for="{{ form.mobile_primary.id_for_label }}">{{ form.mobile_primary.label }}</label>
                             {{ form.mobile_primary }}
                             {% if form.mobile_primary.errors %}<div class="error-text">{{ form.mobile_primary.errors|striptags }}</div>{% endif %}
                         </div>
-                        <div class="field">
-                            <label>{{ form.mobile_secondary.label }}</label>
+                        <div class="entry-field">
+                            <label for="{{ form.mobile_secondary.id_for_label }}">{{ form.mobile_secondary.label }}</label>
                             {{ form.mobile_secondary }}
                             {% if form.mobile_secondary.errors %}<div class="error-text">{{ form.mobile_secondary.errors|striptags }}</div>{% endif %}
                         </div>
-                        <div class="field" class="col-span-full">
-                            <label>{{ form.address_local.label }}</label>
+                        <div class="entry-field entry-span-2">
+                            <label for="{{ form.address_local.id_for_label }}">{{ form.address_local.label }}</label>
                             {{ form.address_local }}
                             {% if form.address_local.errors %}<div class="error-text">{{ form.address_local.errors|striptags }}</div>{% endif %}
                         </div>
-                        <div class="field" class="col-span-full">
-                            <label>{{ form.address_permanent.label }}</label>
+                        <div class="entry-field entry-span-full">
+                            <label for="{{ form.address_permanent.id_for_label }}">{{ form.address_permanent.label }}</label>
                             {{ form.address_permanent }}
                             {% if form.address_permanent.errors %}<div class="error-text">{{ form.address_permanent.errors|striptags }}</div>{% endif %}
                         </div>
                     </div>
                 </section>
             </div>
-            
-            <div class="student-right-stack" style="display: flex; flex-direction: column; gap: 16px;">
-                <div class="photo-card">
-                    <div class="drop">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="margin-bottom: 8px; opacity: 0.5;">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+
+            <aside class="student-entry-rail">
+                <section class="entry-card student-photo-card">
+                    <div class="student-photo-box">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M4 16l4.4-4.4a2 2 0 0 1 2.8 0L16 16m-2-2 1.5-1.5a2 2 0 0 1 2.8 0L20 14M7 5h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z" />
                         </svg>
-                        No Photo
+                        <span>No Photo</span>
                     </div>
-                    <div style="font-size: 11px; color: #64748b;">(Upload coming soon)</div>
-                </div>
-                
-                <div>
-                    <label class="active-toggle">
+                </section>
+
+                <section class="entry-card student-command-card">
+                    <label class="student-active-toggle">
                         {{ form.is_active }}
                         <span>Active Student</span>
                     </label>
                     {% if form.is_active.errors %}<div class="error-text">{{ form.is_active.errors|striptags }}</div>{% endif %}
-                </div>
 
-                <div style="display: flex; flex-direction: column; gap: 10px; padding: 16px;">
-                    <button class="btn-primary" type="submit" name="action" value="save" style="width: 100%;">Save</button>
-                    {% if not is_edit %}
-                        <button class="btn-outline" type="submit" name="action" value="save_new" style="width: 100%;">Save & New</button>
-                    {% endif %}
-                </div>
-            </div>
+                    <div class="student-command-actions">
+                        <button class="entry-btn entry-btn-primary" type="submit" name="action" value="save">Save</button>
+                        {% if not is_edit %}
+                            <button class="entry-btn entry-btn-secondary" type="submit" name="action" value="save_new">Save & New</button>
+                        {% endif %}
+                    </div>
+                </section>
+            </aside>
         </div>
     </form>
 
     {% if not is_edit and recent_students %}
-        <section class="card" style="margin-top: 24px;">
-            <div class="card-title">Recent Admissions</div>
-            <div class="table-wrap compact-table-wrap" style="margin: 0; border: none; box-shadow: none;">
-                <table class="data-table">
+        <section class="entry-card recent-admissions-card">
+            <div class="entry-card-title">Recent Admissions</div>
+            <div class="table-wrap compact-table-wrap">
+                <table class="recent-admissions-table">
                     <thead>
                         <tr>
-                            <th >SID</th>
-                            <th >Date</th>
-                            <th >Student's Name</th>
-                            <th >Class</th>
-                            <th >Father's Name</th>
-                            <th >Actions</th>
+                            <th>SID</th>
+                            <th>Date</th>
+                            <th>Student's Name</th>
+                            <th>Class</th>
+                            <th>Father's Name</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for st in recent_students %}
                             <tr>
-                                <td >{{ st.legacy_sid|default:"" }}</td>
-                                <td >{{ st.admission_date|date:"d/m/Y"|default:"" }}</td>
-                                <td ><a href="{% url 'core:student_detail' st.pk %}" style="color: #2563eb; font-weight: 500;">{{ st.full_name }}</a></td>
-                                <td >{{ st.current_class|default:"" }}{% if st.current_section %}-{{ st.current_section }}{% endif %}</td>
-                                <td >{{ st.father_name }}</td>
-                                <td >
+                                <td>{{ st.legacy_sid|default:"" }}</td>
+                                <td>{{ st.admission_date|date:"d/m/Y"|default:"" }}</td>
+                                <td><a class="record-link" href="{% url 'core:student_detail' st.pk %}">{{ st.full_name }}</a></td>
+                                <td>{{ st.current_class|default:"" }}{% if st.current_section %}-{{ st.current_section }}{% endif %}</td>
+                                <td>{{ st.father_name }}</td>
+                                <td class="table-actions">
                                     <a class="record-link edit" href="{% url 'core:student_update' st.pk %}">Edit</a>
                                     <a class="record-link delete" href="{% url 'core:student_delete' st.pk %}">Delete</a>
                                 </td>
@@ -220,26 +222,31 @@
         const sidInput = document.getElementById("{{ form.legacy_sid.id_for_label }}");
         const admissionInput = document.getElementById("{{ form.admission_no.id_for_label }}");
         const mobileInput = document.getElementById("{{ form.mobile_primary.id_for_label }}");
-        
+
+        function hideWarning() {
+            warningBanner.hidden = true;
+            warningBanner.textContent = "";
+        }
+
         function checkDuplicate(field, value) {
             if (!value) {
-                warningBanner.style.display = "none";
+                hideWarning();
                 return;
             }
-            
+
             let url = "{% url 'core:check_student_duplicate' %}?field=" + encodeURIComponent(field) + "&value=" + encodeURIComponent(value);
             {% if is_edit %}
                 url += "&exclude_id={{ student.pk }}";
             {% endif %}
-            
+
             fetch(url)
                 .then(response => response.json())
                 .then(data => {
                     if (data.duplicate) {
-                        warningBanner.textContent = "⚠️ " + data.message;
-                        warningBanner.style.display = "block";
+                        warningBanner.textContent = "Warning: " + data.message;
+                        warningBanner.hidden = false;
                     } else {
-                        warningBanner.style.display = "none";
+                        hideWarning();
                     }
                 })
                 .catch(err => console.error("Error checking duplicate:", err));
@@ -250,13 +257,13 @@
                 checkDuplicate("legacy_sid", this.value);
             });
         }
-        
+
         if (admissionInput) {
             admissionInput.addEventListener("blur", function() {
                 checkDuplicate("admission_no", this.value);
             });
         }
-        
+
         if (mobileInput) {
             mobileInput.addEventListener("blur", function() {
                 checkDuplicate("mobile", this.value);

@@ -2493,244 +2493,552 @@ th.amount,
 
 
 
-/* ============================================================
-   SchoolSoft — Premium UI Polish (Vanilla CSS)
-   Student Admission Entry & shared form styles
-   Drop-in improvements. Adjust the class names in the
-   "HOOKS" comments to match your existing markup.
-   ============================================================ */
-
-/* ---------- 1. DESIGN TOKENS (single source of truth) ---------- */
-:root {
-  /* Brand — anchored to the dark-green sidebar */
-  --brand-900: #14342a;   /* sidebar / darkest */
-  --brand-800: #17563f;
-  --brand-700: #1b6b52;   /* primary actions */
-  --brand-600: #218a68;
-  --brand-500: #2fa37c;   /* accent / gradient end */
-  --brand-050: #e8f3ee;   /* tint fills, focus glow */
-
-  /* Neutrals (slightly warm/green-tinted for cohesion) */
-  --ink-900: #0f2620;     /* headings */
-  --ink-700: #33413c;     /* body text */
-  --ink-500: #5b6b64;     /* labels */
-  --ink-400: #8a978f;     /* placeholder */
-  --line:    #dce5e1;     /* borders */
-  --line-strong: #c4d2cb; /* hover borders */
-  --surface: #ffffff;     /* cards / inputs */
-  --canvas:  #eef3f1;     /* page background */
-
-  /* Semantic */
-  --danger:  #b4453c;     /* muted, not harsh */
-  --focus-ring: 0 0 0 3px rgba(47, 163, 124, 0.22);
-
-  /* System */
-  --radius:   12px;
-  --radius-sm: 9px;
-  --shadow-card: 0 1px 2px rgba(16,40,32,.04), 0 6px 18px rgba(16,40,32,.06);
-  --shadow-pop:  0 8px 24px rgba(16,40,32,.12);
-  --field-h: 42px;
-  --gap-x: 22px;
-  --gap-y: 16px;
+/* Restore shared form defaults after the imported UI polish block above. */
+.form-grid,
+.fee-head-grid {
+    display: grid;
+    gap: 12px;
 }
 
-/* ---------- 2. PAGE CANVAS ---------- */
-/* HOOK: your main content wrapper */
-.content-area {
-  background: var(--canvas);
-  color: var(--ink-700);
-  font-family: "Inter", "Segoe UI", system-ui, sans-serif;
-  -webkit-font-smoothing: antialiased;
-}
-
-/* ---------- 3. CARDS ---------- */
-/* HOOK: each white section box */
-.card {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-card);
-  padding: 22px 24px 24px;
-  margin-bottom: 18px;
-}
-
-/* Section title with refined accent bar */
-/* HOOK: the "Identity & Enrollment" etc. heading row */
-.card-title {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: .2px;
-  color: var(--ink-900);
-  margin: 0 0 20px;
-  padding-bottom: 14px;
-  border-bottom: 1px solid var(--line);
-}
-.card-title::before {
-  content: "";
-  width: 4px;
-  height: 18px;
-  border-radius: 4px;
-  background: linear-gradient(180deg, var(--brand-500), var(--brand-700));
-}
-
-/* ---------- 4. THE ONE GRID (fixes all alignment) ---------- */
-/* HOOK: wrap the label+input pairs of a section in .form-grid */
 .form-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--gap-y) var(--gap-x);
-  align-items: start;
-}
-.form-grid .col-span-2 { grid-column: span 2; }
-.form-grid .col-span-full { grid-column: 1 / -1; }
-
-/* one field = label stacked over input */
-.field { display: flex; flex-direction: column; gap: 6px; }
-
-/* ---------- 5. LABELS & TYPOGRAPHY ---------- */
-.field > label {
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: .3px;
-  color: var(--ink-500);
-}
-.field .hint { font-size: 11px; color: var(--ink-400); }
-
-/* ---------- 6. UNIFIED INPUTS (the biggest visual win) ---------- */
-/* HOOK: applies to all your text inputs, selects, date fields */
-.field input,
-.field select,
-.field textarea {
-  width: 100%;
-  min-height: var(--field-h);
-  padding: 0 12px;
-  font-size: 14px;
-  color: var(--ink-900);
-  background: var(--surface);        /* kill the random grey fills */
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  box-shadow: inset 0 1px 1px rgba(16,40,32,.02);
-  transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
-  box-sizing: border-box;
-}
-.field textarea { min-height: 76px; padding: 10px 12px; resize: vertical; }
-.field select { appearance: none; padding-right: 34px;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%235b6b64' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
-  background-repeat: no-repeat; background-position: right 11px center;
-}
-.field input::placeholder,
-.field textarea::placeholder { color: var(--ink-400); }
-
-/* hover + focus: clear target for fast data entry */
-.field input:hover,
-.field select:hover,
-.field textarea:hover { border-color: var(--line-strong); }
-
-.field input:focus,
-.field select:focus,
-.field textarea:focus {
-  outline: none;
-  border-color: var(--brand-500);
-  box-shadow: var(--focus-ring);
-  background: #fff;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-/* read-only / legacy values look intentional, not broken */
-.field input[readonly] {
-  background: var(--brand-050);
-  color: var(--ink-700);
-  border-color: var(--line);
+.fee-head-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
-/* ---------- 7. BUTTONS ---------- */
-/* Primary Save — richer gradient + depth */
-.btn-primary {
-  width: 100%;
-  height: 44px;
-  border: none;
-  border-radius: var(--radius-sm);
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: .3px;
-  color: #fff;
-  cursor: pointer;
-  background: linear-gradient(135deg, var(--brand-700) 0%, var(--brand-500) 100%);
-  box-shadow: 0 4px 12px rgba(27,107,82,.28), inset 0 1px 0 rgba(255,255,255,.18);
-  transition: transform .06s ease, box-shadow .15s ease, filter .15s ease;
-}
-.btn-primary:hover { filter: brightness(1.04); box-shadow: 0 6px 16px rgba(27,107,82,.34); }
-.btn-primary:active { transform: translateY(1px); }
+/* ================= Student Admission Entry: scoped compact polish ================= */
 
-/* Secondary / outline (Save & New, Student List) */
-.btn-outline {
-  width: 100%;
-  height: 42px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--brand-700);
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background .15s ease, border-color .15s ease;
+.student-entry {
+    --entry-line: #d7e3ea;
+    --entry-line-strong: #b9cbd6;
+    --entry-surface: #ffffff;
+    --entry-soft: #f5f9fb;
+    --entry-ink: #0f172a;
+    --entry-muted: #64748b;
+    --entry-accent: #0f766e;
+    --entry-accent-dark: #0b4f4a;
+    --entry-focus: 0 0 0 3px rgba(15, 118, 110, 0.16);
+    padding-bottom: 28px;
 }
-.btn-outline:hover { background: var(--brand-050); border-color: var(--brand-500); }
 
-/* ---------- 8. RIGHT RAIL (photo + actions) ---------- */
-/* Shrink the empty photo card so Save sits higher = faster */
-.photo-card {
-  padding: 14px;
-  border: 1px dashed var(--line-strong);
-  border-radius: var(--radius);
-  background: var(--surface);
-  text-align: center;
+.student-entry-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 18px;
+    padding: 18px 20px;
+    border: 1px solid var(--entry-line);
+    border-radius: 18px;
+    background:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(232, 245, 242, 0.82)),
+        radial-gradient(circle at 96% 0%, rgba(37, 99, 235, 0.13), transparent 34%);
+    box-shadow: var(--shadow-soft);
 }
-.photo-card .drop { aspect-ratio: 1 / 1; max-height: 190px; }
 
-.active-toggle {
-  display: flex; align-items: center; gap: 10px;
-  padding: 12px 14px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  font-weight: 600; color: var(--ink-900);
+.entry-kicker {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+    padding: 0 10px;
+    border-radius: 999px;
+    background: #e7f7f4;
+    color: var(--entry-accent-dark);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
 }
-.active-toggle input[type="checkbox"] { accent-color: var(--brand-600); width:18px; height:18px; }
 
-/* ---------- 9. COLOR COHESION: links & table ---------- */
-/* Student name links + Edit → brand green (was blue) */
-a.record-link, .table-actions .edit {
-  color: var(--brand-700);
-  font-weight: 600;
-  text-decoration: none;
+.student-entry-header h1 {
+    margin: 8px 0 2px;
+    color: var(--entry-ink);
+    font-size: 26px;
+    line-height: 1.15;
+    letter-spacing: 0;
 }
-a.record-link:hover, .table-actions .edit:hover { text-decoration: underline; }
-.table-actions .delete { color: var(--danger); font-weight: 600; }
 
-/* Recent Admissions table */
-.data-table { width: 100%; border-collapse: separate; border-spacing: 0; }
-.data-table thead th {
-  font-size: 11px; letter-spacing: .6px; text-transform: uppercase;
-  color: var(--ink-500); text-align: left;
-  padding: 10px 14px; border-bottom: 1px solid var(--line);
+.student-entry-header p {
+    margin: 0;
+    color: var(--entry-muted);
+    font-size: 14px;
 }
-.data-table tbody td {
-  padding: 12px 14px; font-size: 14px; color: var(--ink-700);
-  border-bottom: 1px solid var(--line);
-}
-.data-table tbody tr:hover { background: var(--brand-050); }
 
-/* ---------- 10. PAGE HEADER STRIP ---------- */
-.page-header {
-  background: linear-gradient(180deg, #ffffff, #f4f8f6);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 18px 22px;
-  box-shadow: var(--shadow-card);
+.entry-header-actions,
+.student-command-actions {
+    display: flex;
+    gap: 10px;
 }
-.page-header h1 { font-size: 20px; font-weight: 700; color: var(--ink-900); margin: 0; }
-.page-header p  { font-size: 13px; color: var(--ink-500); margin: 4px 0 0; }
 
+.entry-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 42px;
+    padding: 0 18px;
+    border: 1px solid var(--entry-line);
+    border-radius: 12px;
+    background: #ffffff;
+    color: var(--entry-accent-dark);
+    font: inherit;
+    font-size: 14px;
+    font-weight: 800;
+    text-decoration: none;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: transform 0.08s ease, box-shadow 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+}
+
+.entry-btn:hover {
+    border-color: var(--entry-line-strong);
+    box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
+    transform: translateY(-1px);
+}
+
+.entry-btn-primary {
+    border-color: transparent;
+    background: linear-gradient(135deg, #0f766e 0%, #1d4ed8 100%);
+    color: #ffffff;
+    box-shadow: 0 12px 24px rgba(15, 118, 110, 0.22);
+}
+
+.entry-btn-secondary {
+    background: #ffffff;
+}
+
+.entry-btn-danger {
+    color: var(--danger);
+}
+
+.student-entry-form {
+    margin: 0;
+}
+
+.student-admission-shell {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 220px;
+    gap: 18px;
+    align-items: start;
+}
+
+.student-admission-main {
+    display: grid;
+    gap: 14px;
+}
+
+.entry-card {
+    min-width: 0;
+    padding: 15px 16px 16px;
+    border: 1px solid var(--entry-line);
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.97);
+    box-shadow: 0 14px 32px rgba(15, 23, 42, 0.06);
+}
+
+.entry-card-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 13px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #edf2f6;
+    color: var(--entry-ink);
+    font-size: 15px;
+    font-weight: 850;
+}
+
+.entry-card-title::before {
+    content: "";
+    width: 5px;
+    height: 18px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #14b8a6, #0f766e);
+}
+
+.entry-grid {
+    display: grid;
+    gap: 11px 12px;
+    align-items: start;
+}
+
+.entry-grid-four {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.entry-span-2 {
+    grid-column: span 2;
+}
+
+.entry-span-full {
+    grid-column: 1 / -1;
+}
+
+.entry-field {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.entry-field label {
+    color: #334155;
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1.2;
+}
+
+.entry-field input,
+.entry-field select,
+.entry-field textarea {
+    width: 100%;
+    min-height: 38px;
+    padding: 0 10px;
+    border: 1px solid #cbd7e2;
+    border-radius: 10px;
+    background: #fbfdff;
+    color: var(--entry-ink);
+    font: inherit;
+    font-size: 14px;
+    box-shadow: inset 0 1px 0 rgba(15, 23, 42, 0.02);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.entry-field textarea {
+    min-height: 50px;
+    padding-top: 8px;
+    padding-bottom: 8px;
+    resize: vertical;
+}
+
+.entry-field input:hover,
+.entry-field select:hover,
+.entry-field textarea:hover {
+    border-color: var(--entry-line-strong);
+}
+
+.entry-field input:focus,
+.entry-field select:focus,
+.entry-field textarea:focus {
+    outline: none;
+    border-color: var(--entry-accent);
+    background: #ffffff;
+    box-shadow: var(--entry-focus);
+}
+
+.student-entry-rail {
+    position: sticky;
+    top: 84px;
+    display: grid;
+    gap: 12px;
+}
+
+.student-photo-card {
+    padding: 12px;
+}
+
+.student-photo-box {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 8px;
+    min-height: 140px;
+    border: 1px dashed #bed0dc;
+    border-radius: 14px;
+    background: linear-gradient(180deg, #f8fbfd, #eef5f8);
+    color: #8a9aad;
+    font-weight: 800;
+    text-align: center;
+}
+
+.student-photo-box svg {
+    opacity: 0.72;
+}
+
+.student-command-card {
+    display: grid;
+    gap: 12px;
+}
+
+.student-active-toggle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 42px;
+    color: var(--entry-ink);
+    font-size: 14px;
+    font-weight: 800;
+}
+
+.student-active-toggle input {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--entry-accent);
+}
+
+.student-command-actions {
+    flex-direction: column;
+}
+
+.student-command-actions .entry-btn {
+    width: 100%;
+}
+
+.entry-alert {
+    margin-bottom: 14px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 750;
+}
+
+.entry-alert-danger {
+    border: 1px solid #fca5a5;
+    background: #fef2f2;
+    color: #991b1b;
+}
+
+.entry-alert-warning {
+    border: 1px solid #fde68a;
+    background: #fffbeb;
+    color: #92400e;
+}
+
+.recent-admissions-card {
+    margin-top: 18px;
+}
+
+.recent-admissions-card .compact-table-wrap {
+    margin: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+.recent-admissions-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.recent-admissions-table th {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--entry-line);
+    color: #526279;
+    font-size: 11px;
+    font-weight: 850;
+    letter-spacing: 0.05em;
+    text-align: left;
+    text-transform: uppercase;
+}
+
+.recent-admissions-table td {
+    padding: 11px 12px;
+    border-bottom: 1px solid #eef3f7;
+    color: var(--entry-ink);
+    font-size: 13px;
+}
+
+.recent-admissions-table tr:hover td {
+    background: #f6fbfa;
+}
+
+.student-entry .record-link {
+    color: var(--entry-accent-dark);
+    font-weight: 800;
+    text-decoration: none;
+}
+
+.student-entry .record-link:hover {
+    text-decoration: underline;
+}
+
+.student-entry .record-link.delete {
+    margin-left: 10px;
+    color: var(--danger);
+}
+
+@media (max-width: 1180px) {
+    .student-admission-shell {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .student-entry-rail {
+        position: static;
+        grid-template-columns: 220px minmax(0, 1fr);
+        order: -1;
+    }
+}
+
+@media (max-width: 960px) {
+    .form-grid,
+    .fee-head-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .student-entry-header {
+        align-items: stretch;
+        flex-direction: column;
+        padding: 15px;
+    }
+
+    .entry-header-actions {
+        width: 100%;
+    }
+
+    .entry-header-actions .entry-btn {
+        flex: 1;
+    }
+
+    .student-entry-header h1 {
+        font-size: 22px;
+    }
+
+    .student-entry-rail {
+        order: 0;
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+
+    .student-photo-card {
+        display: none;
+    }
+
+    .entry-card {
+        padding: 13px;
+        border-radius: 14px;
+    }
+
+    .entry-grid-four {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .entry-span-2,
+    .entry-span-full {
+        grid-column: 1 / -1;
+    }
+
+    .student-command-card {
+        align-content: start;
+    }
+
+    .student-active-toggle {
+        min-height: 34px;
+    }
+
+    .student-command-actions .entry-btn {
+        min-height: 40px;
+        padding: 0 10px;
+        font-size: 13px;
+    }
+
+    .recent-admissions-table th,
+    .recent-admissions-table td {
+        padding: 8px 10px;
+        font-size: 12px;
+    }
+}
+
+@media (max-width: 520px) {
+    .student-entry-rail {
+        grid-template-columns: 1fr;
+    }
+}
+
+
+/* ============================================================
+   PREMIUM COLOR LAYER — admission entry (appended override)
+   Harmonises the form with the deep-green sidebar. v3-color
+   ============================================================ */
+.student-entry {
+    --entry-deep: #14342a;
+    --entry-accent: #0f766e;
+    --entry-accent-dark: #0b4f4a;
+    background:
+        radial-gradient(1100px 420px at 82% -12%, rgba(15, 118, 110, 0.12), transparent 62%),
+        linear-gradient(180deg, #eef5f1 0%, #e7f1ec 100%);
+}
+
+/* Hero header — soft green wash + gradient kicker chip */
+.student-entry .student-entry-header {
+    background:
+        linear-gradient(135deg, rgba(15, 118, 110, 0.12), rgba(20, 52, 42, 0.04)),
+        #ffffff;
+    border-color: #cde3db;
+    box-shadow: 0 14px 34px rgba(15, 52, 42, 0.08);
+}
+.student-entry .entry-kicker {
+    background: linear-gradient(135deg, #0f766e, #14342a);
+    color: #ffffff;
+    letter-spacing: 0.9px;
+    box-shadow: 0 3px 8px rgba(11, 79, 74, 0.28);
+}
+
+/* Section cards — thin colored top edge + faint gradient body */
+.student-entry .entry-card {
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(180deg, #ffffff 0%, #f9fdfb 100%);
+    border-color: #d7e7e0;
+    box-shadow: 0 16px 34px rgba(15, 52, 42, 0.07);
+}
+.student-entry .entry-card::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #2dd4bf, #0f766e 55%, #14342a);
+    opacity: 0.9;
+}
+.student-entry .entry-card-title {
+    color: var(--entry-accent-dark);
+}
+.student-entry .entry-card-title::before {
+    background: linear-gradient(180deg, #2dd4bf, #0f766e);
+    box-shadow: 0 2px 6px rgba(15, 118, 110, 0.4);
+}
+
+/* Inputs — gentle tint so fields read as clear zones */
+.student-entry .entry-field input,
+.student-entry .entry-field select,
+.student-entry .entry-field textarea {
+    background: #f6fbf9;
+    border-color: #cddfd8;
+}
+.student-entry .entry-field input:focus,
+.student-entry .entry-field select:focus,
+.student-entry .entry-field textarea:focus {
+    background: #ffffff;
+    border-color: var(--entry-accent);
+    box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.18);
+}
+
+/* Right rail cards — same premium tint */
+.student-entry .student-photo-card,
+.student-entry .student-command-card {
+    background: linear-gradient(180deg, #ffffff, #f5fbf8);
+    border-color: #d7e7e0;
+    box-shadow: 0 16px 34px rgba(15, 52, 42, 0.07);
+}
+
+/* Save button — deeper, richer green gradient */
+.student-entry .entry-btn-primary {
+    background: linear-gradient(135deg, #0f766e 0%, #0b5f57 55%, #14342a 100%);
+    box-shadow: 0 6px 16px rgba(11, 79, 74, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+    border: none;
+}
+.student-entry .entry-btn-primary:hover {
+    filter: brightness(1.06);
+    box-shadow: 0 8px 20px rgba(11, 79, 74, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+/* Recent Admissions — tinted green header band */
+.student-entry .recent-admissions-table thead th {
+    background: linear-gradient(180deg, #eef6f2, #e3f0ea);
+    color: var(--entry-accent-dark);
+}
+.student-entry .recent-admissions-table tbody tr:hover td {
+    background: #f2f9f6;
+}
