@@ -1,0 +1,51 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#004d40">
+    <title>Login | SchoolSoft</title>
+    <link rel="stylesheet" href="{% static 'core/styles.css' %}?v=20260703-auth-1">
+</head>
+<body class="workspace-login-page">
+<main class="workspace-login-shell">
+    <section class="workspace-login-brand">
+        <img src="{% static 'core/school_logo.png' %}" alt="THPS logo">
+        <span>SchoolSoft Workspace</span>
+        <h1>THPS English Medium School</h1>
+        <p>Secure access for student, fee, marks, staff and transport records.</p>
+    </section>
+
+    <section class="workspace-login-card">
+        <div class="workspace-login-rule"></div>
+        <p class="workspace-login-kicker">User Login</p>
+        <h2>Sign in to continue</h2>
+
+        {% if form.errors %}
+        <div class="workspace-login-error">
+            Username ya password sahi nahi hai. Dobara try kijiye.
+        </div>
+        {% endif %}
+
+        <form method="post" action="{% url 'core:login' %}">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ next }}">
+            <label>
+                <span>Username</span>
+                {{ form.username }}
+            </label>
+            <label>
+                <span>Password</span>
+                {{ form.password }}
+            </label>
+            <button type="submit">Log in</button>
+        </form>
+
+        <p class="workspace-login-note">
+            Permission admin panel me user groups se control hoti hai.
+        </p>
+    </section>
+</main>
+</body>
+</html>

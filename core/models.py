@@ -511,4 +511,26 @@ class LegacyImportBatch(TimeStampedModel):
     def __str__(self):
         return f"{self.source_table} import on {self.created_at:%Y-%m-%d}"
 
+
+class ModuleAccess(models.Model):
+    class Meta:
+        managed = False
+        default_permissions = ()
+        verbose_name = "SchoolSoft module permission"
+        verbose_name_plural = "SchoolSoft module permissions"
+        permissions = [
+            ("access_all_modules", "SchoolSoft: Access all modules"),
+            ("access_dashboard", "SchoolSoft: Open dashboard"),
+            ("access_students", "SchoolSoft: Students and admissions"),
+            ("access_fee_collection", "SchoolSoft: Fee collection"),
+            ("access_receipts", "SchoolSoft: Receipt register and receipt PDFs"),
+            ("access_dues", "SchoolSoft: Dues report"),
+            ("access_collection", "SchoolSoft: Collection report"),
+            ("access_fee_setup", "SchoolSoft: Fee setup"),
+            ("access_marks", "SchoolSoft: Marks and marksheets"),
+            ("access_staff", "SchoolSoft: Staff and salary"),
+            ("access_transport", "SchoolSoft: Transport"),
+            ("access_school_profile", "SchoolSoft: School profile"),
+        ]
+
 # Create your models here.

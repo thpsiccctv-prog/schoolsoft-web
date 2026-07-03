@@ -113,6 +113,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'core.access.access_context',
             ],
         },
     },
@@ -185,6 +186,10 @@ USE_TZ = True
 STATIC_URL = 'static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+LOGIN_URL = "core:login"
+LOGIN_REDIRECT_URL = "core:dashboard"
+LOGOUT_REDIRECT_URL = "core:login"
 
 # WhiteNoise serves compressed, cache-busted static files directly from Django,
 # so the online deployment does not need a separate Nginx/static host to start.

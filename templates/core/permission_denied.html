@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+
+{% block title %}No Permission | SchoolSoft{% endblock %}
+
+{% block content %}
+<section class="auth-denied-card">
+    <p class="auth-denied-kicker">Permission Required</p>
+    <h1>{{ module_name }} access nahi hai</h1>
+    <p>Is user ko ye module kholne ki permission nahi di gayi hai. Admin user Groups me jaakar permission de sakta hai.</p>
+    <div class="auth-denied-actions">
+        <a class="button" href="{% url 'core:dashboard' %}">Dashboard</a>
+        {% if request.user.is_staff %}
+        <a class="button secondary" href="/admin/auth/user/">User Permissions</a>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
@@ -25,7 +26,26 @@ from .models import (
 )
 
 
-class DashboardTests(TestCase):
+class AuthenticatedClientMixin:
+    def setUp(self):
+        super().setUp()
+        self.user = get_user_model().objects.create_superuser(
+            username="tester",
+            email="tester@example.com",
+            password="testpass123",
+        )
+        self.client.force_login(self.user)
+
+
+class WorkspaceAuthTests(TestCase):
+    def test_dashboard_requires_login(self):
+        response = self.client.get(reverse("core:dashboard"))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse("core:login"), response["Location"])
+
+
+class DashboardTests(AuthenticatedClientMixin, TestCase):
     def test_dashboard_loads(self):
         response = self.client.get(reverse("core:dashboard"))
 
@@ -123,7 +143,7 @@ class DashboardTests(TestCase):
         self.assertContains(all_rows_response, "Zero Fee")
 
 
-class FeeReceiptTests(TestCase):
+class FeeReceiptTests(AuthenticatedClientMixin, TestCase):
     def test_payable_amount_uses_lines_late_fee_and_concession(self):
         session = AcademicSession.objects.create(name="2026-27")
         school_class = SchoolClass.objects.create(name="I", display_order=1)
@@ -285,7 +305,7 @@ class FeeReceiptTests(TestCase):
         self.assertContains(response, "Due Report")
         self.assertContains(response, "Due Student")
 
-class Month2DocumentTests(TestCase):
+class Month2DocumentTests(AuthenticatedClientMixin, TestCase):
     def test_admission_form_pdf(self):
         school_class = SchoolClass.objects.create(name="I", display_order=1)
         student = Student.objects.create(full_name="Doc Student", current_class=school_class)
@@ -420,7 +440,7 @@ class Month2DocumentTests(TestCase):
         self.assertEqual(mark.grade, "A1")
 
 
-class StaffTests(TestCase):
+class StaffTests(AuthenticatedClientMixin, TestCase):
     def test_staff_list_loads(self):
         Staff.objects.create(full_name="Test Teacher", designation="Teacher", basic_pay=Decimal("15000.00"))
 
@@ -502,7 +522,7 @@ class StaffTests(TestCase):
         self.assertEqual(pdf_response["Content-Type"], "application/pdf")
 
 
-class TransportTests(TestCase):
+class TransportTests(AuthenticatedClientMixin, TestCase):
     def test_transport_list_loads(self):
         school_class = SchoolClass.objects.create(name="VIII", display_order=8)
         student = Student.objects.create(
