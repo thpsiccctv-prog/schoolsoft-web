@@ -3728,7 +3728,6 @@ th.amount,
 @media print {
     @page {
         margin: 0;
-        size: A5 portrait;
     }
     body {
         background: #fff;

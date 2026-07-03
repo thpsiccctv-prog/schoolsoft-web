@@ -22,29 +22,43 @@ def build_fee_receipt_pdf(receipt, school_profile=None):
     )
 
     styles = getSampleStyleSheet()
+    
+    # Premium Styles
+    brand_color = colors.HexColor("#0f766e")
+    text_color = colors.HexColor("#1e293b")
+    light_bg = colors.HexColor("#f8fafc")
+    border_color = colors.HexColor("#cbd5e1")
+    
     title_style = ParagraphStyle(
         "ReceiptTitle",
         parent=styles["Title"],
-        fontSize=16,
-        leading=20,
-        alignment=1,
+        fontSize=18,
+        leading=22,
+        alignment=0, # Left align
+        textColor=brand_color,
+        fontName="Helvetica-Bold",
         spaceAfter=2 * mm,
     )
     small_style = ParagraphStyle(
         "Small",
         parent=styles["Normal"],
-        fontSize=8,
-        leading=10,
-    )
-    normal_style = ParagraphStyle(
-        "ReceiptNormal",
-        parent=styles["Normal"],
         fontSize=9,
-        leading=11,
+        leading=12,
+        textColor=colors.HexColor("#64748b"),
+    )
+    badge_style = ParagraphStyle(
+        "Badge",
+        parent=styles["Normal"],
+        fontSize=10,
+        fontName="Helvetica-Bold",
+        textColor=brand_color,
+        backColor=colors.HexColor("#ecfdf5"),
+        alignment=0,
+        spaceBefore=4 * mm,
     )
 
     school_name = school_profile.name if school_profile else "SchoolSoft Fee Receipt"
-    school_address = school_profile.address if school_profile else "Legacy migration prototype"
+    school_address = school_profile.address if school_profile else "Premium Migration Prototype"
     school_contact = ""
     if school_profile:
         contact_parts = []
@@ -54,12 +68,28 @@ def build_fee_receipt_pdf(receipt, school_profile=None):
             contact_parts.append(f"Email: {school_profile.email}")
         school_contact = " | ".join(contact_parts)
 
-    story = [Paragraph(school_name, title_style)]
-    if school_address:
-        story.append(Paragraph(school_address, small_style))
-    if school_contact:
-        story.append(Paragraph(school_contact, small_style))
-    story.extend([Paragraph("Fee Receipt", small_style), Spacer(1, 5 * mm)])
+    story = []
+    
+    # Header Table (School Info Left, Receipt No Right)
+    header_data = [
+        [
+            [Paragraph(school_name.upper(), title_style), 
+             Paragraph(school_address, small_style), 
+             Paragraph(school_contact, small_style),
+             Paragraph(" FEE RECEIPT ", badge_style)],
+            [Paragraph(f"<b>Receipt No.</b><br/><font size=16>{receipt.receipt_no}</font>", 
+                      ParagraphStyle("RNo", alignment=2, leading=20, textColor=text_color))]
+        ]
+    ]
+    header_table = Table(header_data, colWidths=[110 * mm, 70 * mm])
+    header_table.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+        ('ALIGN', (1,0), (1,0), 'RIGHT'),
+        ('LINEBELOW', (0,0), (-1,-1), 1.5, border_color),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 15),
+    ]))
+    
+    story.extend([header_table, Spacer(1, 8 * mm)])
 
     student = receipt.student
     class_label = ""
@@ -73,83 +103,125 @@ def build_fee_receipt_pdf(receipt, school_profile=None):
         month_label = f"{receipt.from_month} to {receipt.to_month}"
 
     meta = [
-        ["Receipt No.", receipt.receipt_no, "Date", receipt.receipt_date.strftime("%d-%m-%Y")],
-        ["Student", student.full_name, "SID", student.legacy_sid or ""],
-        ["Father", student.father_name or "", "Class", class_label],
-        ["Month", month_label, "Mode", receipt.get_payment_mode_display()],
+        ["Student Name", student.full_name, "Date", receipt.receipt_date.strftime("%d-%m-%Y")],
+        ["SID / Admn", f"{student.legacy_sid or ''} / {student.admission_no or ''}", "Class", class_label],
+        ["Fee Month", month_label, "Mode", receipt.get_payment_mode_display()],
     ]
-    meta_table = Table(meta, colWidths=[28 * mm, 68 * mm, 24 * mm, 55 * mm])
+    meta_table = Table(meta, colWidths=[35 * mm, 60 * mm, 30 * mm, 55 * mm])
     meta_table.setStyle(
         TableStyle(
             [
-                ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#9aa4b2")),
-                ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f1f5f9")),
-                ("BACKGROUND", (2, 0), (2, -1), colors.HexColor("#f1f5f9")),
+                ("GRID", (0, 0), (-1, -1), 0.5, border_color),
+                ("BACKGROUND", (0, 0), (0, -1), light_bg),
+                ("BACKGROUND", (2, 0), (2, -1), light_bg),
                 ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
                 ("FONTNAME", (2, 0), (2, -1), "Helvetica-Bold"),
+                ("TEXTCOLOR", (0, 0), (0, -1), colors.HexColor("#475569")),
+                ("TEXTCOLOR", (2, 0), (2, -1), colors.HexColor("#475569")),
+                ("TEXTCOLOR", (1, 0), (1, -1), text_color),
+                ("TEXTCOLOR", (3, 0), (3, -1), text_color),
                 ("FONTSIZE", (0, 0), (-1, -1), 9),
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("TOPPADDING", (0, 0), (-1, -1), 5),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+                ("TOPPADDING", (0, 0), (-1, -1), 6),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
             ]
         )
     )
-    story.extend([meta_table, Spacer(1, 6 * mm)])
+    story.extend([meta_table, Spacer(1, 8 * mm)])
 
-    line_rows = [["Fee Head", "Amount"]]
+    line_rows = [["Fee Head Description", "Amount (Rs.)"]]
     for line in receipt.lines.select_related("fee_head").all():
         line_rows.append([line.fee_head.name, money(line.amount)])
 
-    line_rows.extend(
-        [
-            ["Fee Total", money(receipt.legacy_fee_total)],
-            ["Concession", money(receipt.concession_amount)],
-            ["Net Total", money(receipt.legacy_net_total)],
-            ["Paid", money(receipt.received_amount)],
-            ["Due", money(receipt.legacy_due_amount)],
-        ]
-    )
+    # Spacer row before totals
+    line_rows.append(["", ""])
+    
+    total_start_idx = len(line_rows)
+    line_rows.append(["Fee Total", money(receipt.legacy_fee_total)])
+    
+    if receipt.concession_amount > 0:
+        line_rows.append(["Concession / Discount", f"- {money(receipt.concession_amount)}"])
+    if receipt.late_fee_amount > 0:
+        line_rows.append(["Late Fee Fine", f"+ {money(receipt.late_fee_amount)}"])
+        
+    net_idx = len(line_rows)
+    line_rows.append(["Net Payable", f"Rs. {money(receipt.legacy_net_total)}"])
+    line_rows.append(["Amount Paid", f"Rs. {money(receipt.received_amount)}"])
+    
+    due_idx = None
+    if receipt.legacy_due_amount > 0:
+        due_idx = len(line_rows)
+        line_rows.append(["Balance Due", f"Rs. {money(receipt.legacy_due_amount)}"])
 
-    fee_table = Table(line_rows, colWidths=[130 * mm, 45 * mm], repeatRows=1)
-    total_start = len(line_rows) - 5
-    fee_table.setStyle(
-        TableStyle(
-            [
-                ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#c8d0dc")),
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e2e8f0")),
-                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                ("FONTNAME", (0, total_start), (-1, -1), "Helvetica-Bold"),
-                ("BACKGROUND", (0, total_start), (-1, -1), colors.HexColor("#f8fafc")),
-                ("ALIGN", (1, 1), (1, -1), "RIGHT"),
-                ("FONTSIZE", (0, 0), (-1, -1), 9),
-                ("TOPPADDING", (0, 0), (-1, -1), 5),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-            ]
-        )
-    )
+    fee_table = Table(line_rows, colWidths=[130 * mm, 50 * mm], repeatRows=1)
+    
+    ts = [
+        # Header
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f1f5f9")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#334155")),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("LINEBELOW", (0, 0), (-1, 0), 1, border_color),
+        
+        # Body Lines
+        ("LINEBELOW", (0, 1), (-1, total_start_idx-2), 0.5, colors.HexColor("#e2e8f0")),
+        ("ALIGN", (1, 1), (1, -1), "RIGHT"),
+        ("FONTSIZE", (0, 0), (-1, -1), 10),
+        ("TEXTCOLOR", (0, 1), (-1, total_start_idx-2), text_color),
+        ("TOPPADDING", (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        
+        # Totals Section
+        ("FONTNAME", (0, total_start_idx), (-1, -1), "Helvetica-Bold"),
+        ("TEXTCOLOR", (0, total_start_idx), (-1, -1), colors.HexColor("#475569")),
+        
+        # Net Payable Row
+        ("BACKGROUND", (0, net_idx), (-1, net_idx), light_bg),
+        ("TEXTCOLOR", (0, net_idx), (-1, net_idx), text_color),
+        ("LINEABOVE", (0, net_idx), (-1, net_idx), 1, border_color),
+        ("LINEBELOW", (0, net_idx), (-1, net_idx), 1, border_color),
+        ("FONTSIZE", (0, net_idx), (-1, net_idx), 11),
+    ]
+    
+    if due_idx:
+        ts.append(("TEXTCOLOR", (0, due_idx), (-1, due_idx), colors.HexColor("#dc2626")))
+        
+    fee_table.setStyle(TableStyle(ts))
     story.append(fee_table)
 
     if receipt.remarks:
-        story.extend([Spacer(1, 5 * mm), Paragraph(f"Remarks: {receipt.remarks}", normal_style)])
+        story.extend([Spacer(1, 5 * mm), Paragraph(f"<i>Remarks: {receipt.remarks}</i>", small_style)])
 
     story.extend(
         [
-            Spacer(1, 18 * mm),
+            Spacer(1, 25 * mm),
             Table(
-                [["Cashier", "Parent/Guardian"]],
-                colWidths=[80 * mm, 80 * mm],
+                [["Cashier's Signature", "Parent / Guardian"]],
+                colWidths=[70 * mm, 70 * mm],
                 style=TableStyle(
                     [
-                        ("LINEABOVE", (0, 0), (-1, 0), 0.5, colors.black),
+                        ("LINEABOVE", (0, 0), (0, 0), 1, border_color),
+                        ("LINEABOVE", (1, 0), (1, 0), 1, border_color),
                         ("ALIGN", (0, 0), (-1, -1), "CENTER"),
                         ("FONTSIZE", (0, 0), (-1, -1), 9),
+                        ("TEXTCOLOR", (0, 0), (-1, -1), colors.HexColor("#64748b")),
+                        ("TOPPADDING", (0, 0), (-1, -1), 6),
                     ]
                 ),
             ),
         ]
     )
 
-    document.build(story)
+    # Add Watermark callback
+    def add_watermark(canvas, doc):
+        canvas.saveState()
+        canvas.setFont('Helvetica-Bold', 100)
+        canvas.setFillColor(colors.HexColor("#0f766e"), alpha=0.04)
+        canvas.translate(105*mm, 148*mm)
+        canvas.rotate(45)
+        canvas.drawCentredString(0, 0, "SCHOOLSOFT")
+        canvas.restoreState()
+
+    document.build(story, onFirstPage=add_watermark, onLaterPages=add_watermark)
     buffer.seek(0)
     return buffer.getvalue()
 

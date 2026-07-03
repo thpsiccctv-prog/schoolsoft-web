@@ -4,6 +4,18 @@
 {% block title %}Receipt {{ receipt.receipt_no }} | SchoolSoft Modernization{% endblock %}
 
 {% block content %}
+<style>
+    @media print {
+        @page { size: A5 portrait; margin: 0; }
+        .receipt-paper {
+            padding: 15px !important;
+            margin: 0 !important;
+            border-top: 6px solid #0f766e !important;
+        }
+        .receipt-header { margin-bottom: 12px !important; padding-bottom: 10px !important; }
+        .receipt-footer { margin-top: 30px !important; }
+    }
+</style>
 <section class="section no-print" style="margin-bottom: 20px;">
     <div class="section-heading with-actions" style="background: #fff; padding: 16px 24px; border-radius: 8px; border: 1px solid #e2e8f0;">
         <div>
