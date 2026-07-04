@@ -53,6 +53,7 @@ class Section(TimeStampedModel):
 
 class SchoolProfile(TimeStampedModel):
     legacy_comp_code = models.PositiveIntegerField(null=True, blank=True, unique=True)
+    udise_code = models.CharField(max_length=50, blank=True)
     name = models.CharField(max_length=120)
     address_line1 = models.CharField(max_length=120, blank=True)
     address_line2 = models.CharField(max_length=120, blank=True)
@@ -85,6 +86,7 @@ class Student(TimeStampedModel):
         UNKNOWN = "U", "Unknown"
 
     legacy_sid = models.PositiveIntegerField(null=True, blank=True, unique=True)
+    pen_number = models.CharField(max_length=50, blank=True)
     admission_no = models.CharField(max_length=30, blank=True)
     registration_no = models.CharField(max_length=30, blank=True)
     roll_no = models.PositiveIntegerField(null=True, blank=True)
@@ -94,6 +96,7 @@ class Student(TimeStampedModel):
     gender = models.CharField(max_length=1, choices=Gender.choices, default=Gender.UNKNOWN)
     date_of_birth = models.DateField(null=True, blank=True)
     aadhaar_no = models.CharField(max_length=25, blank=True)
+    nationality = models.CharField(max_length=50, default="Indian")
     category = models.CharField(max_length=50, blank=True)
     religion = models.CharField(max_length=50, blank=True)
     mobile_primary = models.CharField(max_length=50, blank=True)
@@ -229,6 +232,8 @@ class TransferCertificate(TimeStampedModel):
 
     student = models.OneToOneField(Student, on_delete=models.CASCADE, related_name="transfer_certificate")
     tc_number = models.CharField(max_length=30, unique=True)
+    book_no = models.CharField(max_length=30, blank=True)
+    sr_no = models.CharField(max_length=30, blank=True)
     issue_date = models.DateField(default=timezone.localdate)
     date_of_leaving = models.DateField(null=True, blank=True)
     last_class_studied = models.ForeignKey(
@@ -236,6 +241,12 @@ class TransferCertificate(TimeStampedModel):
     )
     last_section = models.CharField(max_length=10, blank=True)
     reason_for_leaving = models.CharField(max_length=255, blank=True)
+    subjects_offered = models.CharField(max_length=255, blank=True)
+    whether_failed = models.BooleanField(default=False)
+    fee_concession_nature = models.CharField(max_length=255, blank=True)
+    ncc_scout = models.CharField(max_length=100, blank=True)
+    struck_off_date = models.DateField(null=True, blank=True)
+    school_category = models.CharField(max_length=50, default="Independent")
     conduct = models.CharField(max_length=20, choices=Conduct.choices, default=Conduct.GOOD)
     general_progress = models.CharField(max_length=20, choices=Conduct.choices, default=Conduct.GOOD)
     total_working_days = models.PositiveIntegerField(null=True, blank=True)

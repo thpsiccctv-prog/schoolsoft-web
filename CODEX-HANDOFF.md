@@ -466,8 +466,8 @@ Data rules:
 - If counts differ between local, EXE, and Render, first identify which DB is being used.
 
 Suggested next task:
-- Redesign and polish the PDF generation (Marksheet, TC, Receipts, etc.) in `core/pdf.py` to match the premium brand design.
-- The user wants the ReportLab PDFs to look modern, professional, and aligned with the web UI's premium aesthetic.
+- Phase 2: Fees Module (Fee Collection form, Receipts List, Dues Report, Collection Report) UI polish.
+- Update the Fee Collection form to use the dense `.student-entry` style layout, and polish the Receipts List and Reports to match the premium `.premium-table` look.
 
 Before making changes:
 - Run `git status --short --branch`.
