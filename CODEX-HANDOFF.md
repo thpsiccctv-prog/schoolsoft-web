@@ -443,3 +443,18 @@ Before making changes:
 - If dirty, inspect diffs and do not overwrite user changes.
 - Prefer small commits with clear verification notes.
 ```
+
+## Role Matrix (Confirmed July 4, 2026)
+
+The following role presets are available and have been verified across both Render and Desktop EXE:
+
+| Role Name | Access Type | Granted Modules | Blocked Modules |
+| --- | --- | --- | --- |
+| **admin** | Full Write | All | None |
+| **fee** | Full Write | Students, Fee Collection, Receipts, Dues, Collection, Fee Setup, School Profile | Marks, Staff, Transport |
+| **admission** | Full Write | Students, School Profile | Fees, Marks, Staff, Transport |
+| **exam** | Full Write | Students, Marks, School Profile | Fees, Staff, Transport |
+| **staff** | Full Write | Staff, Transport, School Profile | Students, Fees, Marks |
+| **viewer** | Read Only | All (can view lists and print reports) | Cannot create, edit, or delete anything |
+
+*Note: All roles implicitly have access to the Dashboard.*
