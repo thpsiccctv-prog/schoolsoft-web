@@ -382,7 +382,7 @@ First read:
 3. git status --short --branch
 
 Current latest pushed commit:
-cab40ad style: polish users permissions table
+8b605ce docs: add role matrix to handoff
 
 Project summary:
 - SchoolSoft is a Django + vanilla CSS School ERP.
@@ -408,6 +408,7 @@ Current stable features:
   - view-only users are blocked from create/edit/delete
   - direct URL module access is protected server-side
 - Latest Users & Permissions table polish is in `cab40ad`.
+- Confirmed role matrix is documented in `8b605ce`.
 
 Critical rules:
 - Do not bulk append CSS with shell commands. A previous append truncated styles.css.
