@@ -313,6 +313,44 @@ live only in the local dev `db.sqlite3`, NOT the sacred LOCALAPPDATA db, NOT git
    Render DB credential, custom domain CNAME, Render free-DB expiry plan (Aug 1, 2026).
 4. Optional: deactivate/delete the 5 test users from the dev DB (harmless; not shipped).
 
+## PDF polish plan — Claude's review (July 4, 2026) — READ before executing the "Design Polish" plan
+
+A "PDF Generation Design Polish (Premium SaaS Look)" plan exists for `core/pdf.py`
+(unified `_school_header`, brand colors, watermark, cleaner tables for Marksheet / TC /
+Character Certificate). The cosmetic parts are fine and low-risk, BUT the plan is
+**visual-only and misses the more important content gap.** Apply these corrections:
+
+**1. CONTENT before cosmetics — the Transfer Certificate is missing legally-required fields.**
+Compare our current app TC to the legacy VB app's official bilingual TC
+(स्थानान्तरण प्रमाण-पत्र / TRANSFER CERTIFICATE, 23 numbered fields). Our TC lacks, at minimum:
+UDISE Code (09591200129), **PEN** (Permanent Education Number), **Book No. / S.R. No.**,
+Nationality, **SC/ST/OBC category**, **DOB in words** (not just figures), Subjects offered,
+"class last studied — in words", whether failed, fee concession nature, NCC/Scout, struck-off
+date, School category (Govt/Independent), Prepared-by / Checked-by / Principal + seal, and the
+bilingual Hindi/English labels + officiating-principal note. Decide with the user whether to
+**replicate the official government format** (recommended if TCs are used officially) and pin
+the exact field list FIRST. A pretty-but-incomplete TC is worse than a plain complete one.
+
+**2. Hindi/bilingual text needs an embedded Unicode font.** ReportLab default fonts do NOT
+render Devanagari. Must bundle + `pdfmetrics.registerFont` a Devanagari font (e.g. Noto Sans
+Devanagari) and add it to `SchoolSoft.spec` datas so the EXE ships it. Non-trivial — plan for it.
+
+**3. Do NOT put the "SCHOOLSOFT" watermark on TC or Marksheet.** Fine on internal receipts, but
+a watermark on an official Transfer Certificate / Marksheet looks unprofessional and can make it
+look invalid. The plan proposes adding it to the marksheet — skip that for official docs.
+
+**4. Prefer the official/authoritative look over "premium SaaS" for the TC.** Alternating fancy
+row colors on a legal certificate reduce credibility for board/inspection. Keep the TC close to
+the government format; reserve the premium styling for Marksheet + receipts.
+
+**5. Marksheet "AB" (absent) handling:** current sample shows "AB" for a subject yet still totals
+568/900 — verify absent subjects are handled correctly in total/percentage/grade logic, not just
+visually.
+
+**Recommended split:** (A, priority) TC content completeness + Devanagari font; (B, low-risk)
+cosmetic polish for Marksheet + receipts. `manage.py test` must stay green; PDF tests should
+assert content, not just 200 OK. Keep A4 sizes as-is. Logo embed in letterhead is good.
+
 ## Latest checkpoint - July 4, 2026 evening (after `b7dbeee`)
 
 Latest commit: `b7dbeee fix(ui): scope student quick actions to permissions`.
@@ -374,7 +412,7 @@ First read:
 3. git status --short --branch
 
 Current latest commit:
-b7dbeee fix(ui): scope student quick actions to permissions
+2b46809 fix(ui): prevent horizontal overflow on smaller screens
 
 Project summary:
 - SchoolSoft is a Django + vanilla CSS School ERP.
@@ -428,13 +466,8 @@ Data rules:
 - If counts differ between local, EXE, and Render, first identify which DB is being used.
 
 Suggested next task:
-- Help create and test real users/roles separately in Render and desktop EXE.
-- Then verify permissions:
-  - fee user cannot open Marks/Staff unless granted
-  - admission user can add/edit students but not fee setup unless granted
-  - exam user can open Marks but not Fee Collection unless granted
-  - staff user can open Staff/Transport but not Fee Collection
-  - viewer can view/print only and is blocked from all create/edit/delete direct URLs
+- Redesign and polish the PDF generation (Marksheet, TC, Receipts, etc.) in `core/pdf.py` to match the premium brand design.
+- The user wants the ReportLab PDFs to look modern, professional, and aligned with the web UI's premium aesthetic.
 
 Before making changes:
 - Run `git status --short --branch`.
