@@ -4706,3 +4706,143 @@ th.amount,
     text-decoration: underline;
     color: var(--brand-800);
 }
+
+/* ============================================================
+   STUDENT ADMISSION FORM — COMPACT & PREMIUM
+   ============================================================ */
+
+.student-entry .student-admission-shell {
+    display: flex;
+    gap: 24px;
+    align-items: flex-start;
+}
+.student-entry .student-admission-main {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+.student-entry .student-entry-rail {
+    width: 260px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    position: sticky;
+    top: 24px;
+}
+.student-entry .entry-card {
+    background: #fff;
+    border-radius: 8px;
+    padding: 16px 20px;
+    border: 1px solid var(--line);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.02);
+}
+.student-entry .entry-card-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--ink-900);
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--line);
+}
+.student-entry .entry-grid {
+    display: grid;
+    gap: 12px 16px;
+}
+.student-entry .entry-grid-four {
+    grid-template-columns: repeat(4, 1fr);
+}
+.student-entry .entry-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.student-entry .entry-span-2 {
+    grid-column: span 2;
+}
+.student-entry .entry-span-full {
+    grid-column: 1 / -1;
+}
+.student-entry .entry-field label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--ink-600);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+.student-entry .entry-field input,
+.student-entry .entry-field select {
+    height: 36px;
+    padding: 0 10px;
+    border: 1px solid var(--line-strong);
+    border-radius: 4px;
+    font-size: 0.95rem;
+    background: #fff;
+    transition: all 0.2s;
+}
+.student-entry .entry-field input:focus,
+.student-entry .entry-field select:focus {
+    border-color: var(--brand-500);
+    outline: none;
+    box-shadow: 0 0 0 3px var(--brand-100);
+}
+.student-entry .student-photo-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 120px;
+    background: var(--brand-050);
+    color: var(--brand-500);
+    border-radius: 6px;
+    border: 1px dashed var(--brand-300);
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+.student-entry .student-command-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 16px;
+}
+.student-entry .entry-btn {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 38px;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 0.95rem;
+    cursor: pointer;
+    border: none;
+    text-decoration: none;
+}
+.student-entry .entry-btn-primary {
+    background: var(--brand-700);
+    color: #fff;
+}
+.student-entry .entry-btn-primary:hover {
+    background: var(--brand-800);
+}
+.student-entry .entry-btn-secondary {
+    background: #fff;
+    border: 1px solid var(--line-strong);
+    color: var(--ink-700);
+}
+.student-entry .entry-btn-secondary:hover {
+    background: var(--brand-050);
+}
+.student-entry .student-active-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 500;
+    color: var(--ink-800);
+    cursor: pointer;
+}
+.student-entry .student-active-toggle input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+}
