@@ -67,54 +67,58 @@
     </div>
 
     <!-- ─── FILTER ─── -->
-    <form class="filterbar compact-filter no-print" method="get" style="background: #fff; padding: 14px 18px; border-radius: 12px; border: 1px solid #dce5e1; box-shadow: 0 1px 3px rgba(16,40,32,0.03); margin-bottom: 20px;">
-        <input type="search" name="q" value="{{ query }}" placeholder="Search student, father, SID, admission no" style="border-radius: 8px; border: 1px solid #cbd5e1; padding: 8px 12px; flex: 1;">
-        <select name="class" style="border-radius: 8px; border: 1px solid #cbd5e1; padding: 8px 12px;">
-            <option value="">All classes</option>
-            {% for class in classes %}
-                <option value="{{ class.id }}" {% if selected_class == class.id|stringformat:"s" %}selected{% endif %}>
-                    {{ class.name }}
-                </option>
-            {% endfor %}
-        </select>
-        <button type="submit" style="background: #0f766e; color: #fff; border: none; border-radius: 8px; padding: 8px 20px; font-weight: 600; cursor: pointer;">Search</button>
-        <a class="button secondary" href="{% url 'core:due_report' %}" style="border-radius: 8px; padding: 8px 20px;">Reset</a>
-    </form>
+    <div class="premium-filterbar no-print">
+        <form class="due-filterbar" method="get">
+            <div class="filterbar-inputs">
+                <input type="search" name="q" value="{{ query }}" placeholder="Search student, father, SID, admission no">
+                <select name="class">
+                    <option value="">All classes</option>
+                    {% for class in classes %}
+                        <option value="{{ class.id }}" {% if selected_class == class.id|stringformat:"s" %}selected{% endif %}>
+                            {{ class.name }}
+                        </option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="button action-primary">Search</button>
+                <a class="button secondary action-secondary" href="{% url 'core:due_report' %}">Reset</a>
+            </div>
+        </form>
+    </div>
 
     <!-- ─── TABLE ─── -->
-    <div class="table-wrap" style="background: #fff; border-radius: 12px; border: 1px solid #dce5e1; overflow: hidden; box-shadow: 0 1px 3px rgba(16,40,32,0.03);">
-        <table style="width: 100%; border-collapse: collapse;">
-            <thead style="background: #f8fafc; border-bottom: 2px solid #e2e8f0;">
+    <div class="table-wrap premium-table-wrap">
+        <table class="premium-table">
+            <thead>
                 <tr>
-                    <th style="padding: 12px 16px; text-align: left; font-size: 12px; text-transform: uppercase; color: #475569; font-weight: 700;">SID</th>
-                    <th style="padding: 12px 16px; text-align: left; font-size: 12px; text-transform: uppercase; color: #475569; font-weight: 700;">Student</th>
-                    <th style="padding: 12px 16px; text-align: left; font-size: 12px; text-transform: uppercase; color: #475569; font-weight: 700;">Father</th>
-                    <th style="padding: 12px 16px; text-align: left; font-size: 12px; text-transform: uppercase; color: #475569; font-weight: 700;">Class</th>
-                    <th style="padding: 12px 16px; text-align: left; font-size: 12px; text-transform: uppercase; color: #475569; font-weight: 700;">Mobile</th>
-                    <th class="amount" style="padding: 12px 16px; text-align: right; font-size: 12px; text-transform: uppercase; color: #475569; font-weight: 700;">Net</th>
-                    <th class="amount" style="padding: 12px 16px; text-align: right; font-size: 12px; text-transform: uppercase; color: #475569; font-weight: 700;">Paid</th>
-                    <th class="amount" style="padding: 12px 16px; text-align: right; font-size: 12px; text-transform: uppercase; color: #475569; font-weight: 700;">Due</th>
+                    <th>SID</th>
+                    <th>Student</th>
+                    <th>Father</th>
+                    <th>Class</th>
+                    <th>Mobile</th>
+                    <th class="amount">Net</th>
+                    <th class="amount">Paid</th>
+                    <th class="amount">Due</th>
                 </tr>
             </thead>
             <tbody>
                 {% for row in page.object_list %}
-                    <tr style="border-bottom: 1px solid #f1f5f9; transition: background 0.15s ease;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='transparent'">
-                        <td style="padding: 12px 16px; font-size: 14px; color: #64748b;">{{ row.student__legacy_sid }}</td>
-                        <td style="padding: 12px 16px; font-size: 14px; font-weight: 600; color: #0f172a;">{{ row.student__full_name }}</td>
-                        <td style="padding: 12px 16px; font-size: 14px; color: #475569;">{{ row.student__father_name }}</td>
-                        <td style="padding: 12px 16px; font-size: 14px; color: #475569;">
-                            <span style="background: #e2e8f0; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 600;">
+                    <tr>
+                        <td data-label="SID">{{ row.student__legacy_sid }}</td>
+                        <td data-label="Student" class="font-medium text-brand">{{ row.student__full_name }}</td>
+                        <td data-label="Father">{{ row.student__father_name }}</td>
+                        <td data-label="Class">
+                            <span class="status-badge status-active">
                                 {{ row.student__current_class__name }}{% if row.student__current_section__name %}-{{ row.student__current_section__name }}{% endif %}
                             </span>
                         </td>
-                        <td style="padding: 12px 16px; font-size: 14px; color: #475569;">{{ row.student__mobile_primary }}</td>
-                        <td class="amount" style="padding: 12px 16px; text-align: right; font-size: 14px; font-variant-numeric: tabular-nums; color: #475569;">{{ row.net_amount|indian_number }}</td>
-                        <td class="amount" style="padding: 12px 16px; text-align: right; font-size: 14px; font-variant-numeric: tabular-nums; color: #059669;">{{ row.paid_amount|indian_number }}</td>
-                        <td class="amount due-amount" style="padding: 12px 16px; text-align: right; font-size: 14px; font-variant-numeric: tabular-nums; font-weight: 700; color: #dc2626;">{{ row.due_amount|indian_number }}</td>
+                        <td data-label="Mobile">{{ row.student__mobile_primary }}</td>
+                        <td data-label="Net" class="amount font-medium">{{ row.net_amount|indian_number }}</td>
+                        <td data-label="Paid" class="amount text-success font-medium">{{ row.paid_amount|indian_number }}</td>
+                        <td data-label="Due" class="amount due-amount font-bold text-danger">{{ row.due_amount|indian_number }}</td>
                     </tr>
                 {% empty %}
                     <tr>
-                        <td colspan="8" style="padding: 30px; text-align: center; color: #64748b;">No dues found matching your criteria.</td>
+                        <td colspan="8" class="text-center py-8 text-muted">No dues found matching your criteria.</td>
                     </tr>
                 {% endfor %}
             </tbody>
