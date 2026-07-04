@@ -4446,6 +4446,7 @@ th.amount,
     display: flex;
     gap: 24px;
     align-items: center;
+    flex-wrap: wrap;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
     border: 1px solid var(--line);
 }
@@ -4630,7 +4631,8 @@ th.amount,
 }
 .student-list-page .filterbar-inputs input[type="search"] {
     flex-grow: 1;
-    min-width: 250px;
+    flex-basis: 250px;
+    min-width: 150px;
     padding: 8px 12px;
     border: 1px solid var(--line-strong);
     border-radius: 6px;
@@ -4647,7 +4649,8 @@ th.amount,
     background: #fff;
     border-radius: 10px;
     border: 1px solid var(--line);
-    overflow: hidden;
+    overflow-x: auto;
+    overflow-y: hidden;
     box-shadow: 0 4px 12px rgba(0,0,0,0.03);
 }
 .student-list-page .premium-table {
