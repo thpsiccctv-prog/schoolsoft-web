@@ -18,6 +18,26 @@ MODULE_PERMISSIONS = {
     "school_profile": "access_school_profile",
 }
 
+# Membership in this group marks a user as "view / print only": they keep read
+# access to whatever modules they are granted, but every write action (create,
+# edit, delete, save) is blocked. Seeded by migration 0008.
+READONLY_GROUP = "SchoolSoft Read Only"
+
+
+def user_is_readonly(user):
+    if not getattr(user, "is_authenticated", False):
+        return False
+    if user.is_superuser:
+        return False
+    return user.groups.filter(name=READONLY_GROUP).exists()
+
+
+def user_can_manage_users(user):
+    """Only full administrators may open the Users & Permissions screen."""
+    if not getattr(user, "is_authenticated", False):
+        return False
+    return user.is_superuser or user.has_perm("core.access_all_modules")
+
 
 def user_can_access(user, module):
     if not user.is_authenticated:
@@ -31,23 +51,55 @@ def user_can_access(user, module):
     return user.has_perm(f"core.{codename}") or user.has_perm("core.access_all_modules")
 
 
-def module_required(module):
+def module_required(module, write=False):
+    """Guard a view by module access.
+
+    write=True additionally blocks read-only (Viewer) users, so create / edit /
+    delete pages cannot be reached by someone who may only view and print.
+    """
     def decorator(view_func):
         @wraps(view_func)
         @login_required
         def wrapper(request, *args, **kwargs):
-            if user_can_access(request.user, module):
-                return view_func(request, *args, **kwargs)
-            return render(
-                request,
-                "core/permission_denied.html",
-                {"module_name": module.replace("_", " ").title()},
-                status=403,
-            )
+            if not user_can_access(request.user, module):
+                return render(
+                    request,
+                    "core/permission_denied.html",
+                    {"module_name": module.replace("_", " ").title()},
+                    status=403,
+                )
+            if write and user_is_readonly(request.user):
+                return render(
+                    request,
+                    "core/permission_denied.html",
+                    {
+                        "module_name": module.replace("_", " ").title(),
+                        "readonly": True,
+                    },
+                    status=403,
+                )
+            return view_func(request, *args, **kwargs)
 
         return wrapper
 
     return decorator
+
+
+def manage_users_required(view_func):
+    """Guard the in-app Users & Permissions screen (administrators only)."""
+    @wraps(view_func)
+    @login_required
+    def wrapper(request, *args, **kwargs):
+        if not user_can_manage_users(request.user):
+            return render(
+                request,
+                "core/permission_denied.html",
+                {"module_name": "Users & Permissions"},
+                status=403,
+            )
+        return view_func(request, *args, **kwargs)
+
+    return wrapper
 
 
 def access_context(request):
@@ -56,5 +108,7 @@ def access_context(request):
         "access": {
             module: user_can_access(user, module)
             for module in MODULE_PERMISSIONS
-        }
+        },
+        "can_manage_users": user_can_manage_users(user) if user is not None else False,
+        "is_readonly": user_is_readonly(user) if user is not None else False,
     }

@@ -4,13 +4,19 @@
 
 {% block content %}
 <section class="auth-denied-card">
+    {% if readonly %}
+    <p class="auth-denied-kicker">View / print only</p>
+    <h1>Ye kaam ki permission nahi hai</h1>
+    <p>Aapka account sirf dekhne aur print karne ke liye hai. Naya record banana, edit ya delete karna allowed nahi hai. Zaroorat ho to admin se full permission maangiye.</p>
+    {% else %}
     <p class="auth-denied-kicker">Permission Required</p>
     <h1>{{ module_name }} access nahi hai</h1>
-    <p>Is user ko ye module kholne ki permission nahi di gayi hai. Admin user Groups me jaakar permission de sakta hai.</p>
+    <p>Is user ko ye module kholne ki permission nahi di gayi hai. Admin "Users &amp; Permissions" me jaakar permission de sakta hai.</p>
+    {% endif %}
     <div class="auth-denied-actions">
         <a class="button" href="{% url 'core:dashboard' %}">Dashboard</a>
-        {% if request.user.is_staff %}
-        <a class="button secondary" href="/admin/auth/user/">User Permissions</a>
+        {% if can_manage_users %}
+        <a class="button secondary" href="{% url 'core:user_list' %}">Users &amp; Permissions</a>
         {% endif %}
     </div>
 </section>
