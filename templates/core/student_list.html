@@ -89,7 +89,9 @@
                             {% if not is_readonly %}
                                 <a class="action-link" href="{% url 'core:student_update' student.pk %}">Edit</a>
                             {% endif %}
+                            {% if access.marks %}
                             <a class="action-link" href="{% url 'core:marksheet_select' student.pk %}">Marks</a>
+                            {% endif %}
                         </td>
                     </tr>
                 {% empty %}
