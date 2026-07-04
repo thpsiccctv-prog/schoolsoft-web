@@ -3883,6 +3883,103 @@ th.amount,
     margin-left: 8px;
 }
 
+/* High Density Inputs (matching student-entry) */
+.fee-desk label {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 8px;
+    font-size: 13px;
+    color: #475569;
+    font-weight: 600;
+}
+.fee-desk label span {
+    margin-bottom: 4px;
+}
+.fee-desk input[type="text"],
+.fee-desk input[type="number"],
+.fee-desk input[type="date"],
+.fee-desk input[type="search"],
+.fee-desk select {
+    height: 36px;
+    padding: 6px 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    font-size: 14px;
+    color: #0f172a;
+    background-color: #fff;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    transition: border-color 0.15s, box-shadow 0.15s;
+    width: 100%;
+    box-sizing: border-box;
+}
+.fee-desk input:focus,
+.fee-desk select:focus {
+    outline: none;
+    border-color: #0f766e;
+    box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.15);
+}
+
+/* Layouts */
+.fee-desk .receipt-main-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 12px 16px;
+}
+.fee-desk .classic-fee-heads {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 12px 16px;
+}
+.fee-desk .classic-fee-heads input {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+}
+
+/* Two Column Desktop */
+@media (min-width: 900px) {
+    .fee-desk .fee-workbench {
+        display: grid;
+        grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr);
+        gap: 24px;
+        align-items: start;
+    }
+}
+
+/* Month Chips Polish */
+.fee-desk .month-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 2px;
+}
+.fee-desk .month-chips button {
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    border-radius: 16px;
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #64748b;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.fee-desk .month-chips button:hover {
+    background: #e2e8f0;
+    color: #334155;
+    transform: translateY(-1px);
+}
+.fee-desk .month-chips button.active {
+    background: #0f766e;
+    border-color: #0f766e;
+    color: #fff;
+    box-shadow: 0 2px 4px rgba(15, 118, 110, 0.25);
+}
+.fee-desk .month-chips button:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.3);
+}
+
 /* ============================= Workspace auth ============================= */
 
 .side-foot form {
