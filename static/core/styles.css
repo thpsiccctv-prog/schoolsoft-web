@@ -4152,11 +4152,36 @@ th.amount,
 .pill-amber{background:#fff4dc;color:#8a5a08}
 .pill-grey{background:#eef2f0;color:#5b6b64}
 .access-summary{color:#33413c;font-size:12.5px}
-.row-actions{display:flex;gap:14px;align-items:center}
+.users-permissions-card{max-width:100%}
+.users-table-wrap{overflow-x:visible}
+.users-table{width:100%;table-layout:fixed}
+.users-col-username{width:16%}
+.users-col-name{width:13%}
+.users-col-access{width:auto}
+.users-col-status{width:10%}
+.users-col-actions{width:17%}
+.users-table th,
+.users-table td{vertical-align:top;white-space:normal;overflow-wrap:anywhere}
+.users-table th:nth-child(4),
+.users-table td[data-label="Status"]{text-align:center}
+.user-name-cell strong{color:#061b33;font-size:13.5px}
+.user-access-cell{min-width:0}
+.users-access-badges{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:5px}
+.users-table .pill{white-space:nowrap}
+.users-table .access-summary{display:block;line-height:1.35}
+.row-actions{display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap}
 .inline-form{display:inline}
 .link-button{background:none;border:none;color:#9a3412;font-weight:700;cursor:pointer;font-size:13px;padding:0}
 .link-button:hover{text-decoration:underline}
 .muted-note{color:#5b6b64;font-size:12px;margin-top:8px}
+.user-action-btn{
+    display:inline-flex;align-items:center;justify-content:center;min-height:30px;
+    padding:0 12px;border:1px solid #d3e0d9;border-radius:999px;background:#f6fbf8;
+    color:#0f766e;font-size:12.5px;font-weight:800;text-decoration:none;cursor:pointer;
+}
+.user-action-btn:hover{background:#e6f5ef;border-color:#0f766e;text-decoration:none}
+.user-action-btn.danger{color:#9a3412;border-color:#f0d99a;background:#fff8e8}
+.user-action-btn.danger:hover{background:#fff1d1;border-color:#d99b2b}
 
 .user-form-grid{display:grid;gap:16px}
 .modules-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 16px}
@@ -4174,6 +4199,30 @@ th.amount,
 
 @media (max-width:900px){
     .modules-grid{grid-template-columns:1fr}
+}
+
+@media (max-width:780px){
+    .users-table-wrap{overflow:visible;border:0;background:transparent;box-shadow:none}
+    .users-table,
+    .users-table tbody,
+    .users-table tr,
+    .users-table td{display:block;width:100%}
+    .users-table colgroup,
+    .users-table thead{display:none}
+    .users-table tr{
+        margin-bottom:10px;border:1px solid #d7e7e0;border-radius:14px;
+        background:#fff;box-shadow:0 10px 22px rgba(15,52,42,.05);overflow:hidden;
+    }
+    .users-table td{
+        display:grid;grid-template-columns:96px minmax(0,1fr);gap:10px;
+        padding:9px 12px;border-bottom:1px solid #eef3f0;font-size:13px;
+    }
+    .users-table td::before{
+        content:attr(data-label);color:#5f7069;font-size:11px;font-weight:850;
+        letter-spacing:.04em;text-transform:uppercase;
+    }
+    .users-table td:last-child{border-bottom:0}
+    .users-table td[data-label="Status"]{text-align:left}
 }
 
 /* Sidebar footer: stack items so nothing clips when 3+ buttons */

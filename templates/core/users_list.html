@@ -20,10 +20,17 @@
         {% endfor %}
     {% endif %}
 
-    <section class="entry-card">
+    <section class="entry-card users-permissions-card">
         <div class="entry-card-title">All users</div>
-        <div class="table-wrap compact-table-wrap">
+        <div class="table-wrap compact-table-wrap users-table-wrap">
             <table class="users-table">
+                <colgroup>
+                    <col class="users-col-username">
+                    <col class="users-col-name">
+                    <col class="users-col-access">
+                    <col class="users-col-status">
+                    <col class="users-col-actions">
+                </colgroup>
                 <thead>
                     <tr>
                         <th>Username</th>
@@ -36,27 +43,32 @@
                 <tbody>
                     {% for row in rows %}
                     <tr>
-                        <td><strong>{{ row.obj.username }}</strong></td>
-                        <td>{{ row.obj.first_name|default:"—" }}</td>
-                        <td>
-                            {% if row.readonly %}<span class="pill pill-amber">View only</span> {% endif %}
+                        <td data-label="Username" class="user-name-cell">
+                            <strong>{{ row.obj.username }}</strong>
+                        </td>
+                        <td data-label="Name">{{ row.obj.first_name|default:"-" }}</td>
+                        <td data-label="Access" class="user-access-cell">
+                            <div class="users-access-badges">
+                                {% if row.is_admin %}<span class="pill pill-green">Admin</span>{% endif %}
+                                {% if row.readonly %}<span class="pill pill-amber">View only</span>{% endif %}
+                            </div>
                             <span class="access-summary">{{ row.summary }}</span>
                         </td>
-                        <td>
+                        <td data-label="Status">
                             {% if row.obj.is_active %}
                             <span class="pill pill-green">Active</span>
                             {% else %}
                             <span class="pill pill-grey">Inactive</span>
                             {% endif %}
                         </td>
-                        <td class="row-actions">
+                        <td data-label="Actions" class="row-actions">
                             {% if row.obj.is_superuser %}
                             <span class="muted-note">Superuser</span>
                             {% else %}
-                            <a class="table-link" href="{% url 'core:user_edit' row.obj.pk %}">Edit</a>
+                            <a class="user-action-btn" href="{% url 'core:user_edit' row.obj.pk %}">Edit</a>
                             <form method="post" action="{% url 'core:user_toggle_active' row.obj.pk %}" class="inline-form">
                                 {% csrf_token %}
-                                <button type="submit" class="link-button">
+                                <button type="submit" class="user-action-btn danger">
                                     {% if row.obj.is_active %}Deactivate{% else %}Activate{% endif %}
                                 </button>
                             </form>
