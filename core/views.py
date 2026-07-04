@@ -523,7 +523,11 @@ def receipt_create(request):
                 return redirect(f"{reverse('core:receipt_detail', kwargs={'pk': receipt.pk})}?autoprint=1")
             return redirect("core:receipt_detail", pk=receipt.pk)
     else:
-        receipt_form = FeeReceiptEntryForm()
+        student_id = request.GET.get("student")
+        initial_data = {}
+        if student_id:
+            initial_data["student"] = student_id
+        receipt_form = FeeReceiptEntryForm(initial=initial_data)
         line_form = FeeReceiptLineEntryForm()
 
     return render(

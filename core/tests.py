@@ -77,7 +77,7 @@ class DashboardTests(AuthenticatedClientMixin, TestCase):
         self.assertEqual(detail_response.status_code, 200)
         self.assertContains(detail_response, "Detail Student")
         self.assertContains(detail_response, "Detail Father")
-        self.assertContains(detail_response, "Admission Form")
+        self.assertContains(detail_response, "Form PDF")
         self.assertContains(detail_response, "Marksheet")
 
     def test_school_profile_page_loads(self):
