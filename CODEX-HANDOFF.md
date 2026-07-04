@@ -313,29 +313,21 @@ live only in the local dev `db.sqlite3`, NOT the sacred LOCALAPPDATA db, NOT git
    Render DB credential, custom domain CNAME, Render free-DB expiry plan (Aug 1, 2026).
 4. Optional: deactivate/delete the 5 test users from the dev DB (harmless; not shipped).
 
-## Latest checkpoint - July 4, 2026 evening (after `cab40ad`)
+## Latest checkpoint - July 4, 2026 evening (after `d0eed52`)
 
-Latest pushed commit: `cab40ad style: polish users permissions table`.
+Latest pushed commit: `d0eed52 feat(ui): phase 3 - compact admission and edit form polish`.
 
 What changed after the previous handoff:
-- `templates/core/users_list.html` was cleaned up for a compact Users & Permissions table.
-- `static/core/styles.css` got scoped table polish for `.users-table`:
-  fixed column widths, wrapping access text, compact Edit/Deactivate pill buttons, and a
-  mobile card layout.
-- No backend permission logic, data models, migrations, student data, fee data, or PDF code
-  were touched in this final polish.
+- Students module has been polished for premium UI and fast data entry.
+- `student_detail.html`: Transformed into a premium dashboard with a "Quick Actions" panel (Pay Fee, Marksheet, TC, etc.). Write actions are correctly hidden for read-only users.
+- `student_list.html`: Polished with a new premium filterbar and table design.
+- `student_form.html`: Compacted using scoped `.student-entry` CSS for a denser, more readable layout (34-36px input heights).
+- `core/views.py`: `receipt_create` view updated to support `?student=<id>` pre-selection for the "Pay Fee" quick action.
+- `static/core/styles.css`: Scoped CSS added for `.student-profile-page`, `.student-list-page`, and `.student-entry`.
 - Verification done before commit:
-  - CSS braces: balanced
-  - CSS comments: balanced
-  - truncated `.fee-desk .classic-fee-he` selector: false
-  - authenticated `/users/` render: 200
   - `manage.py check`: pass
-  - `manage.py test`: 22/22 pass
-- User screenshots confirm:
-  - local `/users/` page shows test users and the table now fits cleanly
-  - Render `/users/` page is styled and currently shows only `admin`
-  - desktop EXE `/users/` page is styled and currently shows only `admin`
-
+  - `manage.py test`: 22/22 pass for all three phases.
+  
 Important database reminder:
 - Local browser/dev DB, desktop EXE DB, and Render PostgreSQL are separate.
 - Test users created on local dev do not automatically appear online or in the EXE.
