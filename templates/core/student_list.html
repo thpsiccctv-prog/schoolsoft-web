@@ -14,42 +14,47 @@
             </p>
         </div>
         <div class="action-row" style="display: flex; gap: 8px; flex-wrap: wrap;">
-            <a class="button" href="{% url 'core:student_create' %}">New Admission</a>
-            <a class="button secondary" href="{% url 'core:student_register' %}?{{ request.GET.urlencode }}" target="_blank">Print Register</a>
-            <a class="button secondary" href="{% url 'core:student_export_csv' %}?{{ request.GET.urlencode }}">Export Excel</a>
-            <a class="button secondary" href="{% url 'core:student_list' %}">Reset Filters</a>
+            {% if not is_readonly %}
+                <a class="button action-primary" href="{% url 'core:student_create' %}">New Admission</a>
+            {% endif %}
+            <a class="button secondary action-secondary" href="{% url 'core:student_register' %}?{{ request.GET.urlencode }}" target="_blank">Print Register</a>
+            <a class="button secondary action-secondary" href="{% url 'core:student_export_csv' %}?{{ request.GET.urlencode }}">Export Excel</a>
         </div>
     </div>
 
-    <form class="filterbar student-filterbar" method="get">
-        <input type="search" name="q" value="{{ query }}" placeholder="Search name, SID, admission no, mobile">
-        <select name="status" aria-label="Student status">
-            <option value="active" {% if selected_status == "active" %}selected{% endif %}>Active students</option>
-            <option value="inactive" {% if selected_status == "inactive" %}selected{% endif %}>Inactive / TC</option>
-            <option value="all" {% if selected_status == "all" %}selected{% endif %}>All students</option>
-        </select>
-        <select name="class">
-            <option value="">All classes</option>
-            {% for class in classes %}
-                <option value="{{ class.id }}" {% if selected_class == class.id|stringformat:"s" %}selected{% endif %}>
-                    {{ class.name }}
-                </option>
-            {% endfor %}
-        </select>
-        <select name="section">
-            <option value="">All sections</option>
-            {% for section in sections %}
-                <option value="{{ section.id }}" {% if selected_section == section.id|stringformat:"s" %}selected{% endif %}>
-                    {{ section.school_class.name }} - {{ section.name }}
-                </option>
-            {% endfor %}
-        </select>
-        <button type="submit">Search</button>
-        <a class="button secondary" href="{% url 'core:student_list' %}">Reset</a>
-    </form>
+    <div class="premium-filterbar">
+        <form class="student-filterbar" method="get">
+            <div class="filterbar-inputs">
+                <input type="search" name="q" value="{{ query }}" placeholder="Search name, SID, admission no, mobile">
+                <select name="status" aria-label="Student status">
+                    <option value="active" {% if selected_status == "active" %}selected{% endif %}>Active students</option>
+                    <option value="inactive" {% if selected_status == "inactive" %}selected{% endif %}>Inactive / TC</option>
+                    <option value="all" {% if selected_status == "all" %}selected{% endif %}>All students</option>
+                </select>
+                <select name="class">
+                    <option value="">All classes</option>
+                    {% for class in classes %}
+                        <option value="{{ class.id }}" {% if selected_class == class.id|stringformat:"s" %}selected{% endif %}>
+                            {{ class.name }}
+                        </option>
+                    {% endfor %}
+                </select>
+                <select name="section">
+                    <option value="">All sections</option>
+                    {% for section in sections %}
+                        <option value="{{ section.id }}" {% if selected_section == section.id|stringformat:"s" %}selected{% endif %}>
+                            {{ section.school_class.name }} - {{ section.name }}
+                        </option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="button action-primary">Search</button>
+                <a class="button secondary action-secondary" href="{% url 'core:student_list' %}">Reset</a>
+            </div>
+        </form>
+    </div>
 
-    <div class="table-wrap student-table-wrap">
-        <table class="student-card-table">
+    <div class="table-wrap premium-table-wrap">
+        <table class="premium-table student-table">
             <thead>
                 <tr>
                     <th>SID</th>
@@ -60,17 +65,15 @@
                     <th>Admission</th>
                     <th>Mobile</th>
                     <th>Status</th>
-                    <th>Documents</th>
+                    <th class="text-right">Actions</th>
                 </tr>
             </thead>
             <tbody>
                 {% for student in page.object_list %}
-                    <tr>
+                    <tr onclick="window.location='{% url 'core:student_detail' student.pk %}'" style="cursor: pointer;">
                         <td data-label="SID">{{ student.legacy_sid|default:"" }}</td>
-                        <td data-label="Name" class="student-name-cell">
-                            <a class="table-link" href="{% url 'core:student_detail' student.pk %}">
-                                {{ student.full_name }}
-                            </a>
+                        <td data-label="Name" class="font-medium text-brand">
+                            {{ student.full_name }}
                         </td>
                         <td data-label="Father">{{ student.father_name }}</td>
                         <td data-label="Class">{{ student.current_class|default:"" }}{% if student.current_section %}-{{ student.current_section.name }}{% endif %}</td>
@@ -78,21 +81,20 @@
                         <td data-label="Admission">{{ student.admission_no }}</td>
                         <td data-label="Mobile">{{ student.mobile_primary }}</td>
                         <td data-label="Status">
-                            <span class="status-pill {% if student.is_active %}status-active{% else %}status-inactive{% endif %}">
+                            <span class="status-badge {% if student.is_active %}status-active{% else %}status-inactive{% endif %}">
                                 {% if student.is_active %}Active{% else %}Inactive{% endif %}
                             </span>
                         </td>
-                        <td data-label="Documents" class="doc-links">
-                            <a class="table-link" href="{% url 'core:student_update' student.pk %}">Edit</a>
-                            <a class="table-link" href="{% url 'core:admission_form_pdf' student.pk %}">Admission Form</a>
-                            <a class="table-link" href="{% url 'core:character_certificate_pdf' student.pk %}">Character Cert.</a>
-                            <a class="table-link" href="{% url 'core:tc_detail' student.pk %}">TC</a>
-                            <a class="table-link" href="{% url 'core:marksheet_select' student.pk %}">Marksheet</a>
+                        <td data-label="Actions" class="text-right compact-actions" onclick="event.stopPropagation();">
+                            {% if not is_readonly %}
+                                <a class="action-link" href="{% url 'core:student_update' student.pk %}">Edit</a>
+                            {% endif %}
+                            <a class="action-link" href="{% url 'core:marksheet_select' student.pk %}">Marks</a>
                         </td>
                     </tr>
                 {% empty %}
                     <tr>
-                        <td colspan="9">No students found.</td>
+                        <td colspan="9" class="text-center py-8">No students found matching your criteria.</td>
                     </tr>
                 {% endfor %}
             </tbody>

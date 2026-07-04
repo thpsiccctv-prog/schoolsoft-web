@@ -4609,3 +4609,100 @@ th.amount,
     color: #dc2626;
     border-bottom-color: #fecaca;
 }
+
+/* ============================================================
+   STUDENT LIST — PREMIUM DASHBOARD
+   ============================================================ */
+
+.student-list-page .premium-filterbar {
+    background: #fff;
+    padding: 16px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    margin-bottom: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+}
+.student-list-page .filterbar-inputs {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+.student-list-page .filterbar-inputs input[type="search"] {
+    flex-grow: 1;
+    min-width: 250px;
+    padding: 8px 12px;
+    border: 1px solid var(--line-strong);
+    border-radius: 6px;
+    font-size: 0.95rem;
+}
+.student-list-page .filterbar-inputs select {
+    padding: 8px 12px;
+    border: 1px solid var(--line-strong);
+    border-radius: 6px;
+    background: #fff;
+    font-size: 0.95rem;
+}
+.student-list-page .premium-table-wrap {
+    background: #fff;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+}
+.student-list-page .premium-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+}
+.student-list-page .premium-table th {
+    background: var(--brand-050);
+    padding: 14px 16px;
+    font-weight: 600;
+    color: var(--brand-900);
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 2px solid var(--line);
+}
+.student-list-page .premium-table td {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--line);
+    color: var(--ink-700);
+    font-size: 0.95rem;
+    vertical-align: middle;
+}
+.student-list-page .premium-table tbody tr:hover {
+    background-color: #fcfdfd;
+}
+.student-list-page .text-right {
+    text-align: right;
+}
+.student-list-page .text-center {
+    text-align: center;
+}
+.student-list-page .py-8 {
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+}
+.student-list-page .font-medium {
+    font-weight: 500;
+}
+.student-list-page .text-brand {
+    color: var(--brand-700);
+}
+.student-list-page .compact-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+.student-list-page .action-link {
+    color: var(--brand-600);
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 0.85rem;
+}
+.student-list-page .action-link:hover {
+    text-decoration: underline;
+    color: var(--brand-800);
+}
