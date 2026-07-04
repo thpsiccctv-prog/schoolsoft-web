@@ -1,4 +1,4 @@
-const CACHE_NAME = 'schoolsoft-v2';
+const CACHE_NAME = 'schoolsoft-v3';
 const STATIC_ASSETS = [
     '/static/core/styles.css',
     '/static/core/school_logo.png',
@@ -37,8 +37,20 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
     const url = new URL(event.request.url);
 
-    // Static Assets: Cache first, fallback to network
-    if (STATIC_ASSETS.some(asset => url.pathname.includes(asset)) || url.pathname.startsWith('/static/')) {
+    // CSS / JS: Network first so updates always show; cache is only an offline fallback.
+    if (url.pathname.endsWith('.css') || url.pathname.endsWith('.js')) {
+        event.respondWith(
+            fetch(event.request).then(fetchRes => {
+                const copy = fetchRes.clone();
+                caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
+                return fetchRes;
+            }).catch(() => caches.match(event.request))
+        );
+        return;
+    }
+
+    // Other static assets (images, icons): Cache first, fallback to network
+    if (url.pathname.startsWith('/static/')) {
         event.respondWith(
             caches.match(event.request).then((response) => {
                 return response || fetch(event.request).then(fetchRes => {

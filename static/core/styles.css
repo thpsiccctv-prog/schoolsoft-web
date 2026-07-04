@@ -4183,6 +4183,11 @@ th.amount,
 .side-foot button{width:100%}
 .side-foot span{text-align:center}
 
+/* Keep Logout always visible: nav scrolls inside, footer stays pinned */
+.sidebar{overflow:hidden}
+.side-nav{overflow-y:auto;min-height:0}
+.side-foot{flex-shrink:0}
+
 /* ============================================================
    FINAL PRINT OVERRIDES - Receipt + reports
    Keep this block at the end so it wins over older print rules.
