@@ -313,20 +313,20 @@ live only in the local dev `db.sqlite3`, NOT the sacred LOCALAPPDATA db, NOT git
    Render DB credential, custom domain CNAME, Render free-DB expiry plan (Aug 1, 2026).
 4. Optional: deactivate/delete the 5 test users from the dev DB (harmless; not shipped).
 
-## Latest checkpoint - July 4, 2026 evening (after `d0eed52`)
+## Latest checkpoint - July 4, 2026 evening (after `b7dbeee`)
 
-Latest pushed commit: `d0eed52 feat(ui): phase 3 - compact admission and edit form polish`.
+Latest commit: `b7dbeee fix(ui): scope student quick actions to permissions`.
 
 What changed after the previous handoff:
 - Students module has been polished for premium UI and fast data entry.
-- `student_detail.html`: Transformed into a premium dashboard with a "Quick Actions" panel (Pay Fee, Marksheet, TC, etc.). Write actions are correctly hidden for read-only users.
-- `student_list.html`: Polished with a new premium filterbar and table design.
+- `student_detail.html`: Transformed into a premium dashboard with a "Quick Actions" panel (Pay Fee, Marksheet, TC, etc.). Write actions are hidden for read-only users; Pay Fee is shown only to users with Fee Collection access; Marksheet is shown only to users with Marks access.
+- `student_list.html`: Polished with a new premium filterbar and table design. Row click opens the profile; Edit is hidden for read-only users; Marks action is shown only to users with Marks access.
 - `student_form.html`: Compacted using scoped `.student-entry` CSS for a denser, more readable layout (34-36px input heights).
 - `core/views.py`: `receipt_create` view updated to support `?student=<id>` pre-selection for the "Pay Fee" quick action.
 - `static/core/styles.css`: Scoped CSS added for `.student-profile-page`, `.student-list-page`, and `.student-entry`.
 - Verification done before commit:
   - `manage.py check`: pass
-  - `manage.py test`: 22/22 pass for all three phases.
+  - `manage.py test`: 22/22 pass for all three phases and the final permission-scope correction.
   
 Important database reminder:
 - Local browser/dev DB, desktop EXE DB, and Render PostgreSQL are separate.
@@ -373,8 +373,8 @@ First read:
 2. git log --oneline -8
 3. git status --short --branch
 
-Current latest pushed commit:
-8b605ce docs: add role matrix to handoff
+Current latest commit:
+b7dbeee fix(ui): scope student quick actions to permissions
 
 Project summary:
 - SchoolSoft is a Django + vanilla CSS School ERP.
@@ -401,6 +401,11 @@ Current stable features:
   - direct URL module access is protected server-side
 - Latest Users & Permissions table polish is in `cab40ad`.
 - Confirmed role matrix is documented in `8b605ce`.
+- Students module polish is complete through `b7dbeee`:
+  - profile quick-action dashboard
+  - student list/filter/table polish
+  - compact admission/edit form polish
+  - quick actions scoped to user permissions
 
 Critical rules:
 - Do not bulk append CSS with shell commands. A previous append truncated styles.css.
