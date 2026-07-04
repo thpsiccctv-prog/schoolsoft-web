@@ -252,10 +252,10 @@ Fee Collection Workflow Improvements completed:
 ## Session — July 4, 2026 (Users & Permissions + auth roles + UI fixes)
 
 **All committed and pushed to `origin/main`. EXE rebuilt (BUILD OK). Role testing PASSED.**
-Commits this session (in order): `925200d` (styles.css clean baseline restore) → `ac1f36b`
-(users & permissions backend + read-only write-block) → `eb93c7e` (sidebar menu links +
-users-page styling + footer stack) → `1d15f53` (sidebar nav scroll + service-worker
-network-first). Latest = **`1d15f53`**.
+Commits this session (in order): `925200d` (styles.css clean baseline restore) -> `ac1f36b`
+(users & permissions backend + read-only write-block) -> `eb93c7e` (sidebar menu links +
+users-page styling + footer stack) -> `1d15f53` (sidebar nav scroll + service-worker
+network-first) -> `cab40ad` (Users & Permissions table polish). Latest = **`cab40ad`**.
 
 ### What was built (role-based access control, all in-app, no new model)
 - `core/access.py` — `module_required(module)` decorator, `write_required`/write guards,
@@ -312,3 +312,134 @@ live only in the local dev `db.sqlite3`, NOT the sacred LOCALAPPDATA db, NOT git
 3. Older pending items above still stand: change default admin password on both DBs, rotate
    Render DB credential, custom domain CNAME, Render free-DB expiry plan (Aug 1, 2026).
 4. Optional: deactivate/delete the 5 test users from the dev DB (harmless; not shipped).
+
+## Latest checkpoint - July 4, 2026 evening (after `cab40ad`)
+
+Latest pushed commit: `cab40ad style: polish users permissions table`.
+
+What changed after the previous handoff:
+- `templates/core/users_list.html` was cleaned up for a compact Users & Permissions table.
+- `static/core/styles.css` got scoped table polish for `.users-table`:
+  fixed column widths, wrapping access text, compact Edit/Deactivate pill buttons, and a
+  mobile card layout.
+- No backend permission logic, data models, migrations, student data, fee data, or PDF code
+  were touched in this final polish.
+- Verification done before commit:
+  - CSS braces: balanced
+  - CSS comments: balanced
+  - truncated `.fee-desk .classic-fee-he` selector: false
+  - authenticated `/users/` render: 200
+  - `manage.py check`: pass
+  - `manage.py test`: 22/22 pass
+- User screenshots confirm:
+  - local `/users/` page shows test users and the table now fits cleanly
+  - Render `/users/` page is styled and currently shows only `admin`
+  - desktop EXE `/users/` page is styled and currently shows only `admin`
+
+Important database reminder:
+- Local browser/dev DB, desktop EXE DB, and Render PostgreSQL are separate.
+- Test users created on local dev do not automatically appear online or in the EXE.
+- Online and EXE currently showing only `admin` is expected unless users are created there.
+- Active student counts can differ by DB. Do not guess or "fix" counts blindly.
+  Active means the current app/model status, originally mapped from legacy `TC_ISSUE=NO`;
+  inactive/TC means `TC_ISSUE=YES`. Always verify current DB counts before editing.
+
+Recommended next manual work:
+1. In Render and EXE, login as admin and create real users using `+ New user`.
+2. Suggested users/roles:
+   - fee clerk: Students & Admissions, Fee Collection, Receipts, Dues, Collection Report,
+     Fee Setup, School Profile
+   - admission clerk: Students & Admissions, School Profile
+   - exam clerk: Students & Admissions, Marks & Marksheets, School Profile
+   - staff clerk: Staff & Salary, Transport, School Profile
+   - viewer: View only + required modules
+3. Login as each user and verify:
+   - sidebar only shows permitted modules
+   - direct URL access is blocked server-side
+   - view-only users can view/print but cannot create/edit/delete
+4. If any source CSS/template changes are made, remember:
+   - run `python manage.py collectstatic --noinput`
+   - rebuild EXE with `build-desktop.bat` before shipping desktop
+   - close and reopen the EXE fully
+   - for browser/PWA cache, bump the CSS `?v=` cache-buster and service-worker cache name
+
+## Antigravity handoff prompt
+
+Copy/paste this into Antigravity before asking it to continue:
+
+```text
+You are joining the SchoolSoft modernization project.
+
+Workspace root:
+D:\english medium
+
+Main Django project:
+D:\english medium\schoolsoft_web
+
+First read:
+1. D:\english medium\schoolsoft_web\CODEX-HANDOFF.md
+2. git log --oneline -8
+3. git status --short --branch
+
+Current latest pushed commit:
+cab40ad style: polish users permissions table
+
+Project summary:
+- SchoolSoft is a Django + vanilla CSS School ERP.
+- It runs as:
+  1. local dev browser
+  2. Windows desktop EXE via PyInstaller ONEDIR
+  3. online Render website with PostgreSQL
+- These three environments can have different databases. Never assume users/data created in
+  one are present in another.
+
+Current stable features:
+- Login is required before using the app.
+- Dashboard, Students, Fee Collection, Receipts, Dues, Collection, Marks, Staff, Transport,
+  School Profile are styled and working.
+- PWA support exists; Android/iPhone can add the site to home screen.
+- Fee collection improvements exist: month chips, duplicate warning, custom student dropdown,
+  Save & Print flow.
+- Users & Permissions feature exists inside the app:
+  - `/users/`
+  - admin-only
+  - create/edit/toggle users
+  - role presets for fee, admission, exam, staff, viewer, custom
+  - view-only users are blocked from create/edit/delete
+  - direct URL module access is protected server-side
+- Latest Users & Permissions table polish is in `cab40ad`.
+
+Critical rules:
+- Do not bulk append CSS with shell commands. A previous append truncated styles.css.
+- Edit source files only, review diffs, and keep changes scoped.
+- Source CSS: `static/core/styles.css`
+- Source templates: `templates/...`
+- The EXE reads bundled files under `dist/SchoolSoft/_internal/`; source edits do not appear
+  in EXE until collectstatic + rebuild.
+- After CSS/template changes:
+  1. run `python manage.py collectstatic --noinput`
+  2. run tests
+  3. rebuild EXE with `build-desktop.bat` if desktop needs the change
+  4. close/reopen EXE fully
+  5. bump CSS cache-buster/service worker cache if browser/PWA does not refresh
+
+Data rules:
+- Do not change student active/inactive counts blindly.
+- Active student logic must respect the app/model status and legacy mapping from
+  `TC_ISSUE=NO`; inactive/TC from `TC_ISSUE=YES`.
+- If counts differ between local, EXE, and Render, first identify which DB is being used.
+
+Suggested next task:
+- Help create and test real users/roles separately in Render and desktop EXE.
+- Then verify permissions:
+  - fee user cannot open Marks/Staff unless granted
+  - admission user can add/edit students but not fee setup unless granted
+  - exam user can open Marks but not Fee Collection unless granted
+  - staff user can open Staff/Transport but not Fee Collection
+  - viewer can view/print only and is blocked from all create/edit/delete direct URLs
+
+Before making changes:
+- Run `git status --short --branch`.
+- If dirty, inspect diffs and do not overwrite user changes.
+- Prefer small commits with clear verification notes.
+```
