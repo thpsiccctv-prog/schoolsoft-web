@@ -489,3 +489,62 @@ The following role presets are available and have been verified across both Rend
 | **viewer** | Read Only | All (can view lists and print reports) | Cannot create, edit, or delete anything |
 
 *Note: All roles implicitly have access to the Dashboard.*
+
+## Fees Module — Review Guardrails (Claude review, July 4, 2026)
+
+**Fees module is HIGH-RISK — this is where the original fee-head overlap and the
+styles.css corruption first started. Read these guardrails and follow the phasing
+BEFORE writing any code.**
+
+Do NOT start coding until you inspect: `templates/core/receipt_form.html`,
+`static/core/receipt-form.js`, the `FeeReceipt` model in `core/models.py`, and the
+current CSS around `.fee-desk` / `.classic-fee-heads` in `static/core/styles.css`.
+
+Confirmed decisions (from owner, July 4):
+1. Month chips stay as individual rounded chips — only polish active/hover/focus
+   state (no segmented toggle).
+2. Desktop fee form stays dense / two-column; stack only on mobile.
+3. Keep **Save & Print (F9)** as the primary action.
+4. Minimum DOM/JS touch: do NOT change `receipt_form.html` DOM unless absolutely
+   necessary. `receipt-form.js` relies on element IDs / names / data-attributes —
+   keep them safe. If DOM changes, update `receipt-form.js` in lockstep and test a
+   real receipt cycle.
+5. Scope all CSS under `.fee-desk` or `.fee-desk-page` only. Do NOT add broad global
+   `.premium-table` / `.premium-filterbar` rules.
+6. Never use shell append / `cat >>` for `styles.css` — use the file editor /
+   apply_patch only. (styles.css was corrupted this way before; baseline safe
+   commit = `925200d`.)
+7. Verify whether `FeeReceipt` has a cancelled/status field BEFORE styling cancelled
+   receipts. If the field does not exist, that part cannot be built.
+8. Run `manage.py check` and `manage.py test` (keep green).
+9. Manual verification (mandatory, on dev-server AND the EXE): student select →
+   month chips → duplicate-overlap warning → totals → Save & Print →
+   receipt detail / PDF / print; and 1366×768 with no horizontal overflow.
+10. Update CODEX-HANDOFF.md after completion.
+
+Phasing (owner direction): **Phase 1 = Fee Collection form polish ONLY.** Receipts
+List, Dues Report, and Collection Report come in a later phase.
+
+Exact prompt to give Antigravity/Codex:
+~~~
+Add a "Fees Module Review Guardrails" section to CODEX-HANDOFF.md before implementing.
+
+Important: Fees module is high-risk. Do not start coding until you inspect
+receipt_form.html, receipt-form.js, FeeReceipt model, and current CSS around
+.fee-desk/.classic-fee-heads.
+
+Use these decisions:
+1. Keep month chips as individual rounded chips; only polish active/hover/focus state.
+2. Keep desktop fee form dense/two-column. Stack only on mobile.
+3. Keep Save & Print (F9) as the primary action.
+4. Avoid DOM changes in receipt_form.html unless absolutely necessary. If DOM changes,
+   update receipt-form.js and test a real receipt cycle.
+5. Scope CSS under .fee-desk or .fee-desk-page only. Do not add broad global
+   .premium-table/.premium-filterbar rules.
+6. Do not use shell append/cat >> for styles.css. Use file editor/apply_patch only.
+7. Verify whether FeeReceipt has a cancelled/status field before styling cancelled receipts.
+8. Run manage.py check and manage.py test.
+9. Manual verification: student select, month chips, duplicate warning, totals,
+   Save & Print, PDF/print, 1366x768 no horizontal overflow.
+10. Update CODEX-HANDOFF.md after completion.
+~~~
