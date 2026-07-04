@@ -4140,6 +4140,50 @@ th.amount,
 }
 
 /* ============================================================
+   USERS & PERMISSIONS - scoped styling (module checkboxes,
+   pills, flash messages, form layout). Added via editor.
+   ============================================================ */
+.entry-flash{padding:10px 14px;border-radius:10px;margin-bottom:14px;font-size:13px;font-weight:600}
+.entry-flash.success{background:#e6f5ef;color:#0b4f4a;border:1px solid #a9d8c9}
+.entry-flash.error{background:#fdecea;color:#9a2b1e;border:1px solid #f2b8b1}
+
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700}
+.pill-green{background:#e6f5ef;color:#0b4f4a}
+.pill-amber{background:#fff4dc;color:#8a5a08}
+.pill-grey{background:#eef2f0;color:#5b6b64}
+.access-summary{color:#33413c;font-size:12.5px}
+.row-actions{display:flex;gap:14px;align-items:center}
+.inline-form{display:inline}
+.link-button{background:none;border:none;color:#9a3412;font-weight:700;cursor:pointer;font-size:13px;padding:0}
+.link-button:hover{text-decoration:underline}
+.muted-note{color:#5b6b64;font-size:12px;margin-top:8px}
+
+.user-form-grid{display:grid;gap:16px}
+.modules-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 16px}
+.module-check{display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid #e4ede8;border-radius:10px;background:#f9fdfb;cursor:pointer}
+.module-check:hover{border-color:#0f766e}
+.module-check input{width:17px;height:17px;accent-color:#0f766e;flex:0 0 auto;margin:0}
+.module-check span{font-size:13px;font-weight:600;color:#0f2620;text-transform:none;letter-spacing:normal}
+.check-inline{display:flex;align-items:center;gap:10px;font-size:13px;color:#0f2620}
+.check-inline input{width:17px;height:17px;accent-color:#0f766e;flex:0 0 auto;margin:0}
+.viewonly-row{margin-top:14px;padding:12px 14px;border:1px solid #f0d99a;background:#fff8e8;border-radius:10px;align-items:flex-start}
+.reset-card{margin-top:16px;max-width:520px}
+.reset-row{display:flex;gap:10px;align-items:center}
+.reset-row input{max-width:280px}
+.password-card{max-width:480px}
+
+@media (max-width:900px){
+    .modules-grid{grid-template-columns:1fr}
+}
+
+/* Sidebar footer: stack items so nothing clips when 3+ buttons */
+.side-foot{flex-direction:column;align-items:stretch;justify-content:flex-start;gap:8px}
+.side-foot a,
+.side-foot form,
+.side-foot button{width:100%}
+.side-foot span{text-align:center}
+
+/* ============================================================
    FINAL PRINT OVERRIDES - Receipt + reports
    Keep this block at the end so it wins over older print rules.
    ============================================================ */
