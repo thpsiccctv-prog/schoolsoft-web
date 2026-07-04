@@ -248,3 +248,67 @@ Fee Collection Workflow Improvements completed:
 - Added service-worker.js with static-cache-first and network-first strategies.
 - Updated core/urls.py and base.html to serve PWA components at root scope.
 - Verified mobile responsiveness for main pages.
+
+## Session — July 4, 2026 (Users & Permissions + auth roles + UI fixes)
+
+**All committed and pushed to `origin/main`. EXE rebuilt (BUILD OK). Role testing PASSED.**
+Commits this session (in order): `925200d` (styles.css clean baseline restore) → `ac1f36b`
+(users & permissions backend + read-only write-block) → `eb93c7e` (sidebar menu links +
+users-page styling + footer stack) → `1d15f53` (sidebar nav scroll + service-worker
+network-first). Latest = **`1d15f53`**.
+
+### What was built (role-based access control, all in-app, no new model)
+- `core/access.py` — `module_required(module)` decorator, `write_required`/write guards,
+  `access_context` context processor (injects `access.*` booleans + `can_manage_users`),
+  `MODULE_PERMISSIONS` map, `READONLY_GROUP`, `manage_users_required`.
+- Permissions live on a `managed=False` `ModuleAccess` model (migration
+  `core/0008_module_access_permissions.py`) — codenames like `access_fee_collection`,
+  `access_all_modules`, `access_dashboard`. "View/print only" = membership of the
+  **Read Only** group (blocks all create/edit/delete via write guards).
+- `core/user_admin.py` — in-app Users & Permissions screen (admin-only). Role presets:
+  `admin` (all), `fee` (students, fee_collection, receipts, dues, collection, fee_setup,
+  school_profile), `admission` (students, school_profile), `exam` (students, marks,
+  school_profile), `staff` (staff, transport, school_profile), `viewer` (all modules +
+  view-only), `custom`. Views: user_list/create/edit/reset_password/toggle_active.
+- Templates: `core/users_list.html`, `user_form.html`, `password_change.html`,
+  `password_change_done.html`, `permission_denied.html` (two states: "Permission Required"
+  for missing module, "View / print only" for readonly write attempts).
+- `core/urls.py` routes: `user_list`, `user_create`, `user_edit`, `user_reset_password`,
+  `user_toggle_active`, `password_change`, `password_change_done`; `write=True` guards on
+  create/edit/delete/receipt/salary/tc views.
+- `base.html`: sidebar nav items wrapped in `{% if access.<module> %}`; Users & Permissions
+  link under `{% if can_manage_users %}`; footer has Change password + Logout.
+
+### UI fixes this session
+- Sidebar footer (Logout) was clipping when nav got long. Fix in `static/core/styles.css`
+  (end of file): `.side-foot{flex-direction:column; ...}` (stack buttons full-width) +
+  `.sidebar{overflow:hidden}` + `.side-nav{overflow-y:auto; min-height:0}` +
+  `.side-foot{flex-shrink:0}` (nav scrolls internally, footer pinned).
+- **Service worker was cache-first for all `/static/`, so CSS edits never showed even after
+  Ctrl+F5.** Fixed `templates/core/service-worker.js`: bumped `CACHE_NAME` v2→v3; `.css`/`.js`
+  now **network-first** (cache = offline fallback only); images stay cache-first. `base.html`
+  styles.css cache-buster is `?v=20260704-users-3`. If future CSS edits "don't show", it's the
+  SW/cache — bump the `?v=` and/or CACHE_NAME, or DevTools → Application → unregister SW.
+- CRITICAL LESSON (carried from prior session): never append to styles.css via bash `cat >>`
+  — it truncated the file. Use the file editor only.
+
+### Role testing — PASSED (dev server 127.0.0.1:8000, 5 test users)
+Created feetest/admtest/examtest/stafftest/viewtest via the Users & Permissions page (they
+live only in the local dev `db.sqlite3`, NOT the sacred LOCALAPPDATA db, NOT git). Verified:
+- Each role's sidebar shows only its allowed modules.
+- **Direct-URL module block works server-side** (e.g. stafftest → `/receipts/new/` →
+  "Fee Collection access nahi hai — Permission Required"), not just hidden links.
+- **Viewer**: can VIEW all lists (marks, staff open) but every create/edit/delete
+  (`/students/new/`, `/staff/salary/new/`, `/receipts/new/`) → "View / print only" denied.
+
+### PENDING (this is where to pick up)
+1. **Verify Render online deploy** of `1d15f53` at
+   `https://schoolsoft-english-medium.onrender.com` — confirm the footer/Logout fix and
+   service-worker fix are live (hard reload once). Free instance sleeps (~50 s cold start);
+   online DB is separate Postgres (won't have the 1213 desktop students — expected).
+   Auto-deploy triggers on push, but confirm it actually completed on the Render dashboard.
+2. Marks source still unresolved (fresh `Testmark2.csv` exported 0 rows earlier; existing
+   10,036 marks retained). Confirm correct current-marks mapping when needed.
+3. Older pending items above still stand: change default admin password on both DBs, rotate
+   Render DB credential, custom domain CNAME, Render free-DB expiry plan (Aug 1, 2026).
+4. Optional: deactivate/delete the 5 test users from the dev DB (harmless; not shipped).
