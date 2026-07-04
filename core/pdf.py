@@ -10,7 +10,7 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 try:
     _reg_path = os.path.join(settings.BASE_DIR, 'static', 'core', 'fonts', 'NotoSansDevanagari-Regular.ttf')
@@ -662,67 +662,194 @@ def build_transfer_certificate_pdf(tc, school_profile=None):
     return buffer.getvalue()
 
 
+# ---- premium palette (official certificates: report card + character cert) ----
+_C_INK = colors.HexColor("#1e293b")
+_C_BRAND = colors.HexColor("#0f766e")
+_C_BRAND_DK = colors.HexColor("#0b4f4a")
+_C_GOLD = colors.HexColor("#b45309")
+_C_SOFT = colors.HexColor("#f1f5f9")
+_C_SOFT2 = colors.HexColor("#f8fafc")
+_C_LINE = colors.HexColor("#cbd5e1")
+_C_MUTED = colors.HexColor("#64748b")
+
+CBSE_GRADE_SCALE = [
+    ("A1", "91-100"), ("A2", "81-90"), ("B1", "71-80"), ("B2", "61-70"),
+    ("C1", "51-60"), ("C2", "41-50"), ("D", "33-40"), ("E", "Below 33"),
+]
+
+
+def _division(pct):
+    pct = float(pct)
+    if pct >= 60:
+        return "First Division"
+    if pct >= 45:
+        return "Second Division"
+    if pct >= 33:
+        return "Third Division"
+    return "—"
+
+
+def _overall_grade(pct):
+    pct = float(pct)
+    for grade, low in (("A1", 91), ("A2", 81), ("B1", 71), ("B2", 61),
+                       ("C1", 51), ("C2", 41), ("D", 33)):
+        if pct >= low:
+            return grade
+    return "E"
+
+
+def _class_section_label(student):
+    label = student.current_class.name if student.current_class else ""
+    if student.current_section:
+        label = f"{label} - {student.current_section.name}" if label else student.current_section.name
+    return label
+
+
+def _has_devanagari():
+    return "NotoSansDevanagari-Bold" in pdfmetrics.getRegisteredFontNames()
+
+
+def _premium_header(story, school_profile, title_en, styles, title_hi=None, subtitle=None):
+    """Shared official letterhead for report card + character certificate.
+
+    Logo (if present) + school identity + double rule + coloured title band.
+    Does NOT touch the older _school_header used by receipts/TC/etc.
+    """
+    school_name = (school_profile.name if school_profile else "SchoolSoft").upper()
+    name_st = ParagraphStyle("PhName", fontSize=18, leading=21, alignment=1,
+                             textColor=_C_BRAND_DK, fontName="Helvetica-Bold", spaceAfter=1)
+    addr_st = ParagraphStyle("PhAddr", fontSize=8.5, leading=11, alignment=1, textColor=_C_INK)
+    muted_st = ParagraphStyle("PhMuted", fontSize=8, leading=10, alignment=1, textColor=_C_MUTED)
+
+    center = [Paragraph(school_name, name_st)]
+    if school_profile:
+        addr = getattr(school_profile, "address", "") or ""
+        if addr:
+            center.append(Paragraph(addr, addr_st))
+        contact = []
+        if school_profile.phone:
+            contact.append(f"Phone: {school_profile.phone}")
+        if school_profile.email:
+            contact.append(f"Email: {school_profile.email}")
+        if contact:
+            center.append(Paragraph(" &nbsp;|&nbsp; ".join(contact), addr_st))
+        if getattr(school_profile, "udise_code", ""):
+            center.append(Paragraph(f"UDISE Code: {school_profile.udise_code}", muted_st))
+
+    logo_path = os.path.join(settings.BASE_DIR, "static", "core", "school_logo.png")
+    if os.path.exists(logo_path):
+        head = Table([[Image(logo_path, width=20 * mm, height=20 * mm), center, ""]],
+                     colWidths=[24 * mm, 132 * mm, 24 * mm])
+        head.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("ALIGN", (0, 0), (0, 0), "CENTER"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ]))
+    else:
+        head = Table([[center]], colWidths=[180 * mm])
+        head.setStyle(TableStyle([("LEFTPADDING", (0, 0), (-1, -1), 0),
+                                  ("RIGHTPADDING", (0, 0), (-1, -1), 0)]))
+    story.append(head)
+    story.append(Spacer(1, 3 * mm))
+
+    rule = Table([[""]], colWidths=[180 * mm], rowHeights=[2])
+    rule.setStyle(TableStyle([("LINEABOVE", (0, 0), (-1, 0), 2.2, _C_BRAND),
+                              ("LINEBELOW", (0, 0), (-1, 0), 0.8, _C_GOLD)]))
+    story.append(rule)
+    story.append(Spacer(1, 4 * mm))
+
+    use_hi = title_hi and _has_devanagari()
+    if use_hi:
+        t_hi = ParagraphStyle("PhTiHi", fontName="NotoSansDevanagari-Bold", fontSize=12.5,
+                              leading=15, alignment=1, textColor=colors.white)
+        t_en = ParagraphStyle("PhTiEn", fontName="Helvetica-Bold", fontSize=13,
+                              leading=15, alignment=1, textColor=colors.white)
+        band = Table([[Paragraph(title_hi, t_hi)], [Paragraph(title_en, t_en)]], colWidths=[180 * mm])
+    else:
+        t_en = ParagraphStyle("PhTiEn2", fontName="Helvetica-Bold", fontSize=13.5,
+                              leading=16, alignment=1, textColor=colors.white)
+        band = Table([[Paragraph(title_en, t_en)]], colWidths=[180 * mm])
+    band.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), _C_BRAND),
+        ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("ROUNDEDCORNERS", [3, 3, 3, 3]),
+    ]))
+    story.append(band)
+    if subtitle:
+        story.append(Paragraph(subtitle, ParagraphStyle("PhSub", fontSize=9.5, leading=12,
+                                                        alignment=1, textColor=_C_MUTED, spaceBefore=3)))
+    story.append(Spacer(1, 5 * mm))
+
+
 def build_character_certificate_pdf(student, school_profile=None):
     buffer = BytesIO()
     document = SimpleDocTemplate(
         buffer,
         pagesize=A4,
-        rightMargin=20 * mm,
-        leftMargin=20 * mm,
-        topMargin=18 * mm,
-        bottomMargin=18 * mm,
+        rightMargin=18 * mm,
+        leftMargin=18 * mm,
+        topMargin=14 * mm,
+        bottomMargin=16 * mm,
         title=f"Character Certificate - {student.full_name}",
     )
     styles = getSampleStyleSheet()
     story = []
-    _school_header(story, school_profile, "CHARACTER CERTIFICATE", styles)
+    _premium_header(story, school_profile, "CHARACTER CERTIFICATE", styles,
+                    title_hi="चरित्र प्रमाण-पत्र")
 
-    body_style = ParagraphStyle(
-        "CcBody",
-        parent=styles["Normal"],
-        fontSize=11.5,
-        leading=20,
-        spaceAfter=4 * mm,
-        firstLineIndent=8 * mm,
-    )
+    # gender-aware pronouns
+    if getattr(student, "gender", "") == "F":
+        subj, poss, obj, rel = "she", "her", "her", "daughter"
+    else:
+        subj, poss, obj, rel = "he", "his", "him", "son"
 
-    class_label = student.current_class.name if student.current_class else ""
-    if student.current_section:
-        class_label = f"{class_label}-{student.current_section.name}" if class_label else student.current_section.name
+    ref_no = f"CC-{timezone.localdate().year}-{student.admission_no or student.legacy_sid or student.pk}"
+    meta = ParagraphStyle("CcMeta", fontSize=9.5, textColor=_C_MUTED)
+    mrow = Table([[Paragraph(f"<b>Ref. No.:</b> {ref_no}", meta),
+                   Paragraph(f"<b>Date:</b> {timezone_today()}",
+                             ParagraphStyle("CcMetaR", parent=meta, alignment=2))]],
+                 colWidths=[90 * mm, 90 * mm])
+    story.append(mrow)
+    story.append(Spacer(1, 6 * mm))
 
-    father_bit = f" S/o. / D/o. {student.father_name}" if student.father_name else ""
-    text = (
-        f"This is to certify that <b>{student.full_name}</b>{father_bit}, "
-        f"Admission No. <b>{student.admission_no or '-'}</b>, is / was a bona fide student of this school, "
-        f"studying in Class <b>{class_label or '-'}</b>."
-    )
-    story.append(Spacer(1, 8 * mm))
-    story.append(Paragraph(text, body_style))
-    story.append(
-        Paragraph(
-            "During the period of his/her stay in this institution, his/her character and conduct have been found to be good.",
-            body_style,
-        )
-    )
-    story.append(Paragraph("We wish him/her success in future endeavours.", body_style))
+    body = ParagraphStyle("CcBody", parent=styles["Normal"], fontSize=11.5, leading=22,
+                          alignment=4, textColor=_C_INK, firstLineIndent=10 * mm, spaceAfter=5 * mm)
 
-    story.extend(
-        [
-            Spacer(1, 24 * mm),
-            Table(
-                [["Date: " + timezone_today(), "Principal / Headmaster"]],
-                colWidths=[80 * mm, 80 * mm],
-                style=TableStyle(
-                    [
-                        ("LINEABOVE", (1, 0), (1, 0), 0.5, colors.black),
-                        ("ALIGN", (0, 0), (0, 0), "LEFT"),
-                        ("ALIGN", (1, 0), (1, 0), "CENTER"),
-                        ("FONTSIZE", (0, 0), (-1, -1), 9),
-                    ]
-                ),
-            ),
-        ]
-    )
+    class_label = _class_section_label(student)
+    parents = []
+    if student.father_name:
+        parents.append(f"{rel} of <b>Mr. {student.father_name}</b>")
+    if student.mother_name:
+        parents.append(f"and <b>Mrs. {student.mother_name}</b>" if parents else f"child of <b>Mrs. {student.mother_name}</b>")
+    parent_bit = (" " + " ".join(parents)) if parents else ""
+    session_bit = ""
+    try:
+        session_bit = student.fee_receipts.first().session.name  # best-effort; harmless if none
+    except Exception:
+        session_bit = ""
+
+    story.append(Paragraph(
+        f"This is to certify that <b>{student.full_name}</b>{parent_bit}, bearing Admission No. "
+        f"<b>{student.admission_no or '-'}</b>, has been a bona fide student of this institution"
+        + (f", studying in Class <b>{class_label}</b>" if class_label else "") + ".", body))
+    story.append(Paragraph(
+        f"To the best of my knowledge, {poss} character and conduct throughout {poss} stay in this "
+        f"school have been found to be <b>good</b>, and there is nothing adverse recorded against "
+        f"{obj}. {subj.capitalize()} bears a good moral character.", body))
+    story.append(Paragraph(
+        f"I wish {obj} every success in all {poss} future endeavours.", body))
+
+    story.append(Spacer(1, 26 * mm))
+    sign = Table([["", "Principal / Headmaster"]], colWidths=[95 * mm, 75 * mm])
+    sign.setStyle(TableStyle([
+        ("LINEABOVE", (1, 0), (1, 0), 0.6, _C_INK),
+        ("ALIGN", (1, 0), (1, 0), "CENTER"),
+        ("FONTSIZE", (0, 0), (-1, -1), 10), ("TEXTCOLOR", (0, 0), (-1, -1), _C_INK),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+    ]))
+    story.append(sign)
+    story.append(Spacer(1, 3 * mm))
+    story.append(Paragraph("(Office Seal)", ParagraphStyle("CcSeal", fontSize=8.5, textColor=_C_MUTED)))
 
     document.build(story)
     buffer.seek(0)
@@ -746,90 +873,127 @@ def build_marksheet_pdf(student, term, exam_marks, school_profile=None):
     )
     styles = getSampleStyleSheet()
     story = []
-    _school_header(story, school_profile, f"REPORT CARD - {term.name.upper()}", styles)
+    _premium_header(story, school_profile, "PROGRESS REPORT CARD", styles,
+                    subtitle=f"{term.name} &nbsp;&bull;&nbsp; Session {term.session.name}")
 
-    class_label = student.current_class.name if student.current_class else ""
-    if student.current_section:
-        class_label = f"{class_label}-{student.current_section.name}" if class_label else student.current_section.name
+    class_label = _class_section_label(student)
+    dob = student.date_of_birth.strftime("%d-%m-%Y") if student.date_of_birth else "—"
 
-    meta_rows = [
-        ["Student Name", student.full_name, "SID", student.legacy_sid or ""],
-        ["Class", class_label, "Roll No.", student.roll_no or ""],
-        ["Father's Name", student.father_name or "", "Session", term.session.name],
+    def _kv(label, value):
+        safe = value if (value not in (None, "")) else "&nbsp;"
+        return Paragraph(f'<font color="#64748b" size=8>{label}</font><br/><b>{safe}</b>',
+                         ParagraphStyle("RcKv", fontSize=10, leading=13, textColor=_C_INK))
+
+    info = [
+        [_kv("STUDENT NAME", student.full_name), _kv("CLASS &amp; SECTION", class_label),
+         _kv("ROLL NO.", student.roll_no)],
+        [_kv("FATHER'S NAME", student.father_name), _kv("MOTHER'S NAME", student.mother_name),
+         _kv("DATE OF BIRTH", dob)],
+        [_kv("ADMISSION NO.", student.admission_no), _kv("SID", student.legacy_sid),
+         _kv("SESSION", term.session.name)],
     ]
-    meta_table = Table(meta_rows, colWidths=[35 * mm, 60 * mm, 30 * mm, 55 * mm])
-    meta_table.setStyle(
-        TableStyle(
-            [
-                ("LINEBELOW", (0, 0), (-1, -1), 0.5, colors.HexColor("#e2e8f0")),
-                ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
-                ("FONTNAME", (2, 0), (2, -1), "Helvetica-Bold"),
-                ("FONTSIZE", (0, 0), (-1, -1), 9),
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("TOPPADDING", (0, 0), (-1, -1), 5),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-            ]
-        )
-    )
-    story.extend([meta_table, Spacer(1, 6 * mm)])
+    info_table = Table(info, colWidths=[70 * mm, 55 * mm, 45 * mm])
+    info_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), _C_SOFT2),
+        ("BOX", (0, 0), (-1, -1), 0.6, _C_LINE),
+        ("INNERGRID", (0, 0), (-1, -1), 0.4, colors.white),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 6), ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("LEFTPADDING", (0, 0), (-1, -1), 9),
+    ]))
+    story.extend([info_table, Spacer(1, 5 * mm)])
 
-    rows = [["Subject", "Max Marks", "Marks Obtained", "Grade"]]
+    hdr = ParagraphStyle("RcHdr", fontName="Helvetica-Bold", fontSize=9.5,
+                         textColor=colors.white, alignment=1)
+    cell_l = ParagraphStyle("RcCellL", fontSize=9.5, textColor=_C_INK)
+    cell_c = ParagraphStyle("RcCellC", fontSize=9.5, textColor=_C_INK, alignment=1)
+    rows = [[Paragraph("SUBJECT", ParagraphStyle("RcHdrL", parent=hdr, alignment=0)),
+             Paragraph("MAX", hdr), Paragraph("OBTAINED", hdr), Paragraph("GRADE", hdr)]]
     total_max = Decimal("0.00")
     total_obtained = Decimal("0.00")
     for mark in exam_marks:
         obtained_label = "AB" if mark.is_absent else money(mark.marks_obtained or Decimal("0.00"))
-        rows.append(
-            [
-                mark.exam_test.subject.name,
-                money(mark.exam_test.max_marks),
-                obtained_label,
-                mark.grade,
-            ]
-        )
+        rows.append([
+            Paragraph(mark.exam_test.subject.name, cell_l),
+            Paragraph(money(mark.exam_test.max_marks), cell_c),
+            Paragraph(obtained_label, cell_c),
+            Paragraph(mark.grade or "—", cell_c),
+        ])
         total_max += mark.exam_test.max_marks
         if not mark.is_absent and mark.marks_obtained is not None:
             total_obtained += mark.marks_obtained
 
     overall_pct = (total_obtained / total_max * Decimal("100")) if total_max else Decimal("0.00")
-    rows.append(["Total", money(total_max), money(total_obtained), f"{overall_pct:.1f}%"])
+    rows.append([
+        Paragraph("TOTAL", ParagraphStyle("RcTotL", parent=cell_l, fontName="Helvetica-Bold")),
+        Paragraph(money(total_max), ParagraphStyle("RcTotC1", parent=cell_c, fontName="Helvetica-Bold")),
+        Paragraph(money(total_obtained), ParagraphStyle("RcTotC2", parent=cell_c, fontName="Helvetica-Bold")),
+        Paragraph(f"{overall_pct:.1f}%", ParagraphStyle("RcTotC3", parent=cell_c, fontName="Helvetica-Bold")),
+    ])
+    marks_table = Table(rows, colWidths=[78 * mm, 30 * mm, 35 * mm, 27 * mm], repeatRows=1)
+    n = len(rows)
+    ts = [
+        ("BACKGROUND", (0, 0), (-1, 0), _C_BRAND),
+        ("TOPPADDING", (0, 0), (-1, -1), 6), ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("LEFTPADDING", (0, 0), (0, -1), 9),
+        ("LINEBELOW", (0, 0), (-1, -2), 0.4, _C_LINE),
+        ("BACKGROUND", (0, n - 1), (-1, n - 1), colors.HexColor("#e7f5f3")),
+        ("LINEABOVE", (0, n - 1), (-1, n - 1), 1.0, _C_BRAND),
+        ("BOX", (0, 0), (-1, -1), 0.6, _C_LINE),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+    ]
+    for r in range(1, n - 1):
+        if r % 2 == 0:
+            ts.append(("BACKGROUND", (0, r), (-1, r), _C_SOFT2))
+    marks_table.setStyle(TableStyle(ts))
+    story.extend([marks_table, Spacer(1, 5 * mm)])
 
-    marks_table = Table(rows, colWidths=[70 * mm, 35 * mm, 40 * mm, 35 * mm], repeatRows=1)
-    total_row = len(rows) - 1
-    marks_table.setStyle(
-        TableStyle(
-            [
-                ("LINEABOVE", (0, 0), (-1, 0), 1, colors.HexColor("#0f766e")),
-                ("LINEBELOW", (0, 0), (-1, 0), 1, colors.HexColor("#0f766e")),
-                ("LINEBELOW", (0, 1), (-1, -2), 0.5, colors.HexColor("#e2e8f0")),
-                ("LINEBELOW", (0, total_row), (-1, total_row), 1.5, colors.HexColor("#0f766e")),
-                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                ("FONTNAME", (0, total_row), (-1, total_row), "Helvetica-Bold"),
-                ("BACKGROUND", (0, total_row), (-1, total_row), colors.HexColor("#f8fafc")),
-                ("ALIGN", (1, 1), (-1, -1), "CENTER"),
-                ("FONTSIZE", (0, 0), (-1, -1), 9),
-                ("TOPPADDING", (0, 0), (-1, -1), 6),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-            ]
-        )
-    )
-    story.append(marks_table)
+    # result strip (flat 2-row table: labels then values)
+    is_pass = float(overall_pct) >= 33
+    result_word = "PASS" if is_pass else "FAIL"
+    result_color = colors.HexColor("#15803d") if is_pass else colors.HexColor("#b91c1c")
+    strip = Table([
+        ["PERCENTAGE", "GRADE", "DIVISION", "RESULT"],
+        [f"{overall_pct:.1f}%", _overall_grade(overall_pct), _division(overall_pct), result_word],
+    ], colWidths=[45 * mm] * 4)
+    strip.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), _C_SOFT),
+        ("BOX", (0, 0), (-1, -1), 0.6, _C_LINE),
+        ("LINEAFTER", (0, 0), (-2, -1), 0.6, colors.white),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("FONTSIZE", (0, 0), (-1, 0), 8), ("TEXTCOLOR", (0, 0), (-1, 0), _C_MUTED),
+        ("FONTNAME", (0, 1), (-1, 1), "Helvetica-Bold"), ("FONTSIZE", (0, 1), (-1, 1), 11.5),
+        ("TEXTCOLOR", (0, 1), (-1, 1), _C_BRAND_DK),
+        ("TEXTCOLOR", (3, 1), (3, 1), result_color),
+        ("TOPPADDING", (0, 0), (-1, 0), 7), ("BOTTOMPADDING", (0, 0), (-1, 0), 1),
+        ("TOPPADDING", (0, 1), (-1, 1), 1), ("BOTTOMPADDING", (0, 1), (-1, 1), 8),
+    ]))
+    story.extend([strip, Spacer(1, 5 * mm)])
 
-    story.extend(
-        [
-            Spacer(1, 20 * mm),
-            Table(
-                [["Class Teacher", "Principal"]],
-                colWidths=[80 * mm, 80 * mm],
-                style=TableStyle(
-                    [
-                        ("LINEABOVE", (0, 0), (-1, 0), 0.5, colors.black),
-                        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-                        ("FONTSIZE", (0, 0), (-1, -1), 9),
-                    ]
-                ),
-            ),
-        ]
-    )
+    # grading scale legend
+    legend_cells = [Paragraph(f"<b>{g}</b> &nbsp;{r}",
+                              ParagraphStyle("RcLg", fontSize=8, textColor=_C_INK))
+                    for g, r in CBSE_GRADE_SCALE]
+    legend = Table([[Paragraph("<b>Grading Scale</b>",
+                               ParagraphStyle("RcLt", fontSize=8.5, textColor=_C_BRAND_DK))] + legend_cells],
+                   colWidths=[26 * mm] + [19.25 * mm] * 8)
+    legend.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), _C_SOFT2),
+        ("BOX", (0, 0), (-1, -1), 0.5, _C_LINE),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("LEFTPADDING", (0, 0), (0, 0), 7),
+    ]))
+    story.extend([legend, Spacer(1, 16 * mm)])
+
+    sign = Table([["Class Teacher", "Examination Incharge", "Principal"]], colWidths=[60 * mm] * 3)
+    sign.setStyle(TableStyle([
+        ("LINEABOVE", (0, 0), (-1, 0), 0.6, _C_INK),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("FONTSIZE", (0, 0), (-1, -1), 9), ("TEXTCOLOR", (0, 0), (-1, -1), _C_INK),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+    ]))
+    story.append(sign)
 
     document.build(story)
     buffer.seek(0)
