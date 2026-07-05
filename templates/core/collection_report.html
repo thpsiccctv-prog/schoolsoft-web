@@ -59,6 +59,14 @@
     <div class="premium-filterbar no-print">
         <form class="due-filterbar" method="get">
             <div class="filterbar-inputs">
+                <select name="session">
+                    <option value="all">All sessions</option>
+                    {% for sess in sessions %}
+                        <option value="{{ sess.id }}" {% if selected_session == sess.id|stringformat:"s" %}selected{% endif %}>
+                            {{ sess.name }}
+                        </option>
+                    {% endfor %}
+                </select>
                 <div style="display: flex; align-items: center; gap: 8px;">
                     <label style="font-size: 13px; font-weight: 600; color: #475569;">From</label>
                     <input type="date" name="date_from" value="{{ date_from_str }}">

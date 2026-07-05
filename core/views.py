@@ -58,16 +58,18 @@ def dashboard(request):
     audit_dir = settings.BASE_DIR.parent / "migration_audit"
     school7_tables = audit_dir / "school7_mdb" / "tables_summary.csv"
     school7_columns = audit_dir / "school7_mdb" / "columns_summary.csv"
+    active_session = AcademicSession.objects.filter(is_active=True).order_by("-starts_on", "name").first()
     today = timezone.localdate()
     today_receipts = FeeReceipt.objects.filter(receipt_date=today, is_cancelled=False)
     today_totals = today_receipts.aggregate(received=Sum("received_amount"))
-    total_dues = FeeReceipt.objects.filter(is_cancelled=False).aggregate(due=Sum("legacy_due_amount"))
+    total_dues = FeeReceipt.objects.filter(is_cancelled=False, session=active_session, student__is_active=True).aggregate(due=Sum("legacy_due_amount")) if active_session else {"due": Decimal("0.00")}
     total_students = Student.objects.count()
     active_students = Student.objects.filter(is_active=True).count()
+    active_session_receipts = FeeReceipt.objects.filter(session=active_session, is_cancelled=False).count() if active_session else 0
 
     context = {
         "today": today,
-        "active_session": AcademicSession.objects.filter(is_active=True).order_by("-starts_on", "name").first(),
+        "active_session": active_session,
         "dashboard_kpis": [
             ("Today's Collection", today_totals["received"] or Decimal("0.00"), "success"),
             ("Receipts Today", today_receipts.count(), "info"),
@@ -78,7 +80,7 @@ def dashboard(request):
             ("Students", total_students),
             ("Classes", SchoolClass.objects.count()),
             ("Fee heads", FeeHead.objects.count()),
-            ("Receipts", FeeReceipt.objects.count()),
+            ("Receipts", active_session_receipts),
             ("Sessions", AcademicSession.objects.count()),
         ],
         "student_total": total_students,
@@ -370,12 +372,21 @@ def receipt_list(request):
     payment_mode = request.GET.get("payment_mode", "").strip()
     date_from = request.GET.get("date_from", "").strip()
     date_to = request.GET.get("date_to", "").strip()
+    session_id = request.GET.get("session", "").strip()
+    
+    active_session = AcademicSession.objects.filter(is_active=True).first()
+    if not session_id and not query:
+        session_id = str(active_session.id) if active_session else ""
+        
     receipts = FeeReceipt.objects.select_related(
         "student",
         "student__current_class",
         "student__current_section",
         "session",
     ).order_by("-receipt_date", "-legacy_receipt_no", "-id")
+
+    if session_id and session_id != "all":
+        receipts = receipts.filter(session_id=session_id)
 
     if query:
         receipts = receipts.filter(
@@ -412,9 +423,11 @@ def receipt_list(request):
         "query": query,
         "selected_class": class_id,
         "selected_payment_mode": payment_mode,
+        "selected_session": session_id,
         "date_from": date_from,
         "date_to": date_to,
         "classes": SchoolClass.objects.order_by("display_order", "name"),
+        "sessions": AcademicSession.objects.order_by("-starts_on", "name"),
         "payment_modes": FeeReceipt.PaymentMode.choices,
         "totals": totals,
         "total_receipts": receipts.count(),
@@ -435,7 +448,10 @@ def due_report(request):
             "page": page,
             "query": request.GET.get("q", "").strip(),
             "selected_class": request.GET.get("class", "").strip(),
+            "selected_session": getattr(request, "_due_selected_session", ""),
+            "selected_status": getattr(request, "_due_selected_status", "active"),
             "classes": SchoolClass.objects.order_by("display_order", "name"),
+            "sessions": AcademicSession.objects.order_by("-starts_on", "name"),
             "total_students": rows.count(),
             "totals": totals,
         },
@@ -453,12 +469,29 @@ def due_report_pdf(request):
 def get_due_report_rows(request):
     query = request.GET.get("q", "").strip()
     class_id = request.GET.get("class", "").strip()
+    session_id = request.GET.get("session", "").strip()
+    status = request.GET.get("status", "active").strip()
+    
+    active_session = AcademicSession.objects.filter(is_active=True).first()
+    if not session_id and not query:
+        session_id = str(active_session.id) if active_session else ""
+        
+    request._due_selected_session = session_id
+    request._due_selected_status = status
 
     receipts = FeeReceipt.objects.select_related(
         "student",
         "student__current_class",
         "student__current_section",
     ).filter(legacy_due_amount__gt=0, is_cancelled=False)
+
+    if session_id and session_id != "all":
+        receipts = receipts.filter(session_id=session_id)
+        
+    if status == "active":
+        receipts = receipts.filter(student__is_active=True)
+    elif status == "inactive":
+        receipts = receipts.filter(student__is_active=False)
 
     if query:
         receipts = receipts.filter(
@@ -844,6 +877,8 @@ def collection_report(request):
         'totals': totals,
         'date_from_str': date_from_str,
         'date_to_str': date_to_str,
+        'selected_session': getattr(request, "_col_selected_session", ""),
+        'sessions': AcademicSession.objects.order_by("-starts_on", "name"),
         'total_received': totals['total_received'] or Decimal('0.00'),
     })
 

@@ -49,6 +49,14 @@
         <input type="search" name="q" value="{{ query }}" placeholder="Search receipt no, student, SID, admission no">
         <input type="date" name="date_from" value="{{ date_from }}" aria-label="From date">
         <input type="date" name="date_to" value="{{ date_to }}" aria-label="To date">
+        <select name="session">
+            <option value="all">All sessions</option>
+            {% for sess in sessions %}
+                <option value="{{ sess.id }}" {% if selected_session == sess.id|stringformat:"s" %}selected{% endif %}>
+                    {{ sess.name }}
+                </option>
+            {% endfor %}
+        </select>
         <select name="class">
             <option value="">All classes</option>
             {% for class in classes %}

@@ -71,6 +71,19 @@
         <form class="due-filterbar" method="get">
             <div class="filterbar-inputs">
                 <input type="search" name="q" value="{{ query }}" placeholder="Search student, father, SID, admission no">
+                <select name="session">
+                    <option value="all">All sessions</option>
+                    {% for sess in sessions %}
+                        <option value="{{ sess.id }}" {% if selected_session == sess.id|stringformat:"s" %}selected{% endif %}>
+                            {{ sess.name }}
+                        </option>
+                    {% endfor %}
+                </select>
+                <select name="status">
+                    <option value="active" {% if selected_status == 'active' %}selected{% endif %}>Active Students</option>
+                    <option value="inactive" {% if selected_status == 'inactive' %}selected{% endif %}>Inactive Students</option>
+                    <option value="all" {% if selected_status == 'all' %}selected{% endif %}>All Students</option>
+                </select>
                 <select name="class">
                     <option value="">All classes</option>
                     {% for class in classes %}

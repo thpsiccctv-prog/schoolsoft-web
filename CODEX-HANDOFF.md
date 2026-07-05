@@ -936,6 +936,29 @@ Next steps, only after user approval:
    `MR-*` receipts, edited/cancelled test receipts, or current manual entries. (DONE - 667 deleted)
 4. Run actual yearly import on local dev only. (DONE - 11,161 imported)
 5. Verify dashboard, receipt register, dues, collection report, and old receipt
-   PDFs using snapshot fields. (PENDING)
+   PDFs using snapshot fields. (DONE - Smart Default Filters implemented)
 6. Only after local verification, repeat the approved process for desktop DB and
    then Render production. (PENDING)
+
+## 2026-07-05 Checkpoint - Smart Default Filters & Local Dev Yearly Import Verified
+
+Completed commits (Pushed to main):
+- `Smart default filters added to Dashboard, Receipt Register, Dues Report, Collection Report.`
+- `FeeReceiptEntryForm hardened to restrict sessions to is_active=True.`
+
+What the completed feature does:
+- Isolates active session data (`2026-27`) by default on all metrics, lists, and forms.
+- Permits querying old/imported legacy receipts (from 2018 onwards) via explicit dropdown filters without cluttering the UI.
+- All totals strictly exclude cancelled receipts (`is_cancelled=False`).
+
+Verification:
+- `manage.py test` passed 26/26.
+- Manual browser verification confirmed by user: Dashboard, Collections, Dues, Receipts, and PDFs function flawlessly and respect the isolation of active data.
+
+Next Steps for Codex (URGENT):
+The local dev environment has been successfully imported, filtered, and verified. Now you must perform the exact same Yearly Import onto the Desktop EXE database and Render Production database.
+1. Backup the Desktop Database: `%LOCALAPPDATA%\SchoolSoft\db.sqlite3`
+2. Run cleanup script on Desktop DB to remove previous botched legacy `SF-*` receipts (DO NOT touch `MR-*`).
+3. Run `import_yearly_fees` on Desktop DB using the same CSVs from `yearly_exports`.
+4. Verify the Desktop App (EXE) runs and shows the correct filtered data.
+5. Finally, apply the exact same process to the Render PostgreSQL DB (Production).

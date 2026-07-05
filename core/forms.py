@@ -94,10 +94,13 @@ class FeeReceiptEntryForm(forms.ModelForm):
         self.fields["student"].queryset = Student.objects.select_related(
             "current_class",
             "current_section",
-        ).order_by("full_name")
-        self.fields["session"].queryset = AcademicSession.objects.order_by("-is_active", "-starts_on", "name")
+        ).filter(is_active=True).order_by("full_name")
+        self.fields["session"].queryset = AcademicSession.objects.filter(is_active=True).order_by("-starts_on", "name")
+        active_session = AcademicSession.objects.filter(is_active=True).order_by("-starts_on").first()
+        if "session" not in self.initial and active_session:
+            self.fields["session"].initial = active_session
         self.fields["receipt_date"].initial = timezone.localdate()
-        self.fields["student"].empty_label = "Select student"
+        self.fields["student"].empty_label = "Select active student"
         self.fields["session"].empty_label = "Select session"
 
         for field in self.fields.values():
