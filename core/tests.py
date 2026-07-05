@@ -1,4 +1,5 @@
 from decimal import Decimal
+import re
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -24,6 +25,10 @@ from .models import (
     TransportBus,
     TransportRoute,
 )
+
+
+def pdf_page_count(pdf_bytes):
+    return len(re.findall(rb"/Type\s*/Page\b", pdf_bytes))
 
 
 class AuthenticatedClientMixin:
@@ -188,6 +193,52 @@ class FeeReceiptTests(AuthenticatedClientMixin, TestCase):
         self.assertEqual(pdf_response.status_code, 200)
         self.assertEqual(pdf_response["Content-Type"], "application/pdf")
         self.assertContains(detail_response, "R-2")
+
+    def test_receipt_pdf_stays_one_page_for_dense_fee_heads(self):
+        session = AcademicSession.objects.create(name="2026-27")
+        school_class = SchoolClass.objects.create(name="III", display_order=3)
+        student = Student.objects.create(
+            legacy_sid=2408,
+            admission_no="2408",
+            full_name="Dense Receipt Student",
+            current_class=school_class,
+        )
+        fee_items = [
+            ("Admission Fee", "800.00"),
+            ("Building Fee", "300.00"),
+            ("Development Fee", "500.00"),
+            ("Exam Fee", "250.00"),
+            ("Generator Fee", "100.00"),
+            ("Lab Fee", "200.00"),
+            ("Library Fee", "50.00"),
+            ("Medical Fee", "250.00"),
+            ("Science Fee", "400.00"),
+            ("Sports Fee", "300.00"),
+            ("Tuition Fee", "800.00"),
+        ]
+        receipt = FeeReceipt.objects.create(
+            receipt_no="DENSE-1",
+            student=student,
+            session=session,
+            from_month="APR",
+            to_month="APR",
+            received_amount=Decimal("0.00"),
+            legacy_fee_total=Decimal("3950.00"),
+            legacy_net_total=Decimal("3950.00"),
+            legacy_due_amount=Decimal("3950.00"),
+        )
+        for name, amount in fee_items:
+            FeeReceiptLine.objects.create(
+                receipt=receipt,
+                fee_head=FeeHead.objects.create(name=name),
+                amount=Decimal(amount),
+            )
+
+        pdf_response = self.client.get(reverse("core:receipt_pdf", args=[receipt.id]))
+
+        self.assertEqual(pdf_response.status_code, 200)
+        self.assertEqual(pdf_page_count(pdf_response.content), 1)
+
     def test_receipt_list_filters(self):
         session = AcademicSession.objects.create(name="2026-27")
         class_one = SchoolClass.objects.create(name="I", display_order=1)

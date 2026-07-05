@@ -27,10 +27,10 @@ def build_fee_receipt_pdf(receipt, school_profile=None):
     document = SimpleDocTemplate(
         buffer,
         pagesize=A4,
-        rightMargin=14 * mm,
-        leftMargin=14 * mm,
-        topMargin=12 * mm,
-        bottomMargin=12 * mm,
+        rightMargin=12 * mm,
+        leftMargin=12 * mm,
+        topMargin=8 * mm,
+        bottomMargin=8 * mm,
         title=f"Fee Receipt {receipt.receipt_no}",
     )
 
@@ -45,29 +45,30 @@ def build_fee_receipt_pdf(receipt, school_profile=None):
     title_style = ParagraphStyle(
         "ReceiptTitle",
         parent=styles["Title"],
-        fontSize=18,
-        leading=22,
+        fontSize=16,
+        leading=18,
         alignment=0, # Left align
         textColor=brand_color,
         fontName="Helvetica-Bold",
-        spaceAfter=2 * mm,
+        spaceAfter=1 * mm,
     )
     small_style = ParagraphStyle(
         "Small",
         parent=styles["Normal"],
-        fontSize=9,
-        leading=12,
+        fontSize=7,
+        leading=8,
         textColor=colors.HexColor("#64748b"),
     )
     badge_style = ParagraphStyle(
         "Badge",
         parent=styles["Normal"],
-        fontSize=10,
+        fontSize=8,
+        leading=9,
         fontName="Helvetica-Bold",
         textColor=brand_color,
         backColor=colors.HexColor("#ecfdf5"),
         alignment=0,
-        spaceBefore=4 * mm,
+        spaceBefore=2 * mm,
     )
 
     school_name = school_profile.name if school_profile else "SchoolSoft Fee Receipt"
@@ -90,19 +91,19 @@ def build_fee_receipt_pdf(receipt, school_profile=None):
              Paragraph(school_address, small_style), 
              Paragraph(school_contact, small_style),
              Paragraph(" FEE RECEIPT ", badge_style)],
-            [Paragraph(f"<b>Receipt No.</b><br/><font size=16>{receipt.receipt_no}</font>", 
-                      ParagraphStyle("RNo", alignment=2, leading=20, textColor=text_color))]
+            [Paragraph(f"<b>Receipt No.</b><br/><font size=13>{receipt.receipt_no}</font>",
+                      ParagraphStyle("RNo", alignment=2, leading=15, textColor=text_color))]
         ]
     ]
-    header_table = Table(header_data, colWidths=[110 * mm, 70 * mm])
+    header_table = Table(header_data, colWidths=[112 * mm, 62 * mm])
     header_table.setStyle(TableStyle([
         ('VALIGN', (0,0), (-1,-1), 'TOP'),
         ('ALIGN', (1,0), (1,0), 'RIGHT'),
         ('LINEBELOW', (0,0), (-1,-1), 1.5, border_color),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 15),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 7),
     ]))
     
-    story.extend([header_table, Spacer(1, 8 * mm)])
+    story.extend([header_table, Spacer(1, 5 * mm)])
 
     student = receipt.student
     class_label = ""
@@ -120,7 +121,7 @@ def build_fee_receipt_pdf(receipt, school_profile=None):
         ["SID / Admn", f"{student.legacy_sid or ''} / {student.admission_no or ''}", "Class", class_label],
         ["Fee Month", month_label, "Mode", receipt.get_payment_mode_display()],
     ]
-    meta_table = Table(meta, colWidths=[35 * mm, 60 * mm, 30 * mm, 55 * mm])
+    meta_table = Table(meta, colWidths=[34 * mm, 58 * mm, 30 * mm, 52 * mm])
     meta_table.setStyle(
         TableStyle(
             [
@@ -133,22 +134,20 @@ def build_fee_receipt_pdf(receipt, school_profile=None):
                 ("TEXTCOLOR", (2, 0), (2, -1), colors.HexColor("#475569")),
                 ("TEXTCOLOR", (1, 0), (1, -1), text_color),
                 ("TEXTCOLOR", (3, 0), (3, -1), text_color),
-                ("FONTSIZE", (0, 0), (-1, -1), 9),
+                ("FONTSIZE", (0, 0), (-1, -1), 8),
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("TOPPADDING", (0, 0), (-1, -1), 6),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                ("TOPPADDING", (0, 0), (-1, -1), 4),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
             ]
         )
     )
-    story.extend([meta_table, Spacer(1, 8 * mm)])
+    story.extend([meta_table, Spacer(1, 5 * mm)])
 
     line_rows = [["Fee Head Description", "Amount (Rs.)"]]
     for line in receipt.lines.select_related("fee_head").all():
         line_rows.append([line.fee_head.name, money(line.amount)])
 
-    # Spacer row before totals
-    line_rows.append(["", ""])
-    
+    body_last_idx = len(line_rows) - 1
     total_start_idx = len(line_rows)
     line_rows.append(["Fee Total", money(receipt.legacy_fee_total)])
     
@@ -166,7 +165,7 @@ def build_fee_receipt_pdf(receipt, school_profile=None):
         due_idx = len(line_rows)
         line_rows.append(["Balance Due", f"Rs. {money(receipt.legacy_due_amount)}"])
 
-    fee_table = Table(line_rows, colWidths=[130 * mm, 50 * mm], repeatRows=1)
+    fee_table = Table(line_rows, colWidths=[124 * mm, 50 * mm], repeatRows=1)
     
     ts = [
         # Header
@@ -176,24 +175,27 @@ def build_fee_receipt_pdf(receipt, school_profile=None):
         ("LINEBELOW", (0, 0), (-1, 0), 1, border_color),
         
         # Body Lines
-        ("LINEBELOW", (0, 1), (-1, total_start_idx-2), 0.5, colors.HexColor("#e2e8f0")),
         ("ALIGN", (1, 1), (1, -1), "RIGHT"),
-        ("FONTSIZE", (0, 0), (-1, -1), 10),
-        ("TEXTCOLOR", (0, 1), (-1, total_start_idx-2), text_color),
-        ("TOPPADDING", (0, 0), (-1, -1), 8),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ("FONTSIZE", (0, 0), (-1, -1), 8),
+        ("TEXTCOLOR", (0, 1), (-1, body_last_idx), text_color),
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
         
         # Totals Section
         ("FONTNAME", (0, total_start_idx), (-1, -1), "Helvetica-Bold"),
         ("TEXTCOLOR", (0, total_start_idx), (-1, -1), colors.HexColor("#475569")),
+        ("LINEABOVE", (0, total_start_idx), (-1, total_start_idx), 1, border_color),
         
         # Net Payable Row
         ("BACKGROUND", (0, net_idx), (-1, net_idx), light_bg),
         ("TEXTCOLOR", (0, net_idx), (-1, net_idx), text_color),
         ("LINEABOVE", (0, net_idx), (-1, net_idx), 1, border_color),
         ("LINEBELOW", (0, net_idx), (-1, net_idx), 1, border_color),
-        ("FONTSIZE", (0, net_idx), (-1, net_idx), 11),
+        ("FONTSIZE", (0, net_idx), (-1, net_idx), 9),
     ]
+
+    if body_last_idx >= 1:
+        ts.append(("LINEBELOW", (0, 1), (-1, body_last_idx), 0.5, colors.HexColor("#e2e8f0")))
     
     if due_idx:
         ts.append(("TEXTCOLOR", (0, due_idx), (-1, due_idx), colors.HexColor("#dc2626")))
@@ -202,11 +204,11 @@ def build_fee_receipt_pdf(receipt, school_profile=None):
     story.append(fee_table)
 
     if receipt.remarks:
-        story.extend([Spacer(1, 5 * mm), Paragraph(f"<i>Remarks: {receipt.remarks}</i>", small_style)])
+        story.extend([Spacer(1, 3 * mm), Paragraph(f"<i>Remarks: {receipt.remarks}</i>", small_style)])
 
     story.extend(
         [
-            Spacer(1, 25 * mm),
+            Spacer(1, 8 * mm),
             Table(
                 [["Cashier's Signature", "Parent / Guardian"]],
                 colWidths=[70 * mm, 70 * mm],
@@ -215,9 +217,9 @@ def build_fee_receipt_pdf(receipt, school_profile=None):
                         ("LINEABOVE", (0, 0), (0, 0), 1, border_color),
                         ("LINEABOVE", (1, 0), (1, 0), 1, border_color),
                         ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-                        ("FONTSIZE", (0, 0), (-1, -1), 9),
+                        ("FONTSIZE", (0, 0), (-1, -1), 7),
                         ("TEXTCOLOR", (0, 0), (-1, -1), colors.HexColor("#64748b")),
-                        ("TOPPADDING", (0, 0), (-1, -1), 6),
+                        ("TOPPADDING", (0, 0), (-1, -1), 4),
                     ]
                 ),
             ),
