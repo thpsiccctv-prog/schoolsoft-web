@@ -24,6 +24,9 @@
                 Print Receipt
             </button>
             {% if access.receipts and not is_readonly and not receipt.is_cancelled %}
+                <a class="button secondary" href="{% url 'core:receipt_edit' receipt.id %}" style="margin-left: 12px; background: #f59e0b; color: white; border-color: #d97706;">
+                    Correct Receipt
+                </a>
                 <a class="button danger" href="{% url 'core:receipt_cancel' receipt.id %}" style="margin-left: 12px; background: #dc2626; color: white; border-color: #b91c1c;">
                     Cancel / Void
                 </a>
@@ -39,6 +42,16 @@
         <p style="margin: 0; color: #991b1b; font-size: 14px;">
             <strong>Cancelled By:</strong> {{ receipt.cancelled_by.username|default:"System" }} on {{ receipt.cancelled_at|date:"d M Y h:i A" }}<br>
             <strong>Reason:</strong> {{ receipt.cancel_reason }}
+        </p>
+    </div>
+</section>
+{% elif receipt.is_edited %}
+<section class="section no-print" style="margin-bottom: 20px;">
+    <div style="background: #fffbeb; border-left: 4px solid #f59e0b; padding: 16px 20px; border-radius: 4px;">
+        <h3 style="margin: 0 0 8px 0; color: #b45309; font-size: 16px; font-weight: 700;">EDITED / CORRECTED RECEIPT ({{ receipt.edit_count }} time{{ receipt.edit_count|pluralize }})</h3>
+        <p style="margin: 0; color: #92400e; font-size: 14px;">
+            <strong>Last Edited By:</strong> {{ receipt.edited_by.username|default:"System" }} on {{ receipt.edited_at|date:"d M Y h:i A" }}<br>
+            <strong>Reason:</strong> {{ receipt.edit_reason }}
         </p>
     </div>
 </section>
@@ -156,6 +169,48 @@
         <span>Parent / Guardian</span>
     </footer>
 </section>
+
+{% if receipt.audit_logs.exists %}
+<section class="section no-print" style="margin-top: 40px; margin-bottom: 20px;">
+    <div class="classic-titlebar">
+        <div>
+            <strong>Audit History</strong>
+            <span>Changes made to this receipt</span>
+        </div>
+    </div>
+    <div class="table-wrap compact-table-wrap" style="background: #fff; border-radius: 8px; border: 1px solid #e2e8f0; padding: 16px;">
+        <table style="width: 100%; text-align: left; border-collapse: collapse;">
+            <thead>
+                <tr style="border-bottom: 2px solid #cbd5e1;">
+                    <th style="padding: 10px; color: #475569;">Date & Time</th>
+                    <th style="padding: 10px; color: #475569;">Action</th>
+                    <th style="padding: 10px; color: #475569;">User</th>
+                    <th style="padding: 10px; color: #475569;">Reason</th>
+                    <th style="padding: 10px; color: #475569;">Changes</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in receipt.audit_logs.all %}
+                <tr style="border-bottom: 1px solid #e2e8f0;">
+                    <td style="padding: 10px; font-size: 13px;">{{ log.changed_at|date:"d M Y h:i A" }}</td>
+                    <td style="padding: 10px; font-size: 13px;">
+                        <span style="padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; 
+                            {% if log.action == 'cancelled' %}background: #fee2e2; color: #991b1b;
+                            {% elif log.action == 'edited' %}background: #fef3c7; color: #92400e;
+                            {% else %}background: #e0f2fe; color: #075985;{% endif %}">
+                            {{ log.get_action_display|upper }}
+                        </span>
+                    </td>
+                    <td style="padding: 10px; font-size: 13px;">{{ log.changed_by.username|default:"System" }}</td>
+                    <td style="padding: 10px; font-size: 13px; color: #475569;">{{ log.reason }}</td>
+                    <td style="padding: 10px; font-size: 12px; font-family: monospace; color: #334155; white-space: pre-wrap;">{% if log.changes %}{{ log.changes|pprint }}{% else %}-{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}

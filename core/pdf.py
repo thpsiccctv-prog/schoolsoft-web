@@ -235,6 +235,19 @@ def build_fee_receipt_pdf(receipt, school_profile=None):
             canvas.translate(105*mm, 148*mm)
             canvas.rotate(45)
             canvas.drawCentredString(0, 0, "CANCELLED")
+        elif receipt.is_edited:
+            canvas.setFont('Helvetica-Bold', 90)
+            canvas.setFillColor(colors.HexColor("#f59e0b"), alpha=0.2) # Amber
+            canvas.translate(105*mm, 148*mm)
+            canvas.rotate(45)
+            canvas.drawCentredString(0, 0, "EDITED")
+            # Also draw footer note
+            canvas.restoreState()
+            canvas.saveState()
+            canvas.setFont('Helvetica', 8)
+            canvas.setFillColor(colors.HexColor("#b45309"))
+            footer_text = f"Edited on {receipt.edited_at.strftime('%d-%m-%Y %H:%M')} by {receipt.edited_by.username if receipt.edited_by else 'System'}. Reason: {receipt.edit_reason}"
+            canvas.drawString(12*mm, 5*mm, footer_text)
         else:
             canvas.setFont('Helvetica-Bold', 100)
             canvas.setFillColor(colors.HexColor("#0f766e"), alpha=0.04)

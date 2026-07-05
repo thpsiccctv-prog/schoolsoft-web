@@ -11,13 +11,14 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 
-from .forms import FeeReceiptEntryForm, FeeReceiptLineEntryForm, SalaryPaymentForm, StudentForm, TransferCertificateForm
+from .forms import FeeReceiptEditForm, FeeReceiptEntryForm, FeeReceiptLineEntryForm, SalaryPaymentForm, StudentForm, TransferCertificateForm
 from .models import (
     AcademicSession,
     ExamMark,
     ExamTerm,
     FeeHead,
     FeeReceipt,
+    FeeReceiptAuditLog,
     FeeStructure,
     SalaryPayment,
     SchoolClass,
@@ -589,6 +590,137 @@ def receipt_cancel(request, pk):
         return redirect("core:receipt_detail", pk=receipt.pk)
 
     return render(request, "core/receipt_cancel_confirm.html", {"receipt": receipt})
+
+
+def receipt_edit(request, pk):
+    receipt = get_object_or_404(
+        FeeReceipt.objects.select_related("student", "session").prefetch_related("lines", "lines__fee_head"),
+        pk=pk,
+    )
+
+    if receipt.is_cancelled:
+        messages.error(request, f"Receipt {receipt.receipt_no} is cancelled and cannot be edited.")
+        return redirect("core:receipt_detail", pk=receipt.pk)
+
+    if request.method == "POST":
+        receipt_form = FeeReceiptEditForm(request.POST, instance=receipt)
+        line_form = FeeReceiptLineEntryForm(request.POST)
+
+        if receipt_form.is_valid() and line_form.is_valid():
+            with transaction.atomic():
+                original_receipt = FeeReceipt.objects.get(pk=receipt.pk)
+                # Capture before snapshot
+                before_snapshot = {
+                    "receipt_no": original_receipt.receipt_no,
+                    "student": original_receipt.student.full_name,
+                    "session": original_receipt.session.name,
+                    "receipt_date": str(original_receipt.receipt_date),
+                    "from_month": original_receipt.from_month,
+                    "to_month": original_receipt.to_month,
+                    "payment_mode": original_receipt.payment_mode,
+                    "concession_amount": str(original_receipt.concession_amount),
+                    "late_fee_amount": str(original_receipt.late_fee_amount),
+                    "received_amount": str(original_receipt.received_amount),
+                    "legacy_fee_total": str(original_receipt.legacy_fee_total),
+                    "legacy_net_total": str(original_receipt.legacy_net_total),
+                    "legacy_due_amount": str(original_receipt.legacy_due_amount),
+                    "remarks": original_receipt.remarks,
+                    "lines": {line.fee_head.name: str(line.amount) for line in original_receipt.lines.all()}
+                }
+
+                updated_receipt = receipt_form.save(commit=False)
+                
+                # Delete old lines and create new ones
+                updated_receipt.lines.all().delete()
+                
+                new_lines = []
+                for fee_head, amount in line_form.amounts():
+                    new_lines.append(updated_receipt.lines.create(fee_head=fee_head, amount=amount))
+                
+                # Recalculate totals
+                line_total = line_form.cleaned_data["line_total"]
+                updated_receipt.legacy_fee_total = line_total
+                updated_receipt.legacy_net_total = line_total + updated_receipt.late_fee_amount - updated_receipt.concession_amount
+                updated_receipt.legacy_due_amount = max(
+                    updated_receipt.legacy_net_total - updated_receipt.received_amount,
+                    Decimal("0.00"),
+                )
+                
+                # Update audit fields
+                updated_receipt.is_edited = True
+                updated_receipt.edited_at = timezone.now()
+                updated_receipt.edited_by = request.user if request.user.is_authenticated else None
+                updated_receipt.edit_count += 1
+                updated_receipt.save()
+
+                # Capture after snapshot
+                after_snapshot = {
+                    "receipt_no": updated_receipt.receipt_no,
+                    "student": updated_receipt.student.full_name,
+                    "session": updated_receipt.session.name,
+                    "receipt_date": str(updated_receipt.receipt_date),
+                    "from_month": updated_receipt.from_month,
+                    "to_month": updated_receipt.to_month,
+                    "payment_mode": updated_receipt.payment_mode,
+                    "concession_amount": str(updated_receipt.concession_amount),
+                    "late_fee_amount": str(updated_receipt.late_fee_amount),
+                    "received_amount": str(updated_receipt.received_amount),
+                    "legacy_fee_total": str(updated_receipt.legacy_fee_total),
+                    "legacy_net_total": str(updated_receipt.legacy_net_total),
+                    "legacy_due_amount": str(updated_receipt.legacy_due_amount),
+                    "remarks": updated_receipt.remarks,
+                    "lines": {line.fee_head.name: str(line.amount) for line in new_lines}
+                }
+                
+                # Generate compact changes JSON
+                changes = {}
+                for key in before_snapshot:
+                    if key != "lines":
+                        if before_snapshot[key] != after_snapshot[key]:
+                            changes[key] = {"before": before_snapshot[key], "after": after_snapshot[key]}
+                
+                lines_changes = {}
+                all_heads = set(before_snapshot["lines"].keys()) | set(after_snapshot["lines"].keys())
+                for head in all_heads:
+                    b_amt = before_snapshot["lines"].get(head, "0.00")
+                    a_amt = after_snapshot["lines"].get(head, "0.00")
+                    if b_amt != a_amt:
+                        lines_changes[head] = {"before": b_amt, "after": a_amt}
+                
+                if lines_changes:
+                    changes["lines"] = lines_changes
+
+                FeeReceiptAuditLog.objects.create(
+                    receipt=updated_receipt,
+                    action=FeeReceiptAuditLog.ActionChoices.EDITED,
+                    changed_by=request.user if request.user.is_authenticated else None,
+                    reason=updated_receipt.edit_reason,
+                    before_snapshot=before_snapshot,
+                    after_snapshot=after_snapshot,
+                    changes=changes
+                )
+
+            messages.success(request, f"Receipt {receipt.receipt_no} has been corrected.")
+            return redirect("core:receipt_detail", pk=receipt.pk)
+    else:
+        receipt_form = FeeReceiptEditForm(instance=receipt)
+        
+        # Populate lines
+        initial_lines = {}
+        for line in receipt.lines.all():
+            initial_lines[f"fee_head_{line.fee_head_id}"] = line.amount
+            
+        line_form = FeeReceiptLineEntryForm(initial=initial_lines)
+
+    return render(
+        request,
+        "core/receipt_edit.html",
+        {
+            "receipt": receipt,
+            "receipt_form": receipt_form,
+            "line_form": line_form,
+        },
+    )
 
 
 def receipt_pdf(request, pk):

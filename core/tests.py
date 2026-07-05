@@ -564,6 +564,60 @@ class Month2DocumentTests(AuthenticatedClientMixin, TestCase):
         self.assertContains(list_response, "EXCLUDE-1")
         # Total received should not include the 200.00
         # If no other receipts, it should be 0 or empty depending on how it's rendered, but we know 200.00 shouldn't be there as a total.
+
+    def test_receipt_edit_workflow(self):
+        session = AcademicSession.objects.create(name="2026-27")
+        school_class = SchoolClass.objects.create(name="I", display_order=1)
+        student = Student.objects.create(full_name="Edit Student", current_class=school_class)
+        fee_head = FeeHead.objects.create(name="Tuition Fee")
+        receipt = FeeReceipt.objects.create(
+            receipt_no="EDIT-1",
+            student=student,
+            session=session,
+            received_amount=Decimal("100.00"),
+            legacy_fee_total=Decimal("100.00"),
+            legacy_net_total=Decimal("100.00"),
+            legacy_due_amount=Decimal("0.00"),
+            from_month="JAN",
+            to_month="MAR"
+        )
+        FeeReceiptLine.objects.create(receipt=receipt, fee_head=fee_head, amount=Decimal("100.00"))
+        
+        # Admin edits receipt
+        self.client.force_login(self.user)
+        get_edit = self.client.get(reverse("core:receipt_edit", args=[receipt.id]))
+        self.assertEqual(get_edit.status_code, 200)
+        self.assertContains(get_edit, "Correct Fee Receipt")
+        
+        post_edit = self.client.post(
+            reverse("core:receipt_edit", args=[receipt.id]),
+            data={
+                "receipt_date": "2026-07-02",
+                "payment_mode": FeeReceipt.PaymentMode.ONLINE,
+                "concession_amount": "0.00",
+                "late_fee_amount": "0.00",
+                "received_amount": "150.00",
+                "remarks": "Updated amount",
+                "edit_reason": "Wrong amount entered",
+                f"fee_head_{fee_head.id}": "150.00",
+                "line_total": "150.00"
+            },
+        )
+        self.assertRedirects(post_edit, reverse("core:receipt_detail", args=[receipt.id]))
+        
+        receipt.refresh_from_db()
+        self.assertTrue(receipt.is_edited)
+        self.assertEqual(receipt.edit_reason, "Wrong amount entered")
+        self.assertEqual(receipt.received_amount, Decimal("150.00"))
+        self.assertEqual(receipt.legacy_net_total, Decimal("150.00"))
+        
+        # Check audit log
+        self.assertEqual(receipt.audit_logs.count(), 1)
+        log = receipt.audit_logs.first()
+        self.assertEqual(log.action, "edited")
+        self.assertEqual(log.reason, "Wrong amount entered")
+        self.assertEqual(log.changes["received_amount"]["before"], "100.00")
+        self.assertEqual(log.changes["received_amount"]["after"], "150.00")
         
         
 class StaffTests(AuthenticatedClientMixin, TestCase):

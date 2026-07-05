@@ -201,6 +201,17 @@ class FeeReceipt(TimeStampedModel):
         blank=True,
     )
     cancel_reason = models.CharField(max_length=255, blank=True)
+    is_edited = models.BooleanField(default=False)
+    edited_at = models.DateTimeField(null=True, blank=True)
+    edited_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="edited_receipts",
+        null=True,
+        blank=True,
+    )
+    edit_reason = models.CharField(max_length=255, blank=True)
+    edit_count = models.PositiveIntegerField(default=0)
 
     class Meta:
         ordering = ["-receipt_date", "-id"]
@@ -219,6 +230,34 @@ class FeeReceipt(TimeStampedModel):
 
     def __str__(self):
         return self.receipt_no
+
+
+class FeeReceiptAuditLog(TimeStampedModel):
+    class ActionChoices(models.TextChoices):
+        CREATED = "created", "Created"
+        EDITED = "edited", "Edited"
+        CANCELLED = "cancelled", "Cancelled"
+
+    receipt = models.ForeignKey(FeeReceipt, on_delete=models.CASCADE, related_name="audit_logs")
+    action = models.CharField(max_length=20, choices=ActionChoices.choices)
+    changed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="receipt_audit_logs",
+    )
+    changed_at = models.DateTimeField(default=timezone.now)
+    reason = models.TextField(blank=True)
+    before_snapshot = models.JSONField(null=True, blank=True)
+    after_snapshot = models.JSONField(null=True, blank=True)
+    changes = models.JSONField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-changed_at", "-id"]
+
+    def __str__(self):
+        return f"{self.receipt.receipt_no} - {self.get_action_display()} at {self.changed_at.strftime('%Y-%m-%d %H:%M')}"
 
 
 class FeeReceiptLine(TimeStampedModel):

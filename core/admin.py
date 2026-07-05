@@ -7,6 +7,7 @@ from .models import (
     ExamTest,
     FeeHead,
     FeeReceipt,
+    FeeReceiptAuditLog,
     FeeReceiptLine,
     FeeStructure,
     LegacyImportBatch,
@@ -114,6 +115,42 @@ class FeeReceiptAdmin(admin.ModelAdmin):
     search_fields = ("receipt_no", "legacy_receipt_no", "student__full_name", "student__admission_no")
     autocomplete_fields = ("student", "session")
     inlines = [FeeReceiptLineInline]
+    readonly_fields = (
+        "is_edited",
+        "edited_at",
+        "edited_by",
+        "edit_reason",
+        "edit_count",
+        "is_cancelled",
+        "cancelled_at",
+        "cancelled_by",
+        "cancel_reason"
+    )
+
+@admin.register(FeeReceiptAuditLog)
+class FeeReceiptAuditLogAdmin(admin.ModelAdmin):
+    list_display = ("receipt", "action", "changed_by", "changed_at", "reason")
+    list_filter = ("action", "changed_at")
+    search_fields = ("receipt__receipt_no", "reason")
+    readonly_fields = (
+        "receipt",
+        "action",
+        "changed_by",
+        "changed_at",
+        "reason",
+        "before_snapshot",
+        "after_snapshot",
+        "changes"
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(TransferCertificate)

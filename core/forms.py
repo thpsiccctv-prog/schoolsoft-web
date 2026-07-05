@@ -104,6 +104,28 @@ class FeeReceiptEntryForm(forms.ModelForm):
             field.widget.attrs.setdefault("class", "form-control")
 
 
+class FeeReceiptEditForm(FeeReceiptEntryForm):
+    edit_reason = forms.CharField(
+        max_length=255,
+        required=True,
+        label="Reason for Correction",
+        widget=forms.TextInput(attrs={"placeholder": "Enter reason for this correction"}),
+    )
+
+    class Meta(FeeReceiptEntryForm.Meta):
+        fields = FeeReceiptEntryForm.Meta.fields + ["edit_reason"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Phase 1: Restrict changes to student, session, and month to prevent duplicate receipt overlaps.
+        self.fields["student"].disabled = True
+        self.fields["session"].disabled = True
+        self.fields["from_month"].disabled = True
+        self.fields["to_month"].disabled = True
+        for field in self.fields.values():
+            field.widget.attrs.setdefault("class", "form-control")
+
+
 class FeeReceiptLineEntryForm(forms.Form):
     def __init__(self, *args, **kwargs):
         self.fee_heads = list(FeeHead.objects.filter(is_active=True).order_by("name"))
