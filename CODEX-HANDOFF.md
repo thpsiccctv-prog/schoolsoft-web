@@ -756,3 +756,84 @@ Next manual verification before EXE rebuild:
 Do not rebuild the desktop EXE until the user confirms this browser/manual flow is
 correct. After approval: run tests, `collectstatic`, `build-desktop.bat`, then fully
 close and reopen the EXE.
+
+## 2026-07-05 Checkpoint - Audited Receipt Correction Workflow Phase 1
+
+Completed commits:
+
+- `c5c6087 feat: audited receipt correction workflow (Phase 1)`
+- `f791306 fix(pdf): adjust footer margin for edited receipt PDF`
+
+What the completed feature does:
+
+- Adds correction/audit fields to `FeeReceipt`:
+  - `is_edited`
+  - `edited_at`
+  - `edited_by`
+  - `edit_reason`
+  - `edit_count`
+- Adds `FeeReceiptAuditLog` with:
+  - `action`
+  - `changed_by`
+  - `reason`
+  - `before_snapshot`
+  - `after_snapshot`
+  - `changes`
+- Adds route:
+  - `/receipts/<pk>/edit/`
+- Adds a receipt correction form based on the fee receipt form.
+- Requires a correction reason before saving edits.
+- Blocks edits on cancelled receipts.
+- Recalculates receipt totals server-side after correction.
+- Shows `Edit / Correct` action on receipt detail for write-capable users.
+- Shows amber edited/corrected banner and audit history on receipt detail.
+- Shows an `EDITED` badge on the receipt register. Cancelled status takes priority
+  visually if a receipt is later cancelled.
+- Adds an amber diagonal `EDITED` watermark to corrected receipt PDFs, plus a footer
+  note with edit date/user/reason. Cancelled watermark takes priority.
+- Registers receipt audit logs as read-only in Django admin.
+
+Important implementation note:
+
+- Antigravity reported 34 tests passing, but Codex independently verified the actual
+  current test suite count is 26. Treat 26/26 as the known-good verification number
+  for this checkpoint unless new tests are added later.
+
+Independent verification by Codex:
+
+- `manage.py makemigrations --check` passed with no new changes.
+- `manage.py check` passed.
+- `manage.py test` passed 26/26.
+- `showmigrations core` shows:
+  - `[X] 0010_feereceipt_cancellation`
+  - `[X] 0011_feereceipt_edit_count_feereceipt_edit_reason_and_more`
+- Post-check working tree was clean:
+  - `git status --short --branch` clean against `origin/main`
+  - `git diff HEAD --stat` empty
+  - `git diff HEAD --ignore-all-space --stat` empty
+- CSS integrity remained good:
+  - 4949 lines
+  - 824 opening braces / 824 closing braces
+  - `.student-entry` present
+  - `.fee-desk` present
+  - no truncated `.fee-desk .classic-fee-he {` selector
+
+Next manual verification before EXE rebuild:
+
+1. Create a test receipt.
+2. Open receipt detail and click `Edit / Correct`.
+3. Change one fee amount or received amount.
+4. Enter a clear reason such as `wrong amount corrected`.
+5. Save and confirm:
+   - receipt detail shows edited/corrected banner
+   - audit history shows before/after/change details
+   - receipt register shows `EDITED` badge
+   - downloaded PDF has `EDITED` watermark and footer note
+6. Cancel the corrected receipt and confirm:
+   - edit action disappears
+   - cancelled banner appears
+   - cancelled PDF watermark takes priority over edited watermark
+
+Do not rebuild the desktop EXE until the user confirms the browser/manual correction
+flow is correct. After approval: run tests, `collectstatic`, `build-desktop.bat`,
+then fully close and reopen the EXE.
