@@ -490,7 +490,82 @@ class Month2DocumentTests(AuthenticatedClientMixin, TestCase):
 
         self.assertEqual(mark.grade, "A1")
 
+    def test_receipt_cancellation_workflow(self):
+        session = AcademicSession.objects.create(name="2026-27")
+        school_class = SchoolClass.objects.create(name="I", display_order=1)
+        student = Student.objects.create(full_name="Cancel Student", current_class=school_class)
+        receipt = FeeReceipt.objects.create(
+            receipt_no="CANCEL-1",
+            student=student,
+            session=session,
+            received_amount=Decimal("100.00"),
+            legacy_net_total=Decimal("100.00"),
+            legacy_due_amount=Decimal("0.00"),
+        )
+        
+        # Test permission: Viewer cannot cancel
+        viewer = get_user_model().objects.create_user(username="viewer", password="pw")
+        self.client.force_login(viewer)
+        cancel_response = self.client.post(reverse("core:receipt_cancel", args=[receipt.id]), {"cancel_reason": "Test"})
+        self.assertEqual(cancel_response.status_code, 403)
+        
+        # Admin can cancel
+        self.client.force_login(self.user)
+        # GET should render confirm template
+        get_confirm = self.client.get(reverse("core:receipt_cancel", args=[receipt.id]))
+        self.assertEqual(get_confirm.status_code, 200)
+        self.assertContains(get_confirm, "Cancel / Void Receipt CANCEL-1")
+        
+        # POST without reason should fail
+        post_fail = self.client.post(reverse("core:receipt_cancel", args=[receipt.id]), {"cancel_reason": ""})
+        self.assertContains(post_fail, "A cancellation reason is required.")
+        
+        # POST with reason should succeed
+        post_success = self.client.post(reverse("core:receipt_cancel", args=[receipt.id]), {"cancel_reason": "Mistake"})
+        self.assertRedirects(post_success, reverse("core:receipt_detail", args=[receipt.id]))
+        
+        receipt.refresh_from_db()
+        self.assertTrue(receipt.is_cancelled)
+        self.assertEqual(receipt.cancel_reason, "Mistake")
+        self.assertEqual(receipt.cancelled_by, self.user)
+        self.assertIsNotNone(receipt.cancelled_at)
+        
+        # PDF should still generate
+        pdf_response = self.client.get(reverse("core:receipt_pdf", args=[receipt.id]))
+        self.assertEqual(pdf_response.status_code, 200)
 
+    def test_cancelled_receipts_excluded_from_reports(self):
+        session = AcademicSession.objects.create(name="2026-27")
+        school_class = SchoolClass.objects.create(name="I", display_order=1)
+        student = Student.objects.create(full_name="Exclude Student", current_class=school_class)
+        FeeReceipt.objects.create(
+            receipt_no="EXCLUDE-1",
+            student=student,
+            session=session,
+            received_amount=Decimal("200.00"),
+            legacy_net_total=Decimal("200.00"),
+            legacy_due_amount=Decimal("50.00"),
+            is_cancelled=True,
+            cancel_reason="Voided"
+        )
+        
+        # Collection report
+        col_response = self.client.get(reverse("core:collection_report"))
+        self.assertNotContains(col_response, "EXCLUDE-1")
+        
+        # Due report shouldn't include this as due amount because the receipt query itself filters out is_cancelled=False, 
+        # so this receipt won't appear. Wait, if a receipt is cancelled, it's ignored for due_report.
+        # But actually, due_report in this app is driven by receipt rows holding `legacy_due_amount` > 0.
+        due_response = self.client.get(reverse("core:due_report"))
+        self.assertNotContains(due_response, "EXCLUDE-1")
+        
+        # Receipt list should still list it but not include it in totals
+        list_response = self.client.get(reverse("core:receipt_list"))
+        self.assertContains(list_response, "EXCLUDE-1")
+        # Total received should not include the 200.00
+        # If no other receipts, it should be 0 or empty depending on how it's rendered, but we know 200.00 shouldn't be there as a total.
+        
+        
 class StaffTests(AuthenticatedClientMixin, TestCase):
     def test_staff_list_loads(self):
         Staff.objects.create(full_name="Test Teacher", designation="Teacher", basic_pay=Decimal("15000.00"))

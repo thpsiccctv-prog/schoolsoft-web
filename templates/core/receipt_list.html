@@ -8,7 +8,7 @@
     <div class="section-heading with-actions">
         <div>
             <h2>Fee Receipts</h2>
-            <p>{{ total_receipts }} migrated and manual receipts.</p>
+            <p>{{ total_receipts }} receipts{% if cancelled_count %} ({{ cancelled_count }} cancelled){% endif %}.</p>
         </div>
         <a class="button" href="{% url 'core:receipt_create' %}">New Receipt</a>
     </div>
@@ -87,18 +87,21 @@
             </thead>
             <tbody>
                 {% for receipt in page.object_list %}
-                    <tr onclick="window.location='{% url 'core:receipt_detail' receipt.id %}'" style="cursor: pointer;">
+                    <tr onclick="window.location='{% url 'core:receipt_detail' receipt.id %}'" style="cursor: pointer; {% if receipt.is_cancelled %}opacity: 0.6;{% endif %}">
                         <td data-label="Receipt" class="font-medium text-brand">
                             {{ receipt.receipt_no }}
+                            {% if receipt.is_cancelled %}
+                                <br><span style="font-size: 11px; background: #fee2e2; color: #b91c1c; padding: 2px 6px; border-radius: 4px; font-weight: 700;">CANCELLED</span>
+                            {% endif %}
                         </td>
-                        <td data-label="Date">{{ receipt.receipt_date|date:"d M Y" }}</td>
-                        <td data-label="Student">
+                        <td data-label="Date" {% if receipt.is_cancelled %}style="text-decoration: line-through;"{% endif %}>{{ receipt.receipt_date|date:"d M Y" }}</td>
+                        <td data-label="Student" {% if receipt.is_cancelled %}style="text-decoration: line-through;"{% endif %}>
                             {{ receipt.student.full_name }}
                         </td>
-                        <td data-label="Class">{{ receipt.student.current_class|default:"" }}{% if receipt.student.current_section %}-{{ receipt.student.current_section.name }}{% endif %}</td>
-                        <td data-label="Month">{{ receipt.from_month }}{% if receipt.to_month and receipt.to_month != receipt.from_month %} to {{ receipt.to_month }}{% endif %}</td>
-                        <td data-label="Paid" class="amount font-medium">{{ receipt.received_amount|indian_number }}</td>
-                        <td data-label="Due" class="amount{% if receipt.legacy_due_amount > 0 %} due-amount{% endif %}">{{ receipt.legacy_due_amount|indian_number }}</td>
+                        <td data-label="Class" {% if receipt.is_cancelled %}style="text-decoration: line-through;"{% endif %}>{{ receipt.student.current_class|default:"" }}{% if receipt.student.current_section %}-{{ receipt.student.current_section.name }}{% endif %}</td>
+                        <td data-label="Month" {% if receipt.is_cancelled %}style="text-decoration: line-through;"{% endif %}>{{ receipt.from_month }}{% if receipt.to_month and receipt.to_month != receipt.from_month %} to {{ receipt.to_month }}{% endif %}</td>
+                        <td data-label="Paid" class="amount font-medium" {% if receipt.is_cancelled %}style="text-decoration: line-through;"{% endif %}>{{ receipt.received_amount|indian_number }}</td>
+                        <td data-label="Due" class="amount{% if receipt.legacy_due_amount > 0 %} due-amount{% endif %}" {% if receipt.is_cancelled %}style="text-decoration: line-through;"{% endif %}>{{ receipt.legacy_due_amount|indian_number }}</td>
                         <td data-label="Action" class="text-right compact-actions" onclick="event.stopPropagation();">
                             <a class="action-link" href="{% url 'core:receipt_detail' receipt.id %}">View</a>
                         </td>

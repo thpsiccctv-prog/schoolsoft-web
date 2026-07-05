@@ -229,11 +229,18 @@ def build_fee_receipt_pdf(receipt, school_profile=None):
     # Add Watermark callback
     def add_watermark(canvas, doc):
         canvas.saveState()
-        canvas.setFont('Helvetica-Bold', 100)
-        canvas.setFillColor(colors.HexColor("#0f766e"), alpha=0.04)
-        canvas.translate(105*mm, 148*mm)
-        canvas.rotate(45)
-        canvas.drawCentredString(0, 0, "SCHOOLSOFT")
+        if receipt.is_cancelled:
+            canvas.setFont('Helvetica-Bold', 90)
+            canvas.setFillColor(colors.HexColor("#dc2626"), alpha=0.2)
+            canvas.translate(105*mm, 148*mm)
+            canvas.rotate(45)
+            canvas.drawCentredString(0, 0, "CANCELLED")
+        else:
+            canvas.setFont('Helvetica-Bold', 100)
+            canvas.setFillColor(colors.HexColor("#0f766e"), alpha=0.04)
+            canvas.translate(105*mm, 148*mm)
+            canvas.rotate(45)
+            canvas.drawCentredString(0, 0, "SCHOOLSOFT")
         canvas.restoreState()
 
     document.build(story, onFirstPage=add_watermark, onLaterPages=add_watermark)

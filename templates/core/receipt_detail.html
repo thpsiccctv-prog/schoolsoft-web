@@ -23,9 +23,26 @@
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px;vertical-align:middle"><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>
                 Print Receipt
             </button>
+            {% if access.receipts and not is_readonly and not receipt.is_cancelled %}
+                <a class="button danger" href="{% url 'core:receipt_cancel' receipt.id %}" style="margin-left: 12px; background: #dc2626; color: white; border-color: #b91c1c;">
+                    Cancel / Void
+                </a>
+            {% endif %}
         </div>
     </div>
 </section>
+
+{% if receipt.is_cancelled %}
+<section class="section no-print" style="margin-bottom: 20px;">
+    <div style="background: #fef2f2; border-left: 4px solid #ef4444; padding: 16px 20px; border-radius: 4px;">
+        <h3 style="margin: 0 0 8px 0; color: #b91c1c; font-size: 16px; font-weight: 700;">CANCELLED RECEIPT</h3>
+        <p style="margin: 0; color: #991b1b; font-size: 14px;">
+            <strong>Cancelled By:</strong> {{ receipt.cancelled_by.username|default:"System" }} on {{ receipt.cancelled_at|date:"d M Y h:i A" }}<br>
+            <strong>Reason:</strong> {{ receipt.cancel_reason }}
+        </p>
+    </div>
+</section>
+{% endif %}
 
 <section class="receipt-paper">
     <header class="receipt-header">
@@ -40,7 +57,9 @@
             {% else %}
                 <p>Legacy migration prototype</p>
             {% endif %}
-            <div class="receipt-title-badge">Fee Receipt</div>
+            <div class="receipt-title-badge" {% if receipt.is_cancelled %}style="background: #dc2626;"{% endif %}>
+                {% if receipt.is_cancelled %}VOID RECEIPT{% else %}Fee Receipt{% endif %}
+            </div>
         </div>
         <div class="receipt-number">
             <span>Receipt No.</span>
