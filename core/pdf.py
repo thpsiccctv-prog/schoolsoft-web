@@ -247,7 +247,7 @@ def build_fee_receipt_pdf(receipt, school_profile=None):
             canvas.setFont('Helvetica', 8)
             canvas.setFillColor(colors.HexColor("#b45309"))
             footer_text = f"Edited on {receipt.edited_at.strftime('%d-%m-%Y %H:%M')} by {receipt.edited_by.username if receipt.edited_by else 'System'}. Reason: {receipt.edit_reason}"
-            canvas.drawString(12*mm, 5*mm, footer_text)
+            canvas.drawString(12*mm, 12*mm, footer_text)
         else:
             canvas.setFont('Helvetica-Bold', 100)
             canvas.setFillColor(colors.HexColor("#0f766e"), alpha=0.04)
