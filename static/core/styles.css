@@ -4623,20 +4623,20 @@ th.amount,
 .action-btn:hover {
     background: var(--brand-050);
     border-color: var(--brand-500);
-    color: var(--brand-700);
+    color: var(--accent);
 }
 .action-btn svg {
     width: 18px;
     height: 18px;
 }
 .action-primary {
-    background: var(--brand-700);
-    border-color: var(--brand-700);
+    background: var(--accent);
+    border-color: var(--accent);
     color: #fff;
 }
 .action-primary:hover {
-    background: var(--brand-800);
-    border-color: var(--brand-800);
+    background: var(--accent-dark);
+    border-color: var(--accent-dark);
     color: #fff;
 }
 .action-secondary {
@@ -4789,7 +4789,7 @@ th.amount,
     font-weight: 500;
 }
 .student-list-page .text-brand {
-    color: var(--brand-700);
+    color: var(--accent);
 }
 .student-list-page .compact-actions {
     display: flex;
@@ -4804,7 +4804,7 @@ th.amount,
 }
 .student-list-page .action-link:hover {
     text-decoration: underline;
-    color: var(--brand-800);
+    color: var(--accent-dark);
 }
 
 /* ============================================================
@@ -4920,11 +4920,11 @@ th.amount,
     text-decoration: none;
 }
 .student-entry .entry-btn-primary {
-    background: var(--brand-700);
+    background: var(--accent);
     color: #fff;
 }
 .student-entry .entry-btn-primary:hover {
-    background: var(--brand-800);
+    background: var(--accent-dark);
 }
 .student-entry .entry-btn-secondary {
     background: #fff;
