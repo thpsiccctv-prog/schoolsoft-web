@@ -11,6 +11,8 @@ dist/
 debug-scripts/
 tmp/
 data.json
+render-db-url.txt
+sync-backups/
 git-out.txt
 *-out.txt
 External

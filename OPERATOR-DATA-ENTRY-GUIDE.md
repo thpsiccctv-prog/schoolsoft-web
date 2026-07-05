@@ -196,18 +196,44 @@ The online website is a copy/mirror for reporting.
 When online website needs to be updated:
 
 1. Stop making entries for a few minutes.
-2. Take backup of Desktop DB:
+2. Close SchoolSoft EXE completely.
+3. Take backup of Desktop DB:
 
    `C:\Users\Admin\AppData\Local\SchoolSoft\db.sqlite3`
 
-3. Ask the administrator/developer to run Desktop-to-Render sync.
-4. After sync, check online dashboard.
+4. Run this file from the project/app folder:
+
+   `sync-desktop-to-online.bat`
+
+5. First time only, it will ask for Render External Database URL.
+   Paste the URL that starts with:
+
+   `postgresql://...`
+
+   It will save this URL locally in:
+
+   `render-db-url.txt`
+
+   This file is ignored by Git and should not be shared publicly.
+
+6. The script will:
+
+   - Backup the Desktop DB into `sync-backups`
+   - Export fresh Desktop data into `data.json`
+   - Replace the online Render database with the Desktop data
+   - Print final counts
+
+7. After sync, open the online website and check the dashboard:
+
+   `https://schoolsoft-english-medium.onrender.com`
 
 Important:
 
 - Sync is not automatic.
 - Desktop entries do not instantly appear online.
 - Online entries do not come back to desktop automatically.
+- Sync direction is one-way: Desktop -> Online.
+- Do not run sync while operators are making entries.
 
 ## 9. What Not To Do
 
