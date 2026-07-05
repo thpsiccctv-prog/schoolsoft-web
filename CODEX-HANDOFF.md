@@ -957,8 +957,12 @@ Verification:
 
 Next Steps for Codex (URGENT):
 The local dev environment has been successfully imported, filtered, and verified. Now you must perform the exact same Yearly Import onto the Desktop EXE database and Render Production database.
-1. Backup the Desktop Database: `%LOCALAPPDATA%\SchoolSoft\db.sqlite3`
-2. Run cleanup script on Desktop DB to remove previous botched legacy `SF-*` receipts (DO NOT touch `MR-*`).
-3. Run `import_yearly_fees` on Desktop DB using the same CSVs from `yearly_exports`.
-4. Verify the Desktop App (EXE) runs and shows the correct filtered data.
-5. Finally, apply the exact same process to the Render PostgreSQL DB (Production).
+1. Backup the Desktop Database: `%LOCALAPPDATA%\SchoolSoft\db.sqlite3` (DONE)
+   - Backup Path: `C:\Users\Admin\AppData\Local\SchoolSoft\db.before_yearly_import_20260705_170828.sqlite3`
+2. Run cleanup script on Desktop DB to remove previous botched legacy `SF-*` receipts (DO NOT touch `MR-*`). (DONE - 2507 deleted)
+3. Run `import_yearly_fees` on Desktop DB using the same CSVs from `yearly_exports`. (DONE)
+   - Receipts imported: 11,161
+   - Duplicates found: 0
+   - Lines imported: 32,760
+4. Verify the Desktop App (EXE) runs and shows the correct filtered data. (PENDING USER VERIFICATION)
+5. Finally, apply the exact same process to the Render PostgreSQL DB (Production). (PENDING)
