@@ -548,3 +548,146 @@ Use these decisions:
    Save & Print, PDF/print, 1366x768 no horizontal overflow.
 10. Update CODEX-HANDOFF.md after completion.
 ~~~
+
+## 2026-07-05 Checkpoint - Fees, Receipt PDF, and Local Test Cleanup
+
+Latest confirmed commit before this handoff update:
+
+- `2d6b64a fix(pdf): keep dense fee receipts on one page`
+
+Current repo health at checkpoint:
+
+- `git status --short --branch` is clean against `origin/main`.
+- `static/core/styles.css` integrity check passed:
+  - line count around 4949
+  - braces 824/824
+  - `.student-entry` present
+  - `.fee-desk` present
+  - no truncated `.fee-desk .classic-fee-he` selector
+- Continue running `git diff HEAD --stat` and `git diff HEAD --ignore-all-space --stat`
+  after every commit because Antigravity previously reverted local working-tree
+  files to stale copies after successful commits.
+
+### Completed Since The Previous Checkpoint
+
+Fees module UI:
+
+- `35000a7` polished the Fee Collection page with the high-density `.fee-desk`
+  layout, rounded month chips, two-column desktop layout, sticky payable rail, and
+  primary `Save & Print (F9)` workflow.
+- `d37e366` reused existing premium components for Receipts List, Dues Report, and
+  Collection Report. This phase intentionally did not edit `styles.css`.
+
+Receipt PDF:
+
+- `core/pdf.py` receipt generation was compacted so dense receipts fit on one A4
+  page.
+- A regression test was added in `core/tests.py` to create a receipt with many fee
+  heads and assert the generated PDF stays at one page.
+- `.gitignore` now ignores local `tmp/` verification artifacts.
+- `manage.py test` passed 23/23 after the PDF fix.
+- Verified with Poppler `pdfinfo.exe`:
+  - old dense `SF-101` before fix: 2 pages
+  - fixed `SF-101`: 1 page
+  - desktop DB test receipt `MR-20260705090215`: 1 page
+- User verified visually in EXE and Adobe Reader that
+  `MR-20260705090215 (1).pdf` shows `1 / 1` and the signature/footer remain on the
+  same page.
+
+Local desktop test cleanup:
+
+- `MR-20260705090215` was a false/test receipt created only for checking the
+  one-page PDF behavior.
+- User deleted it through Django admin:
+  `Admin -> Core -> Fee receipts -> MR-20260705090215 -> Delete`.
+- Delete confirmation showed 1 `FeeReceipt` and 11 related `FeeReceiptLine` rows.
+- After deletion the desktop dashboard showed:
+  - receipts today: 0
+  - total dues: Rs. 3,27,350
+  - active students: 364
+  - total receipts: 664
+- This cleanup was local desktop DB work. Do not assume the same receipt existed on
+  Render/PostgreSQL unless separately verified.
+
+### Important Accounting Note
+
+For real receipts, prefer a future Cancel/Void workflow instead of hard delete.
+Hard delete is acceptable only for deliberate test/false entries while the system
+is still being tested. A production accounting system should preserve receipt
+history with cancelled status, cancellation reason, cancelled time, and cancelled
+by user.
+
+### Recommended Next Plan
+
+1. Add a proper `Cancel / Void Receipt` workflow before adding more fee-accounting
+   features.
+   - Add fields such as `is_cancelled`, `cancelled_at`, `cancelled_by`, and
+     `cancel_reason`.
+   - Show cancelled receipts clearly in the receipt register.
+   - Exclude or separately report cancelled receipts in dues, collection totals,
+     and dashboard KPIs.
+   - Keep an audit trail; do not delete real receipts.
+2. Improve the receipt detail/register actions:
+   - View
+   - PDF
+   - Print
+   - Void/Cancel, permission guarded
+3. Re-test role permissions after the void workflow:
+   - `fee_clerk` can create receipts and cancel only if allowed.
+   - `viewer` can view/print but cannot create, edit, delete, or cancel.
+4. Then continue modules in the agreed order:
+   - School Profile
+   - Fee Structure
+   - Marks
+   - Staff
+   - Transport
+5. Before building desktop EXE after any source/template/static change:
+   - verify git clean
+   - run tests
+   - run `collectstatic`
+   - run `build-desktop.bat`
+   - fully close and reopen the EXE
+
+### Prompt For Antigravity / Other AI
+
+```text
+You are joining the SchoolSoft modernization project at:
+D:\english medium\schoolsoft_web
+
+First read CODEX-HANDOFF.md completely. The latest important checkpoint is
+2026-07-05, with commit `2d6b64a fix(pdf): keep dense fee receipts on one page`.
+
+Current stable facts:
+- Desktop, web, PWA, users/permissions, Students module polish, Fees module polish,
+  and one-page receipt PDF fixes are already in place.
+- Active students are 364, total students are 1,213. Do not recalculate active
+  students as 596; active comes from TC/inactive status.
+- The false local test receipt `MR-20260705090215` was deleted from the desktop DB
+  through Django admin. This was a test cleanup, not a new feature.
+- Real receipts should not be hard-deleted in production. The next recommended
+  feature is a proper Cancel/Void Receipt workflow with audit trail.
+
+Before editing anything:
+1. Run `git status --short --branch`.
+2. Run `git diff HEAD --stat`.
+3. Run `git diff HEAD --ignore-all-space --stat`.
+4. Verify CSS integrity:
+   - `.student-entry` exists
+   - `.fee-desk` exists
+   - braces are balanced
+   - no truncated `.fee-desk .classic-fee-he` selector
+
+Critical rules:
+- Do not use shell append/cat >> for styles.css. Use file editor or apply_patch.
+- Do not touch `%LOCALAPPDATA%\SchoolSoft\db.sqlite3` unless explicitly asked.
+- Do not edit generated staticfiles/dist copies as source of truth.
+- Source files are under `templates/`, `static/core/`, and `core/`.
+- After CSS/template/source changes: run tests, collectstatic, rebuild EXE, close
+  and reopen the desktop app.
+- After every commit, verify `git status` and both diff commands again because the
+  local working tree has previously reverted to stale copies after successful commits.
+
+Recommended next task:
+Implement a safe Cancel/Void Receipt workflow, not a delete button, unless the user
+explicitly asks for test-data cleanup through Django admin.
+```
