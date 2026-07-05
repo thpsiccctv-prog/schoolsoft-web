@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% load schoolsoft_extras %}
+
+{% block title %}Cancel Receipt {{ receipt.receipt_no }} | SchoolSoft Modernization{% endblock %}
+
+{% block content %}
+<section class="section" style="max-width: 640px;">
+    <div class="section-heading">
+        <div>
+            <h2>Cancel / Void Receipt {{ receipt.receipt_no }}</h2>
+            <p>{{ receipt.student.full_name }} | {{ receipt.receipt_date|date:"d M Y" }} | Net &#8377;&nbsp;{{ receipt.legacy_net_total|indian_number }}</p>
+        </div>
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+            <p class="hint" style="color: #b91c1c;">{{ message }}</p>
+        {% endfor %}
+    {% endif %}
+
+    <div class="profile-card" style="border-color:#fca5a5; background:#fff1f2;">
+        <p style="margin-top:0;">
+            This does not delete the receipt. It marks it <strong>Cancelled</strong>, keeps a permanent audit
+            trail (who, when, why), and excludes it from Dues, Collection Report, and Dashboard totals.
+            The receipt stays visible in the register, clearly marked as cancelled.
+        </p>
+
+        <form method="post">
+            {% csrf_token %}
+            <label for="cancel_reason"><strong>Reason for cancellation (required)</strong></label>
+            <textarea id="cancel_reason" name="cancel_reason" rows="3" style="width:100%; margin-top:6px;" required placeholder="e.g. Entered against wrong student, duplicate entry, parent refund, etc."></textarea>
+
+            <div class="action-row" style="margin-top:16px;">
+                <a class="button secondary" href="{% url 'core:receipt_detail' receipt.pk %}">Back, don't cancel</a>
+                <button class="button danger" type="submit">Confirm Cancel / Void</button>
+            </div>
+        </form>
+    </div>
+</section>
+{% endblock %}

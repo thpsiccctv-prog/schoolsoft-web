@@ -50,9 +50,9 @@ def dashboard(request):
     school7_tables = audit_dir / "school7_mdb" / "tables_summary.csv"
     school7_columns = audit_dir / "school7_mdb" / "columns_summary.csv"
     today = timezone.localdate()
-    today_receipts = FeeReceipt.objects.filter(receipt_date=today)
+    today_receipts = FeeReceipt.objects.filter(receipt_date=today, is_cancelled=False)
     today_totals = today_receipts.aggregate(received=Sum("received_amount"))
-    total_dues = FeeReceipt.objects.aggregate(due=Sum("legacy_due_amount"))
+    total_dues = FeeReceipt.objects.filter(is_cancelled=False).aggregate(due=Sum("legacy_due_amount"))
     total_students = Student.objects.count()
     active_students = Student.objects.filter(is_active=True).count()
 
@@ -389,11 +389,12 @@ def receipt_list(request):
     if date_to:
         receipts = receipts.filter(receipt_date__lte=date_to)
 
-    totals = receipts.aggregate(
+    totals = receipts.filter(is_cancelled=False).aggregate(
         received=Sum("received_amount"),
         net=Sum("legacy_net_total"),
         due=Sum("legacy_due_amount"),
     )
+    cancelled_count = receipts.filter(is_cancelled=True).count()
     paginator = Paginator(receipts, 50)
     page = paginator.get_page(request.GET.get("page"))
 
@@ -408,6 +409,7 @@ def receipt_list(request):
         "payment_modes": FeeReceipt.PaymentMode.choices,
         "totals": totals,
         "total_receipts": receipts.count(),
+        "cancelled_count": cancelled_count,
     }
     return render(request, "core/receipt_list.html", context)
 
@@ -447,7 +449,7 @@ def get_due_report_rows(request):
         "student",
         "student__current_class",
         "student__current_section",
-    ).filter(legacy_due_amount__gt=0)
+    ).filter(legacy_due_amount__gt=0, is_cancelled=False)
 
     if query:
         receipts = receipts.filter(
@@ -562,6 +564,33 @@ def receipt_detail(request, pk):
     )
 
 
+def receipt_cancel(request, pk):
+    receipt = get_object_or_404(
+        FeeReceipt.objects.select_related("student", "session"),
+        pk=pk,
+    )
+
+    if receipt.is_cancelled:
+        messages.info(request, f"Receipt {receipt.receipt_no} is already cancelled.")
+        return redirect("core:receipt_detail", pk=receipt.pk)
+
+    if request.method == "POST":
+        reason = request.POST.get("cancel_reason", "").strip()
+        if not reason:
+            messages.error(request, "A cancellation reason is required.")
+            return render(request, "core/receipt_cancel_confirm.html", {"receipt": receipt})
+
+        receipt.is_cancelled = True
+        receipt.cancelled_at = timezone.now()
+        receipt.cancelled_by = request.user if request.user.is_authenticated else None
+        receipt.cancel_reason = reason
+        receipt.save(update_fields=["is_cancelled", "cancelled_at", "cancelled_by", "cancel_reason"])
+        messages.success(request, f"Receipt {receipt.receipt_no} has been cancelled/voided.")
+        return redirect("core:receipt_detail", pk=receipt.pk)
+
+    return render(request, "core/receipt_cancel_confirm.html", {"receipt": receipt})
+
+
 def receipt_pdf(request, pk):
     receipt = get_object_or_404(
         FeeReceipt.objects.select_related(
@@ -626,8 +655,8 @@ def get_collection_report_rows(request):
         'student',
         'student__current_class',
         'student__current_section',
-    ).order_by('receipt_date', 'receipt_no')
-    
+    ).filter(is_cancelled=False).order_by('receipt_date', 'receipt_no')
+
     date_from = None
     date_to = None
     

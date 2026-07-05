@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
@@ -190,6 +191,16 @@ class FeeReceipt(TimeStampedModel):
     legacy_net_total = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
     legacy_due_amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
     remarks = models.CharField(max_length=255, blank=True)
+    is_cancelled = models.BooleanField(default=False)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    cancelled_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="cancelled_receipts",
+        null=True,
+        blank=True,
+    )
+    cancel_reason = models.CharField(max_length=255, blank=True)
 
     class Meta:
         ordering = ["-receipt_date", "-id"]
