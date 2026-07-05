@@ -691,3 +691,68 @@ Recommended next task:
 Implement a safe Cancel/Void Receipt workflow, not a delete button, unless the user
 explicitly asks for test-data cleanup through Django admin.
 ```
+
+## 2026-07-05 Checkpoint - Cancel/Void Receipt Workflow Completed
+
+Completed commits:
+
+- `540b63d feat(fees): implement audit-trailed receipt cancellation with PDF watermark and UI updates`
+- `827d1fe fix(fees): include receipt cancellation backend and migration`
+
+Important correction:
+
+- Antigravity first committed only the UI/PDF/tests portion of the cancellation
+  work. The actual backend files (`core/models.py`, `core/views.py`, `core/urls.py`,
+  migration `0010_feereceipt_cancellation.py`, and
+  `templates/core/receipt_cancel_confirm.html`) were still uncommitted.
+- Codex verified this with `git status`, inspected the diffs, ran checks/tests, then
+  committed the missing backend/migration work separately in `827d1fe`.
+
+What the completed feature does:
+
+- Adds audit fields to `FeeReceipt`:
+  - `is_cancelled`
+  - `cancelled_at`
+  - `cancelled_by`
+  - `cancel_reason`
+- Adds route:
+  - `/receipts/<pk>/cancel/`
+- Adds cancellation confirmation screen requiring a reason.
+- Shows `Cancel / Void Receipt` on receipt detail only for write-capable receipt
+  users and only when the receipt is not already cancelled.
+- Shows a cancelled banner on receipt detail with reason, timestamp, and user.
+- Shows cancelled badge / muted row styling in receipt register.
+- Excludes cancelled receipts from:
+  - dashboard receipt/dues totals
+  - receipt register aggregate totals
+  - dues report source query
+  - collection report source query
+- Keeps cancelled receipts visible for audit instead of hard deleting.
+- Adds a large diagonal `CANCELLED` watermark to cancelled receipt PDFs.
+
+Verification:
+
+- `manage.py check` passed.
+- `manage.py makemigrations --check` passed with no new changes.
+- `manage.py test` passed 25/25.
+- Final post-push checks passed:
+  - `git status --short --branch` clean against `origin/main`
+  - `git diff HEAD --stat` empty
+  - `git diff HEAD --ignore-all-space --stat` empty
+  - CSS integrity: `.student-entry` present, `.fee-desk` present, braces balanced,
+    no truncated fee selector.
+
+Next manual verification before EXE rebuild:
+
+1. Run migrations on the target DB if needed.
+2. Create a small test receipt.
+3. Cancel it from receipt detail with a clear reason.
+4. Confirm receipt detail shows cancelled banner.
+5. Confirm receipt register shows cancelled badge.
+6. Download/open PDF and confirm `CANCELLED` watermark.
+7. Confirm Collection Report excludes the cancelled receipt.
+8. Confirm Dues/Dashboard totals behave as expected.
+
+Do not rebuild the desktop EXE until the user confirms this browser/manual flow is
+correct. After approval: run tests, `collectstatic`, `build-desktop.bat`, then fully
+close and reopen the EXE.
