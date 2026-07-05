@@ -930,12 +930,12 @@ Generated dry-run reports:
 
 Next steps, only after user approval:
 
-1. Review the four dry-run CSV reports, especially SID/name collisions.
-2. Back up local dev database.
+1. Review the four dry-run CSV reports, especially SID/name collisions. (DONE)
+2. Back up local dev database. (DONE)
 3. Clean only the previous botched legacy receipt import if approved. Do not touch
-   `MR-*` receipts, edited/cancelled test receipts, or current manual entries.
-4. Run actual yearly import on local dev only.
+   `MR-*` receipts, edited/cancelled test receipts, or current manual entries. (DONE - 667 deleted)
+4. Run actual yearly import on local dev only. (DONE - 11,161 imported)
 5. Verify dashboard, receipt register, dues, collection report, and old receipt
-   PDFs using snapshot fields.
+   PDFs using snapshot fields. (PENDING)
 6. Only after local verification, repeat the approved process for desktop DB and
-   then Render production.
+   then Render production. (PENDING)
