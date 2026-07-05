@@ -17,6 +17,7 @@ from .models import (
     SalaryPayment,
     SchoolClass,
     SchoolProfile,
+    Section,
     Staff,
     Student,
     StudentTransport,
@@ -283,7 +284,8 @@ class FeeReceiptTests(AuthenticatedClientMixin, TestCase):
     def test_manual_receipt_create(self):
         session = AcademicSession.objects.create(name="2026-27")
         school_class = SchoolClass.objects.create(name="I", display_order=1)
-        student = Student.objects.create(full_name="Test Student", current_class=school_class)
+        section = Section.objects.create(school_class=school_class, name="A")
+        student = Student.objects.create(full_name="Test Student", current_class=school_class, current_section=section)
         fee_head = FeeHead.objects.create(name="Tuition Fee")
 
         get_response = self.client.get(reverse("core:receipt_create"))
@@ -313,6 +315,19 @@ class FeeReceiptTests(AuthenticatedClientMixin, TestCase):
         self.assertEqual(receipt.receipt_no[:3], "MR-")
         self.assertEqual(receipt.legacy_net_total, Decimal("90.00"))
         self.assertEqual(receipt.lines.count(), 1)
+        self.assertEqual(receipt.student_name_snapshot, "Test Student")
+        self.assertEqual(receipt.class_snapshot, "I")
+        self.assertEqual(receipt.section_snapshot, "A")
+
+        student.full_name = "Changed Student"
+        student.current_class = SchoolClass.objects.create(name="II", display_order=2)
+        student.current_section = Section.objects.create(school_class=student.current_class, name="B")
+        student.save()
+
+        detail_response = self.client.get(reverse("core:receipt_detail", args=[receipt.id]))
+        self.assertContains(detail_response, "Test Student")
+        self.assertContains(detail_response, "I-A")
+        self.assertNotContains(detail_response, "Changed Student")
 
     def test_student_fee_defaults_api(self):
         session = AcademicSession.objects.create(name="2026-27")

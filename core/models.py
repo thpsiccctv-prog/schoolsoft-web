@@ -180,6 +180,10 @@ class FeeReceipt(TimeStampedModel):
     receipt_no = models.CharField(max_length=30, unique=True)
     student = models.ForeignKey(Student, on_delete=models.PROTECT, related_name="fee_receipts")
     session = models.ForeignKey(AcademicSession, on_delete=models.PROTECT, related_name="fee_receipts")
+    student_name_snapshot = models.CharField(max_length=120, blank=True)
+    father_name_snapshot = models.CharField(max_length=120, blank=True)
+    class_snapshot = models.CharField(max_length=30, blank=True)
+    section_snapshot = models.CharField(max_length=10, blank=True)
     receipt_date = models.DateField(default=timezone.localdate)
     from_month = models.CharField(max_length=25, blank=True)
     to_month = models.CharField(max_length=25, blank=True)
@@ -227,6 +231,34 @@ class FeeReceipt(TimeStampedModel):
     @property
     def payable_amount(self):
         return self.line_total + self.late_fee_amount - self.concession_amount
+
+    @property
+    def display_student_name(self):
+        return self.student_name_snapshot or self.student.full_name
+
+    @property
+    def display_father_name(self):
+        return self.father_name_snapshot or self.student.father_name
+
+    @property
+    def display_class_name(self):
+        if self.class_snapshot:
+            return self.class_snapshot
+        return self.student.current_class.name if self.student.current_class else ""
+
+    @property
+    def display_section_name(self):
+        if self.section_snapshot:
+            return self.section_snapshot
+        return self.student.current_section.name if self.student.current_section else ""
+
+    @property
+    def display_class_section(self):
+        class_name = self.display_class_name
+        section_name = self.display_section_name
+        if class_name and section_name:
+            return f"{class_name}-{section_name}"
+        return class_name or section_name
 
     def __str__(self):
         return self.receipt_no

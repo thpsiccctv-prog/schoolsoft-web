@@ -106,18 +106,14 @@ def build_fee_receipt_pdf(receipt, school_profile=None):
     story.extend([header_table, Spacer(1, 5 * mm)])
 
     student = receipt.student
-    class_label = ""
-    if student.current_class:
-        class_label = student.current_class.name
-    if student.current_section:
-        class_label = f"{class_label}-{student.current_section.name}" if class_label else student.current_section.name
+    class_label = receipt.display_class_section
 
     month_label = receipt.from_month
     if receipt.to_month and receipt.to_month != receipt.from_month:
         month_label = f"{receipt.from_month} to {receipt.to_month}"
 
     meta = [
-        ["Student Name", student.full_name, "Date", receipt.receipt_date.strftime("%d-%m-%Y")],
+        ["Student Name", receipt.display_student_name, "Date", receipt.receipt_date.strftime("%d-%m-%Y")],
         ["SID / Admn", f"{student.legacy_sid or ''} / {student.admission_no or ''}", "Class", class_label],
         ["Fee Month", month_label, "Mode", receipt.get_payment_mode_display()],
     ]
@@ -1063,16 +1059,12 @@ def build_collection_report_pdf(rows, totals, date_from_str, date_to_str, school
     ]
 
     for row in rows:
-        c_name = row.student.current_class.name if row.student.current_class else ""
-        s_name = row.student.current_section.name if row.student.current_section else ""
-        class_str = f"{c_name}-{s_name}" if s_name else c_name
-        
         table_data.append([
             row.receipt_date.strftime("%d-%m-%Y"),
             row.receipt_no,
             str(row.student.legacy_sid),
-            row.student.full_name[:20],
-            class_str,
+            row.display_student_name[:20],
+            row.display_class_section,
             row.get_payment_mode_display(),
             str(row.legacy_net_total),
             str(row.received_amount),

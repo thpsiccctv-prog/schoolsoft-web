@@ -175,8 +175,8 @@
                         <tr>
                             <td><a class="table-link" href="{% url 'core:receipt_detail' receipt.id %}">{{ receipt.receipt_no }}</a></td>
                             <td>{{ receipt.receipt_date|date:"d-m-Y" }}</td>
-                            <td>{{ receipt.student.full_name }}</td>
-                            <td>{{ receipt.student.current_class|default:"" }}{% if receipt.student.current_section %}-{{ receipt.student.current_section.name }}{% endif %}</td>
+                            <td>{{ receipt.display_student_name }}</td>
+                            <td>{{ receipt.display_class_section }}</td>
                             <td class="amount">{{ receipt.received_amount }}</td>
                             <td class="amount{% if receipt.legacy_due_amount > 0 %} due-amount{% endif %}">{{ receipt.legacy_due_amount }}</td>
                         </tr>

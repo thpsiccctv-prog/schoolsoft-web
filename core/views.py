@@ -46,6 +46,14 @@ def get_active_school_profile():
     return SchoolProfile.objects.filter(is_active=True).first()
 
 
+def apply_receipt_student_snapshot(receipt):
+    student = receipt.student
+    receipt.student_name_snapshot = student.full_name or ""
+    receipt.father_name_snapshot = student.father_name or ""
+    receipt.class_snapshot = student.current_class.name if student.current_class else ""
+    receipt.section_snapshot = student.current_section.name if student.current_section else ""
+
+
 def dashboard(request):
     audit_dir = settings.BASE_DIR.parent / "migration_audit"
     school7_tables = audit_dir / "school7_mdb" / "tables_summary.csv"
@@ -517,6 +525,7 @@ def receipt_create(request):
                     receipt.legacy_net_total - receipt.received_amount,
                     Decimal("0.00"),
                 )
+                apply_receipt_student_snapshot(receipt)
                 receipt.save()
 
                 for fee_head, amount in line_form.amounts():
@@ -612,7 +621,9 @@ def receipt_edit(request, pk):
                 # Capture before snapshot
                 before_snapshot = {
                     "receipt_no": original_receipt.receipt_no,
-                    "student": original_receipt.student.full_name,
+                    "student": original_receipt.display_student_name,
+                    "father_name": original_receipt.display_father_name,
+                    "class": original_receipt.display_class_section,
                     "session": original_receipt.session.name,
                     "receipt_date": str(original_receipt.receipt_date),
                     "from_month": original_receipt.from_month,
@@ -645,6 +656,7 @@ def receipt_edit(request, pk):
                     updated_receipt.legacy_net_total - updated_receipt.received_amount,
                     Decimal("0.00"),
                 )
+                apply_receipt_student_snapshot(updated_receipt)
                 
                 # Update audit fields
                 updated_receipt.is_edited = True
@@ -656,7 +668,9 @@ def receipt_edit(request, pk):
                 # Capture after snapshot
                 after_snapshot = {
                     "receipt_no": updated_receipt.receipt_no,
-                    "student": updated_receipt.student.full_name,
+                    "student": updated_receipt.display_student_name,
+                    "father_name": updated_receipt.display_father_name,
+                    "class": updated_receipt.display_class_section,
                     "session": updated_receipt.session.name,
                     "receipt_date": str(updated_receipt.receipt_date),
                     "from_month": updated_receipt.from_month,

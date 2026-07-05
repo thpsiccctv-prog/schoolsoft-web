@@ -837,3 +837,105 @@ Next manual verification before EXE rebuild:
 Do not rebuild the desktop EXE until the user confirms the browser/manual correction
 flow is correct. After approval: run tests, `collectstatic`, `build-desktop.bat`,
 then fully close and reopen the EXE.
+
+## Yearly Legacy Fee Import Planning - Snapshot + Dry-Run Checkpoint (2026-07-05)
+
+User clarified that legacy data is split across yearly folders:
+
+- `D:\english medium\1` through `D:\english medium\9`
+- each yearly folder contains a `SCHOOL7.mdb`
+- subfolders inside those yearly folders should be ignored
+- exported CSVs are under `D:\english medium\migration_audit\yearly_exports`
+
+Important: do not import or delete production/local data until the user explicitly
+approves after reviewing the dry-run reports.
+
+Implemented source changes:
+
+- Added `FeeReceipt` snapshot fields:
+  - `student_name_snapshot`
+  - `father_name_snapshot`
+  - `class_snapshot`
+  - `section_snapshot`
+- Added display fallback properties on `FeeReceipt`:
+  - `display_student_name`
+  - `display_father_name`
+  - `display_class_name`
+  - `display_section_name`
+  - `display_class_section`
+- Receipt create/edit now stores snapshots from the current student.
+- Receipt detail/list/recent receipts/collection report/PDF now prefer snapshot
+  values and fall back to the live student relation.
+- Created migration:
+  - `core/migrations/0012_feereceipt_class_snapshot_and_more.py`
+- Improved `core/management/commands/import_yearly_fees.py`:
+  - keeps receipt snapshots from legacy CSV rows
+  - reports unique missing SIDs, not only per-receipt misses
+  - reports SID/name collisions
+  - reports generated receipt number collisions
+  - reports session-wise receipts/lines/paid/net/due
+  - writes CSV audit reports to:
+    `D:\english medium\migration_audit\yearly_import_reports`
+
+Local dev schema status:
+
+- Migration `0012` has been applied to local dev SQLite only.
+- No yearly import has been performed.
+- No cleanup/delete of existing receipts has been performed.
+
+Validation:
+
+- `manage.py makemigrations --check` passed.
+- `manage.py check` passed.
+- `manage.py test` passed 26/26.
+- Dry-run command completed:
+  - `.\.venv\Scripts\python.exe manage.py import_yearly_fees --dry-run`
+
+Dry-run summary:
+
+- `receipts_seen`: 11,162
+- `receipts_imported`: 11,161
+- `receipts_skipped`: 1
+- `missing_students`: 5,966 per receipt references
+- `missing_students_unique`: 596 distinct legacy SIDs
+- `placeholder_students_created`: 5,966 in dry-run accounting
+- `placeholder_students_unique`: 596 distinct placeholders
+- `lines_imported`: 32,760
+- `sum_paid`: Rs. 1,95,05,735.00
+- `sum_net`: Rs. 2,91,25,720.00
+- `sum_due`: Rs. 96,22,915.00
+- `duplicates_found`: 0
+- `sid_name_collisions`: 93
+
+Session-wise dry-run stats:
+
+| Session | Receipts | Lines | Missing unique SIDs | Paid | Net | Due |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 2018-19 | 1413 | 3928 | 1 | 2613000.00 | 2964370.00 | 351370.00 |
+| 2019-20 | 1395 | 5252 | 133 | 3167250.00 | 4243250.00 | 1076000.00 |
+| 2020-21 | 396 | 752 | 46 | 584650.00 | 1050250.00 | 468450.00 |
+| 2021-22 | 1491 | 3481 | 136 | 1362920.00 | 1965475.00 | 602555.00 |
+| 2022-23 | 2155 | 5754 | 214 | 3060115.00 | 4470520.00 | 1410405.00 |
+| 2023-24 | 1681 | 5009 | 258 | 2545730.00 | 3697175.00 | 1151475.00 |
+| 2024-25 | 1394 | 4488 | 280 | 2897800.00 | 4705250.00 | 1807500.00 |
+| 2025-26 | 1135 | 3787 | 276 | 2913020.00 | 5452480.00 | 2539460.00 |
+| 2026-27 | 101 | 309 | 90 | 361250.00 | 576950.00 | 215700.00 |
+
+Generated dry-run reports:
+
+- `D:\english medium\migration_audit\yearly_import_reports\session_stats.csv`
+- `D:\english medium\migration_audit\yearly_import_reports\missing_student_sids.csv`
+- `D:\english medium\migration_audit\yearly_import_reports\sid_name_collisions.csv`
+- `D:\english medium\migration_audit\yearly_import_reports\receipt_no_collisions.csv`
+
+Next steps, only after user approval:
+
+1. Review the four dry-run CSV reports, especially SID/name collisions.
+2. Back up local dev database.
+3. Clean only the previous botched legacy receipt import if approved. Do not touch
+   `MR-*` receipts, edited/cancelled test receipts, or current manual entries.
+4. Run actual yearly import on local dev only.
+5. Verify dashboard, receipt register, dues, collection report, and old receipt
+   PDFs using snapshot fields.
+6. Only after local verification, repeat the approved process for desktop DB and
+   then Render production.

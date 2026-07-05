@@ -8,7 +8,7 @@
     <div class="section-heading with-actions" style="background: #fff; padding: 16px 24px; border-radius: 8px; border: 1px solid #e2e8f0;">
         <div>
             <h2 style="margin: 0; font-size: 20px; font-weight: 700; color: #0f172a;">Receipt {{ receipt.receipt_no }}</h2>
-            <p style="margin: 4px 0 0; color: #64748b; font-size: 13px;">{{ receipt.student.full_name }} | {{ receipt.receipt_date|date:"d M Y" }}</p>
+            <p style="margin: 4px 0 0; color: #64748b; font-size: 13px;">{{ receipt.display_student_name }} | {{ receipt.receipt_date|date:"d M Y" }}</p>
         </div>
         <div class="action-row">
             <a class="button secondary" href="{% url 'core:receipt_list' %}">
@@ -83,7 +83,7 @@
     <div class="receipt-meta">
         <div>
             <span>Student Name</span>
-            <strong>{{ receipt.student.full_name }}</strong>
+            <strong>{{ receipt.display_student_name }}</strong>
         </div>
         <div>
             <span>SID / Admission No.</span>
@@ -91,7 +91,7 @@
         </div>
         <div>
             <span>Class</span>
-            <strong>{{ receipt.student.current_class|default:"" }}{% if receipt.student.current_section %}-{{ receipt.student.current_section.name }}{% endif %}</strong>
+            <strong>{{ receipt.display_class_section }}</strong>
         </div>
         <div>
             <span>Date</span>

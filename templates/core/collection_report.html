@@ -96,10 +96,10 @@
                             {{ row.receipt_no }}
                         </td>
                         <td data-label="SID">{{ row.student.legacy_sid }}</td>
-                        <td data-label="Student" class="font-medium">{{ row.student.full_name }}</td>
+                        <td data-label="Student" class="font-medium">{{ row.display_student_name }}</td>
                         <td data-label="Class">
                             <span class="status-badge status-active">
-                                {{ row.student.current_class.name }}{% if row.student.current_section.name %}-{{ row.student.current_section.name }}{% endif %}
+                                {{ row.display_class_section }}
                             </span>
                         </td>
                         <td data-label="Mode">{{ row.get_payment_mode_display }}</td>
