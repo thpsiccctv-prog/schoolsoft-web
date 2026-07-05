@@ -966,3 +966,48 @@ The local dev environment has been successfully imported, filtered, and verified
    - Lines imported: 32,760
 4. Verify the Desktop App (EXE) runs and shows the correct filtered data. (PENDING USER VERIFICATION)
 5. Finally, apply the exact same process to the Render PostgreSQL DB (Production). (PENDING)
+
+## 2026-07-05 Checkpoint - Desktop and Render Data Mirror Verified
+
+Current verified state:
+
+- Desktop EXE database remains the primary source of truth:
+  `C:\Users\Admin\AppData\Local\SchoolSoft\db.sqlite3`
+- Render production PostgreSQL has now been refreshed from the real Desktop EXE
+  database, not the local development `db.sqlite3`.
+- The online dashboard at `https://schoolsoft-english-medium.onrender.com`
+  was verified by screenshot after refresh.
+
+Verified dashboard numbers after Render sync:
+
+- Active Students: 364
+- Total Students: 1,215
+- Current Session Receipts: 101
+- Total Dues: Rs. 2,15,700
+- Today's Collection: Rs. 0
+- Receipts Today: 0
+
+Important operational rule:
+
+- Daily real entries must be made in the Desktop EXE only.
+- The Render website is secondary: mobile/report viewing and online backup.
+- There is no automatic two-way sync between Desktop and Render.
+- To update Render later, repeat the safe desktop-to-Render sync process from the
+  Desktop EXE database.
+
+Render sync notes:
+
+- A previous attempt accidentally used the local development database export.
+- This was corrected by exporting/loading from the Desktop EXE database under
+  `%LOCALAPPDATA%\SchoolSoft\db.sqlite3`.
+- After correction, Desktop and Render dashboards matched.
+
+Pending cleanup:
+
+- Generated local data dump files are present in the working tree and should not
+  be committed unless deliberately needed:
+  - `core_data.json`
+  - `desktop_data.json`
+  - `full_data.json`
+  - `legacy_data.json`
+  - `scratch_css_matches.txt`
