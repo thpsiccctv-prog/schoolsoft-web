@@ -49,7 +49,8 @@ echo.
 choice /C YN /M "Kya aap online database ko Desktop data se update karna chahte hain"
 if errorlevel 2 goto :cancel
 
-if not exist "render-db-url.txt" (
+if exist "render-db-url.txt" goto :read_url
+
     echo.
     echo Render ka External Database URL paste kijiye.
     echo URL render-db-url.txt me local machine par save hoga.
@@ -58,23 +59,30 @@ if not exist "render-db-url.txt" (
     for /f "tokens=* delims= " %%A in ("%DATABASE_URL%") do set "DATABASE_URL=%%A"
     if "%DATABASE_URL%"=="" goto :fail
     >"render-db-url.txt" echo %DATABASE_URL%
-) else (
+    goto :check_url
+
+:read_url
     for /f "usebackq delims=" %%A in ("render-db-url.txt") do set "DATABASE_URL=%%A"
     for /f "tokens=* delims= " %%A in ("%DATABASE_URL%") do set "DATABASE_URL=%%A"
-)
+
+:check_url
 
 if "%DATABASE_URL%"=="" (
     echo ERROR: DATABASE_URL blank hai.
     >>"%SYNC_LOG%" echo ERROR: DATABASE_URL blank hai.
     goto :fail
 )
-echo "%DATABASE_URL%" | findstr /B /I /C:"postgresql://" /C:"postgres://" >nul
-if errorlevel 1 (
+set "PREFIX_13=%DATABASE_URL:~0,13%"
+set "PREFIX_11=%DATABASE_URL:~0,11%"
+if /I "%PREFIX_13%"=="postgresql://" goto :valid_url
+if /I "%PREFIX_11%"=="postgres://" goto :valid_url
+
     echo ERROR: URL postgresql:// ya postgres:// se start nahi ho raha.
     echo render-db-url.txt delete karke sahi External Database URL paste kijiye.
     >>"%SYNC_LOG%" echo ERROR: invalid database URL prefix.
     goto :fail
-)
+
+:valid_url
 set "RENDER_DATABASE_URL=%DATABASE_URL%"
 
 echo.
