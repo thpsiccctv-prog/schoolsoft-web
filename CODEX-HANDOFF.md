@@ -1011,3 +1011,15 @@ Pending cleanup:
   - `full_data.json`
   - `legacy_data.json`
   - `scratch_css_matches.txt`
+## Latest Daily Update - 06 July 2026
+
+Before continuing Accounts/Cash Book work, read:
+
+- `WORK-UPDATE-2026-07-06.md`
+
+This new daily update summarizes:
+- Desktop-to-Online sync BAT fix.
+- Accounts/Cash Book Phase 1 MVP.
+- Daily Expense, Voucher Register, Voucher Cancel, Cash Book, Ledger Master.
+- Staff Advance dropdown behavior in Daily Expense.
+- Tests run and current pending commit/build steps.
