@@ -38,8 +38,13 @@
                     {{ form.amount }}
                 </div>
                 <div class="form-group">
-                    <label>Party Name</label>
-                    {{ form.paid_to_or_received_from }}
+                    <label>Party Name / Staff</label>
+                    <div id="paid-to-text-container">
+                        {{ form.paid_to_or_received_from }}
+                    </div>
+                    <div id="staff-select-container" style="display:none;">
+                        {{ form.staff }}
+                    </div>
                 </div>
             </div>
             <div class="form-group">
@@ -62,4 +67,38 @@
         </form>
     </div>
 </div>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const debitSelect = document.getElementById("id_debit_account");
+    const creditSelect = document.getElementById("id_credit_account");
+    const paidTextInput = document.getElementById("id_paid_to_or_received_from");
+    const staffSelectInput = document.getElementById("id_staff");
+    
+    const paidToContainer = document.getElementById("paid-to-text-container");
+    const staffContainer = document.getElementById("staff-select-container");
+
+    if (!debitSelect || !creditSelect) return;
+
+    function updatePaidToMode() {
+        const debitText = debitSelect.options[debitSelect.selectedIndex]?.text || "";
+        const creditText = creditSelect.options[creditSelect.selectedIndex]?.text || "";
+        const isStaffAdvance = debitText.trim().toLowerCase() === "staff advance" || creditText.trim().toLowerCase() === "staff advance";
+
+        if (isStaffAdvance) {
+            paidToContainer.style.display = "none";
+            staffContainer.style.display = "";
+            if (paidTextInput.value && !staffSelectInput.value) {
+                // Keep staff field empty if not matched, user will select
+            }
+        } else {
+            staffContainer.style.display = "none";
+            paidToContainer.style.display = "";
+        }
+    }
+
+    debitSelect.addEventListener("change", updatePaidToMode);
+    creditSelect.addEventListener("change", updatePaidToMode);
+    updatePaidToMode();
+});
+</script>
 {% endblock %}

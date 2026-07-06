@@ -1481,9 +1481,7 @@ def expense_create(request):
         initial = {"credit_account": _get_cash_account()}
         form = VoucherForm(initial=initial, voucher_kind="expense")
 
-    staff_names = Staff.objects.filter(is_active=True).order_by("full_name").values_list("full_name", flat=True)
-    return render(request, "core/expense_form.html", {"form": form, "staff_names": staff_names})
-
+    return render(request, "core/expense_form.html", {"form": form})
 
 @login_required
 @permission_required('core.access_accounts', raise_exception=True)
@@ -1818,11 +1816,14 @@ def cash_book(request):
         
     for v in vouchers:
         is_in = v.debit_account == cash_ledger
+        party_name = v.staff.full_name if v.staff else v.paid_to_or_received_from
+        head_name = v.credit_account.name if is_in else v.debit_account.name
+        desc_bits = [part for part in [head_name, party_name, v.narration] if part]
         lines.append({
             "type": "VOUCHER",
             "ref": v,
             "ref_no": v.voucher_no,
-            "desc": v.narration or (v.credit_account.name if is_in else v.debit_account.name),
+            "desc": " - ".join(desc_bits),
             "in_amt": v.amount if is_in else Decimal("0.00"),
             "out_amt": Decimal("0.00") if is_in else v.amount,
             "sort_key": v.created_at

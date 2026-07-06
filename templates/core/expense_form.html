@@ -38,14 +38,13 @@
                 </div>
                 <div class="form-group">
                     <label>Paid To</label>
-                    {{ form.paid_to_or_received_from }}
-                    <select id="staff-paid-to-select" class="form-control" style="display:none;">
-                        <option value="">Select staff</option>
-                        {% for staff_name in staff_names %}
-                            <option value="{{ staff_name }}">{{ staff_name }}</option>
-                        {% endfor %}
-                    </select>
-                    <small>Staff Advance ke liye staff ka naam list se select karein.</small>
+                    <div id="paid-to-text-container">
+                        {{ form.paid_to_or_received_from }}
+                    </div>
+                    <div id="staff-select-container" style="display:none;">
+                        {{ form.staff }}
+                        <small>Staff Advance ke liye staff ka naam select karein.</small>
+                    </div>
                 </div>
             </div>
             <div class="form-group">
@@ -67,37 +66,29 @@
 <script>
 document.addEventListener("DOMContentLoaded", function () {
     const debitSelect = document.getElementById("id_debit_account");
-    const paidInput = document.getElementById("id_paid_to_or_received_from");
-    const staffSelect = document.getElementById("staff-paid-to-select");
+    const paidTextInput = document.getElementById("id_paid_to_or_received_from");
+    const staffSelectInput = document.getElementById("id_staff");
+    
+    const paidToContainer = document.getElementById("paid-to-text-container");
+    const staffContainer = document.getElementById("staff-select-container");
 
-    if (!debitSelect || !paidInput || !staffSelect) {
-        return;
-    }
-
-    function syncStaffSelectFromInput() {
-        const currentValue = paidInput.value || "";
-        for (const option of staffSelect.options) {
-            option.selected = option.value === currentValue;
-        }
-    }
+    if (!debitSelect) return;
 
     function updatePaidToMode() {
         const selectedText = debitSelect.options[debitSelect.selectedIndex]?.text || "";
-        const isStaffAdvance = selectedText.toLowerCase().includes("staff advance");
+        const isStaffAdvance = selectedText.trim().toLowerCase() === "staff advance";
 
         if (isStaffAdvance) {
-            syncStaffSelectFromInput();
-            paidInput.style.display = "none";
-            staffSelect.style.display = "";
+            paidToContainer.style.display = "none";
+            staffContainer.style.display = "";
+            paidTextInput.value = ""; // clear text
         } else {
-            staffSelect.style.display = "none";
-            paidInput.style.display = "";
+            staffContainer.style.display = "none";
+            paidToContainer.style.display = "";
+            staffSelectInput.value = ""; // clear staff
         }
     }
 
-    staffSelect.addEventListener("change", function () {
-        paidInput.value = staffSelect.value;
-    });
     debitSelect.addEventListener("change", updatePaidToMode);
     updatePaidToMode();
 });

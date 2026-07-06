@@ -1250,9 +1250,10 @@ def build_voucher_pdf(voucher, school_profile=None):
 
     # Main details
     party_label = "Paid To" if voucher.voucher_type == "CPMT" else "Received From"
+    party_name = voucher.staff.full_name if voucher.staff else voucher.paid_to_or_received_from
     
     details_data = [
-        [f"{party_label}:", voucher.paid_to_or_received_from or "-"],
+        [f"{party_label}:", party_name or "-"],
         ["Debit Head:", voucher.debit_account.name],
         ["Credit Head:", voucher.credit_account.name],
         ["Amount:", f"Rs. {money(voucher.amount)}"],

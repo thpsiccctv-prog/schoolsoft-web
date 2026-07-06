@@ -264,6 +264,7 @@ class VoucherForm(forms.ModelForm):
             "credit_account",
             "amount",
             "paid_to_or_received_from",
+            "staff",
             "narration",
             "physical_slip_no",
         ]
@@ -295,6 +296,9 @@ class VoucherForm(forms.ModelForm):
             self.fields["debit_account"].empty_label = None
             self.fields["credit_account"].empty_label = "Select income head"
 
+        self.fields["staff"].queryset = Staff.objects.filter(is_active=True)
+        self.fields["staff"].empty_label = "Select staff"
+
         for field in self.fields.values():
             field.widget.attrs.setdefault("class", "form-control")
 
@@ -306,6 +310,7 @@ class VoucherForm(forms.ModelForm):
         cleaned_data = super().clean()
         debit_account = cleaned_data.get("debit_account")
         credit_account = cleaned_data.get("credit_account")
+        staff = cleaned_data.get("staff")
 
         if self.voucher_kind == "expense":
             if credit_account and not credit_account.is_cash_or_bank:
@@ -315,6 +320,13 @@ class VoucherForm(forms.ModelForm):
                 is_advance = debit_account.group.name.lower() == "advance given"
                 if not (is_expense or is_advance):
                     self.add_error("debit_account", "Expense / Advance Head me Expense ya Advance Given ledger select kijiye.")
+                if debit_account.name.lower() == "staff advance":
+                    if not staff:
+                        self.add_error("staff", "Staff Advance ke liye staff select kijiye.")
+                    else:
+                        cleaned_data["paid_to_or_received_from"] = staff.full_name
+                else:
+                    cleaned_data["staff"] = None
         elif self.voucher_kind == "receipt":
             if debit_account and not debit_account.is_cash_or_bank:
                 self.add_error("debit_account", "Receipt me paisa Cash/Bank account me hi aayega.")
@@ -322,6 +334,14 @@ class VoucherForm(forms.ModelForm):
                 self.add_error("credit_account", "Income Head me sirf Income ledger select kijiye.")
 
         return cleaned_data
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        if instance.staff_id:
+            instance.paid_to_or_received_from = instance.staff.full_name
+        if commit:
+            instance.save()
+        return instance
 
 
 class VoucherEditForm(VoucherForm):

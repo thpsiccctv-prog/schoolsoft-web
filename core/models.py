@@ -726,6 +726,11 @@ class Voucher(TimeStampedModel):
         max_length=30, blank=True,
         help_text="Optional physical voucher pad reference number.",
     )
+    staff = models.ForeignKey(
+        'core.Staff', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="vouchers",
+        help_text="Linked staff member for salary and staff advance.",
+    )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
         related_name="created_vouchers", null=True, blank=True,

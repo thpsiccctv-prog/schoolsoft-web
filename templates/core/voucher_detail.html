@@ -31,7 +31,7 @@
             <div><strong>Physical Slip:</strong> {{ voucher.physical_slip_no|default:"-" }}</div>
             <div><strong>Debit Head:</strong> {{ voucher.debit_account.name }}</div>
             <div><strong>Credit Head:</strong> {{ voucher.credit_account.name }}</div>
-            <div style="grid-column: 1/-1;"><strong>Party Name:</strong> {{ voucher.paid_to_or_received_from|default:"-" }}</div>
+            <div style="grid-column: 1/-1;"><strong>Party Name / Staff:</strong> {% if voucher.staff %}{{ voucher.staff.full_name }}{% else %}{{ voucher.paid_to_or_received_from|default:"-" }}{% endif %}</div>
             <div style="grid-column: 1/-1;"><strong>Narration:</strong> {{ voucher.narration|default:"-" }}</div>
             <div style="grid-column: 1/-1; color:var(--text-muted); font-size:0.875rem;">
                 Created by {{ voucher.created_by.username|default:"System" }} on {{ voucher.created_at }}

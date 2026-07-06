@@ -5,7 +5,9 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
+from .forms import VoucherForm
 from .models import (
+    AccountGroup,
     AcademicSession,
     ExamMark,
     ExamTerm,
@@ -14,6 +16,7 @@ from .models import (
     FeeReceipt,
     FeeReceiptLine,
     FeeStructure,
+    LedgerAccount,
     SalaryPayment,
     SchoolClass,
     SchoolProfile,
@@ -25,6 +28,7 @@ from .models import (
     TransferCertificate,
     TransportBus,
     TransportRoute,
+    Voucher,
 )
 
 
@@ -635,6 +639,72 @@ class Month2DocumentTests(AuthenticatedClientMixin, TestCase):
         self.assertEqual(log.changes["received_amount"]["after"], "150.00")
         
         
+class AccountsTests(AuthenticatedClientMixin, TestCase):
+    def setUp(self):
+        super().setUp()
+        self.session = AcademicSession.objects.create(
+            name="2026-27",
+            starts_on="2026-04-01",
+            ends_on="2027-03-31",
+            is_active=True,
+        )
+        cash_group = AccountGroup.objects.create(name="Cash & Bank", group_type=AccountGroup.GroupType.ASSET)
+        advance_group = AccountGroup.objects.create(name="Advance Given", group_type=AccountGroup.GroupType.ASSET)
+
+        self.cash_ledger = LedgerAccount.objects.create(
+            group=cash_group,
+            name="Cash in Hand",
+            is_cash_or_bank=True,
+            opening_balance=Decimal("100.00"),
+            opening_balance_date="2026-04-01",
+        )
+        self.staff_advance_ledger = LedgerAccount.objects.create(
+            group=advance_group,
+            name="Staff Advance",
+        )
+        self.staff = Staff.objects.create(full_name="RAVINDRA SINGH", designation="Driver")
+
+    def test_staff_advance_requires_staff(self):
+        form = VoucherForm(
+            data={
+                "voucher_date": "2026-07-06",
+                "payment_mode": Voucher.PaymentMode.CASH,
+                "debit_account": self.staff_advance_ledger.id,
+                "credit_account": self.cash_ledger.id,
+                "amount": "256.50",
+                "paid_to_or_received_from": "",
+                "staff": "",
+                "narration": "advance",
+                "physical_slip_no": "",
+            },
+            voucher_kind="expense",
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("staff", form.errors)
+
+    def test_staff_advance_saves_staff_snapshot(self):
+        form = VoucherForm(
+            data={
+                "voucher_date": "2026-07-06",
+                "payment_mode": Voucher.PaymentMode.CASH,
+                "debit_account": self.staff_advance_ledger.id,
+                "credit_account": self.cash_ledger.id,
+                "amount": "256.50",
+                "paid_to_or_received_from": "",
+                "staff": self.staff.id,
+                "narration": "staff advance",
+                "physical_slip_no": "",
+            },
+            voucher_kind="expense",
+        )
+
+        self.assertTrue(form.is_valid(), form.errors)
+        voucher = form.save(commit=False)
+        self.assertEqual(voucher.staff, self.staff)
+        self.assertEqual(voucher.paid_to_or_received_from, "RAVINDRA SINGH")
+
+
 class StaffTests(AuthenticatedClientMixin, TestCase):
     def test_staff_list_loads(self):
         Staff.objects.create(full_name="Test Teacher", designation="Teacher", basic_pay=Decimal("15000.00"))
