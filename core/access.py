@@ -16,6 +16,7 @@ MODULE_PERMISSIONS = {
     "staff": "access_staff",
     "transport": "access_transport",
     "school_profile": "access_school_profile",
+    "accounts": "access_accounts",
 }
 
 # Membership in this group marks a user as "view / print only": they keep read

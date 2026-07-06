@@ -605,6 +605,191 @@ class LegacyImportBatch(TimeStampedModel):
         return f"{self.source_table} import on {self.created_at:%Y-%m-%d}"
 
 
+# ---------------------------------------------------------------------------
+# Accounting — Phase 1 MVP (Daily Expense / Cash Book)
+# ---------------------------------------------------------------------------
+
+
+class AccountGroup(TimeStampedModel):
+    """Top-level account classification (Asset, Expense, Income, etc.)."""
+
+    class GroupType(models.TextChoices):
+        ASSET = "asset", "Asset"
+        EXPENSE = "expense", "Expense"
+        INCOME = "income", "Income"
+        LIABILITY = "liability", "Liability"
+
+    name = models.CharField(max_length=60, unique=True)
+    group_type = models.CharField(
+        max_length=20, choices=GroupType.choices, default=GroupType.EXPENSE
+    )
+    display_order = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ["display_order", "name"]
+
+    def __str__(self):
+        return self.name
+
+
+class LedgerAccount(TimeStampedModel):
+    """Individual account head under a group (Cash, Diesel, Bank, etc.)."""
+
+    group = models.ForeignKey(
+        AccountGroup, on_delete=models.PROTECT, related_name="ledgers"
+    )
+    name = models.CharField(max_length=80, unique=True)
+    opening_balance = models.DecimalField(
+        max_digits=12, decimal_places=2, default=Decimal("0.00"),
+        help_text="Balance when the system starts using this ledger.",
+    )
+    opening_balance_date = models.DateField(
+        null=True, blank=True,
+        help_text="Date from which the opening balance applies.",
+    )
+    is_cash_or_bank = models.BooleanField(
+        default=False,
+        help_text="True for Cash in Hand / Bank accounts (used in Cash Book).",
+    )
+    is_active = models.BooleanField(default=True)
+    display_order = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ["display_order", "name"]
+
+    def __str__(self):
+        return self.name
+
+
+class VoucherCounter(models.Model):
+    """Race-safe auto-numbering: one counter per voucher type per session."""
+
+    session = models.ForeignKey(
+        AcademicSession, on_delete=models.CASCADE, related_name="voucher_counters"
+    )
+    voucher_type = models.CharField(max_length=10)
+    last_number = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        unique_together = [("session", "voucher_type")]
+
+    def __str__(self):
+        return f"{self.voucher_type} / {self.session} → {self.last_number}"
+
+
+class Voucher(TimeStampedModel):
+    """Single-line accounting voucher (expense / receipt / contra / opening).
+
+    Every voucher records one debit and one credit, maintaining double-entry
+    bookkeeping.  Multi-line journal entries are planned for Phase 2.
+    """
+
+    class VoucherType(models.TextChoices):
+        CASH_PAYMENT = "CPMT", "Cash Payment"
+        CASH_RECEIPT = "CREC", "Cash Receipt"
+        BANK = "BNK", "Bank Payment / Receipt"
+        CONTRA = "CNTR", "Contra (Cash ↔ Bank)"
+        OPENING = "OPEN", "Opening Balance"
+
+    class PaymentMode(models.TextChoices):
+        CASH = "cash", "Cash"
+        BANK = "bank", "Bank"
+        ONLINE = "online", "Online"
+        CHEQUE = "cheque", "Cheque"
+
+    voucher_no = models.CharField(max_length=30, unique=True)
+    voucher_type = models.CharField(
+        max_length=10, choices=VoucherType.choices, default=VoucherType.CASH_PAYMENT
+    )
+    session = models.ForeignKey(
+        AcademicSession, on_delete=models.PROTECT, related_name="vouchers"
+    )
+    voucher_date = models.DateField(default=timezone.localdate)
+    debit_account = models.ForeignKey(
+        LedgerAccount, on_delete=models.PROTECT, related_name="debit_vouchers",
+        help_text="Account debited (money goes TO this account).",
+    )
+    credit_account = models.ForeignKey(
+        LedgerAccount, on_delete=models.PROTECT, related_name="credit_vouchers",
+        help_text="Account credited (money comes FROM this account).",
+    )
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    paid_to_or_received_from = models.CharField(
+        max_length=120, blank=True,
+        help_text="Person name (e.g. 'Ramesh Driver').",
+    )
+    narration = models.TextField(blank=True)
+    payment_mode = models.CharField(
+        max_length=20, choices=PaymentMode.choices, default=PaymentMode.CASH
+    )
+    physical_slip_no = models.CharField(
+        max_length=30, blank=True,
+        help_text="Optional physical voucher pad reference number.",
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        related_name="created_vouchers", null=True, blank=True,
+    )
+
+    # --- Cancel audit ---
+    is_cancelled = models.BooleanField(default=False)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    cancelled_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        related_name="cancelled_vouchers", null=True, blank=True,
+    )
+    cancel_reason = models.CharField(max_length=255, blank=True)
+
+    # --- Edit audit ---
+    is_edited = models.BooleanField(default=False)
+    edited_at = models.DateTimeField(null=True, blank=True)
+    edited_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        related_name="edited_vouchers", null=True, blank=True,
+    )
+    edit_reason = models.CharField(max_length=255, blank=True)
+    edit_count = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["-voucher_date", "-id"]
+        indexes = [
+            models.Index(fields=["voucher_date"]),
+            models.Index(fields=["voucher_type"]),
+        ]
+
+    def __str__(self):
+        return f"{self.voucher_no} — ₹{self.amount}"
+
+
+class VoucherAuditLog(models.Model):
+    """Audit trail for voucher edits and cancellations."""
+
+    class Action(models.TextChoices):
+        CREATED = "created", "Created"
+        EDITED = "edited", "Edited"
+        CANCELLED = "cancelled", "Cancelled"
+
+    voucher = models.ForeignKey(
+        Voucher, on_delete=models.CASCADE, related_name="audit_logs"
+    )
+    action = models.CharField(max_length=20, choices=Action.choices)
+    changed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        related_name="voucher_audit_logs", null=True, blank=True,
+    )
+    changed_at = models.DateTimeField(default=timezone.now)
+    reason = models.TextField(blank=True)
+    before_snapshot = models.JSONField(null=True, blank=True)
+    after_snapshot = models.JSONField(null=True, blank=True)
+    changes = models.JSONField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-changed_at"]
+
+    def __str__(self):
+        return f"{self.voucher.voucher_no} — {self.action} by {self.changed_by}"
+
+
 class ModuleAccess(models.Model):
     class Meta:
         managed = False
@@ -624,6 +809,5 @@ class ModuleAccess(models.Model):
             ("access_staff", "SchoolSoft: Staff and salary"),
             ("access_transport", "SchoolSoft: Transport"),
             ("access_school_profile", "SchoolSoft: School profile"),
+            ("access_accounts", "SchoolSoft: Accounts and cash book"),
         ]
-
-# Create your models here.

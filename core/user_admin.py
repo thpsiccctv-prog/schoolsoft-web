@@ -26,6 +26,7 @@ MODULES_UI = [
     ("staff", "Staff & Salary"),
     ("transport", "Transport"),
     ("school_profile", "School Profile"),
+    ("accounts", "Accounts & Cash Book"),
 ]
 ALL_KEYS = [key for key, _ in MODULES_UI]
 
@@ -35,6 +36,7 @@ ROLE_LABELS = [
     ("admission", "Admission Desk"),
     ("exam", "Exam Desk"),
     ("staff", "Staff & Transport"),
+    ("accounts", "Accounts Desk"),
     ("viewer", "Viewer (read / print only)"),
     ("custom", "Custom"),
 ]
@@ -49,6 +51,10 @@ ROLE_PRESETS = {
     "admission": {"modules": ["students", "school_profile"], "view_only": False, "is_admin": False},
     "exam": {"modules": ["students", "marks", "school_profile"], "view_only": False, "is_admin": False},
     "staff": {"modules": ["staff", "transport", "school_profile"], "view_only": False, "is_admin": False},
+    "accounts": {
+        "modules": ["accounts", "school_profile"],
+        "view_only": False, "is_admin": False,
+    },
     "viewer": {"modules": ALL_KEYS, "view_only": True, "is_admin": False},
     "custom": {"modules": [], "view_only": False, "is_admin": False},
 }
