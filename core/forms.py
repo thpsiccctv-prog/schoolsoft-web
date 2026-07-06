@@ -222,6 +222,7 @@ class SalaryPaymentForm(forms.ModelForm):
             "pf_deduction",
             "esi_deduction",
             "other_deduction",
+            "advance_recovery",
             "remarks",
         ]
         widgets = {
@@ -237,6 +238,31 @@ class SalaryPaymentForm(forms.ModelForm):
         self.fields["payment_date"].initial = timezone.localdate()
         for field in self.fields.values():
             field.widget.attrs.setdefault("class", "form-control")
+
+    def clean(self):
+        cleaned_data = super().clean()
+        if not cleaned_data:
+            return cleaned_data
+            
+        gross = sum([
+            cleaned_data.get("basic_pay", Decimal("0.00")),
+            cleaned_data.get("da", Decimal("0.00")),
+            cleaned_data.get("other_allowances", Decimal("0.00"))
+        ])
+        
+        deductions = sum([
+            cleaned_data.get("pf_deduction", Decimal("0.00")),
+            cleaned_data.get("esi_deduction", Decimal("0.00")),
+            cleaned_data.get("other_deduction", Decimal("0.00"))
+        ])
+        
+        advance_recovery = cleaned_data.get("advance_recovery", Decimal("0.00"))
+        net_pay = gross - deductions - advance_recovery
+        
+        if net_pay < 0:
+            self.add_error("advance_recovery", "Net pay cannot be negative. Advance recovery is too high.")
+            
+        return cleaned_data
 
 
 class LedgerAccountForm(forms.ModelForm):
@@ -291,10 +317,11 @@ class VoucherForm(forms.ModelForm):
             self.fields["credit_account"].empty_label = None
             self.fields["debit_account"].empty_label = "Select expense / advance head"
         elif self.voucher_kind == "receipt":
+            income_receipt_ledgers = (income_ledgers | advance_ledgers).distinct()
             self.fields["debit_account"].queryset = cash_ledgers
-            self.fields["credit_account"].queryset = income_ledgers
+            self.fields["credit_account"].queryset = income_receipt_ledgers
             self.fields["debit_account"].empty_label = None
-            self.fields["credit_account"].empty_label = "Select income head"
+            self.fields["credit_account"].empty_label = "Select income / advance head"
 
         self.fields["staff"].queryset = Staff.objects.filter(is_active=True)
         self.fields["staff"].empty_label = "Select staff"
@@ -330,8 +357,18 @@ class VoucherForm(forms.ModelForm):
         elif self.voucher_kind == "receipt":
             if debit_account and not debit_account.is_cash_or_bank:
                 self.add_error("debit_account", "Receipt me paisa Cash/Bank account me hi aayega.")
-            if credit_account and credit_account.group.group_type != AccountGroup.GroupType.INCOME:
-                self.add_error("credit_account", "Income Head me sirf Income ledger select kijiye.")
+            if credit_account:
+                is_income = credit_account.group.group_type == AccountGroup.GroupType.INCOME
+                is_advance = credit_account.group.name.lower() == "advance given"
+                if not (is_income or is_advance):
+                    self.add_error("credit_account", "Income Head me sirf Income ya Advance Given ledger select kijiye.")
+                if credit_account.name.lower() == "staff advance":
+                    if not staff:
+                        self.add_error("staff", "Staff Advance refund ke liye staff select kijiye.")
+                    else:
+                        cleaned_data["paid_to_or_received_from"] = staff.full_name
+                else:
+                    cleaned_data["staff"] = None
 
         return cleaned_data
 

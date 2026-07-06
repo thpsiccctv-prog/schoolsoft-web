@@ -26,7 +26,7 @@
     <div class="card-body">
         <div class="detail-grid" style="display:grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 2rem;">
             <div><strong>Date:</strong> {{ voucher.voucher_date|date:"d/m/Y" }}</div>
-            <div><strong>Amount:</strong> ₹ {{ voucher.amount }}</div>
+            <div><strong>Amount:</strong> Rs.  {{ voucher.amount }}</div>
             <div><strong>Mode:</strong> {{ voucher.get_payment_mode_display }}</div>
             <div><strong>Physical Slip:</strong> {{ voucher.physical_slip_no|default:"-" }}</div>
             <div><strong>Debit Head:</strong> {{ voucher.debit_account.name }}</div>

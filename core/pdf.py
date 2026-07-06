@@ -1141,7 +1141,8 @@ def build_salary_payslip_pdf(payment, school_profile=None):
         ["Basic Pay", money(payment.basic_pay), "PF", money(payment.pf_deduction)],
         ["DA", money(payment.da), "ESI", money(payment.esi_deduction)],
         ["Other Allowances", money(payment.other_allowances), "Other Deduction", money(payment.other_deduction)],
-        ["Gross Pay", money(payment.gross_pay), "Total Deductions", money(payment.total_deductions)],
+        ["", "", "Advance Recovery", money(payment.advance_recovery)],
+        ["Gross Pay", money(payment.gross_pay), "Total Deductions", money(payment.total_deductions + payment.advance_recovery)],
     ]
     pay_table = Table(earnings_rows, colWidths=[45 * mm, 35 * mm, 45 * mm, 35 * mm], repeatRows=1)
     last_row = len(earnings_rows) - 1
@@ -1201,7 +1202,31 @@ def build_salary_payslip_pdf(payment, school_profile=None):
         ]
     )
 
-    document.build(story)
+    def draw_watermark(canvas, doc):
+        canvas.saveState()
+        canvas.setFont("Helvetica-Bold", 60)
+        canvas.translate(A4[0] / 2, A4[1] / 2)
+        canvas.rotate(45)
+        if payment.is_cancelled:
+            canvas.setFillColorRGB(0.9, 0.2, 0.2, alpha=0.15)
+            canvas.drawCentredString(0, 0, "CANCELLED")
+        elif payment.is_edited:
+            canvas.setFillColorRGB(0.9, 0.6, 0.1, alpha=0.15)
+            canvas.drawCentredString(0, 0, "EDITED")
+        canvas.restoreState()
+
+        if payment.is_cancelled or payment.is_edited:
+            canvas.saveState()
+            canvas.setFont("Helvetica", 8)
+            canvas.setFillColorRGB(0.4, 0.4, 0.4)
+            if payment.is_cancelled:
+                msg = f"Cancelled on {payment.cancelled_at.strftime('%d/%m/%Y')} | Reason: {payment.cancel_reason}"
+            else:
+                msg = f"Edited on {payment.edited_at.strftime('%d/%m/%Y')} | Reason: {payment.edit_reason}"
+            canvas.drawString(18 * mm, 10 * mm, msg)
+            canvas.restoreState()
+
+    document.build(story, onFirstPage=draw_watermark, onLaterPages=draw_watermark)
     buffer.seek(0)
     return buffer.getvalue()
 

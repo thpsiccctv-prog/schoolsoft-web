@@ -112,7 +112,7 @@
             <thead>
                 <tr>
                     <th>Fee Head Description</th>
-                    <th class="amount" style="width: 150px;">Amount (₹)</th>
+                    <th class="amount" style="width: 150px;">Amount (Rs. )</th>
                 </tr>
             </thead>
             <tbody>
@@ -142,16 +142,16 @@
                 {% endif %}
                 <tr class="net-total-row">
                     <th style="text-align: right;">Net Payable</th>
-                    <td class="amount">₹ {{ receipt.legacy_net_total|indian_number }}</td>
+                    <td class="amount">Rs.  {{ receipt.legacy_net_total|indian_number }}</td>
                 </tr>
                 <tr>
                     <th style="text-align: right;">Amount Paid</th>
-                    <td class="amount">₹ {{ receipt.received_amount|indian_number }}</td>
+                    <td class="amount">Rs.  {{ receipt.received_amount|indian_number }}</td>
                 </tr>
                 {% if receipt.legacy_due_amount > 0 %}
                 <tr class="due-row">
                     <th style="text-align: right;">Balance Due</th>
-                    <td class="amount">₹ {{ receipt.legacy_due_amount|indian_number }}</td>
+                    <td class="amount">Rs.  {{ receipt.legacy_due_amount|indian_number }}</td>
                 </tr>
                 {% endif %}
             </tfoot>

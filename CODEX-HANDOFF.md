@@ -1023,3 +1023,17 @@ This new daily update summarizes:
 - Daily Expense, Voucher Register, Voucher Cancel, Cash Book, Ledger Master.
 - Staff Advance dropdown behavior in Daily Expense.
 - Tests run and current pending commit/build steps.
+
+
+## 2026-07-06 Checkpoint - Accounts/Cash Book Phase 1 & Staff Migration
+
+Completed today:
+
+1. **Staff Data Migration**: Migrated 21 active staff members from legacy Access SUBGROUP.csv (where they were stored under the SALARY group) into the Django Staff model. The staff dropdown now correctly shows real names like VIVEK SIR, RAVINDRAJI DRIVER, etc.
+2. **Staff Advance Logic**: Implemented dynamic JavaScript toggle on both New Daily Expense and New Other Receipt forms. When Staff Advance is selected as the Debit/Credit head, the Paid To text input is hidden and replaced by a dropdown of active staff members.
+3. **Receipts Update**: Modified VoucherForm in core/forms.py to allow Advance Ledgers (like Staff Advance) in the credit_account dropdown for receipts. A staff member returning an advance in cash is properly handled as a Receipt.
+4. **EXE Rebuilt**: uild-desktop.bat was run successfully. The new EXE is at dist/SchoolSoft/SchoolSoft.exe.
+
+### Open Question for Codex / User
+The user noticed that opening the New Daily Expense form still shows a text box by default. This is the **correct behavior**: the form defaults to Select expense / advance head. The staff dropdown *only* appears if the user explicitly changes the dropdown to Staff Advance.
+Please verify with the user if they actually selected Staff Advance in the dropdown before taking the screenshot, or if they expected the Staff Dropdown to appear by default regardless of the expense head.

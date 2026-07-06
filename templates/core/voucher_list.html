@@ -48,7 +48,7 @@
                         <small style="color:var(--text-muted)">Dr.</small> {{ voucher.debit_account.name }}<br>
                         <small style="color:var(--text-muted)">Cr.</small> {{ voucher.credit_account.name }}
                     </td>
-                    <td class="font-mono">₹ {{ voucher.amount }}</td>
+                    <td class="font-mono">Rs.  {{ voucher.amount }}</td>
                     <td>
                         {% if voucher.is_cancelled %}
                         <span class="badge badge-danger">Cancelled</span>

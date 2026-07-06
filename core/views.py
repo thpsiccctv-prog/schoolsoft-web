@@ -22,6 +22,7 @@ from .models import (
     FeeReceiptAuditLog,
     FeeStructure,
     SalaryPayment,
+    SalaryPaymentAuditLog,
     SchoolClass,
     SchoolProfile,
     Section,
@@ -31,6 +32,7 @@ from .models import (
     TransferCertificate,
     TransportBus,
     TransportRoute,
+    Voucher,
 )
 from .pdf import (
     build_admission_form_pdf,
@@ -1183,20 +1185,44 @@ def salary_payment_create(request):
         form = SalaryPaymentForm(request.POST)
         if form.is_valid():
             payment = form.save(commit=False)
-            payment.slip_no = next_slip_no()
-            payment.save()
-            return redirect("core:salary_payslip_pdf", pk=payment.pk)
+            if SalaryPayment.objects.filter(staff=payment.staff, pay_month=payment.pay_month, is_cancelled=False).exists():
+                form.add_error(None, f"A valid salary payment for {payment.staff.full_name} for this month already exists.")
+            else:
+                payment.slip_no = next_slip_no()
+                payment.save()
+                SalaryPaymentAuditLog.objects.create(
+                    payment=payment,
+                    action=SalaryPaymentAuditLog.ActionChoices.CREATED,
+                    changed_by=request.user if request.user.is_authenticated else None,
+                    reason="Initial generation"
+                )
+                return redirect("core:salary_payment_detail", pk=payment.pk)
     else:
         form = SalaryPaymentForm()
 
-    staff_defaults = {
-        staff.id: {
+    active_staff = Staff.objects.filter(is_active=True)
+    staff_defaults = {}
+    pending_advances = {}
+    
+    for staff in active_staff:
+        staff_defaults[staff.id] = {
             "basic_pay": str(staff.basic_pay),
             "da": str(staff.da),
             "other_allowances": str(staff.other_allowances),
         }
-        for staff in Staff.objects.filter(is_active=True)
-    }
+        
+        adv_given = Voucher.objects.filter(
+            staff=staff,
+            debit_account__group__name__iexact="Advance Given",
+            is_cancelled=False
+        ).aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+        
+        adv_recovered = SalaryPayment.objects.filter(
+            staff=staff,
+            is_cancelled=False
+        ).aggregate(total=Sum("advance_recovery"))["total"] or Decimal("0.00")
+        
+        pending_advances[staff.id] = float(adv_given - adv_recovered)
 
     return render(
         request,
@@ -1204,6 +1230,7 @@ def salary_payment_create(request):
         {
             "form": form,
             "staff_defaults": staff_defaults,
+            "pending_advances": pending_advances,
         },
     )
 
@@ -1754,7 +1781,8 @@ def cash_book(request):
     if include_salary:
         salary_payments = SalaryPayment.objects.filter(
             payment_date=target_date,
-            payment_mode=SalaryPayment.PaymentMode.CASH
+            payment_mode=SalaryPayment.PaymentMode.CASH,
+            is_cancelled=False
         ).select_related("staff")
         
     # Calculate opening balance up to target_date - 1 day
@@ -1777,7 +1805,8 @@ def cash_book(request):
         sal_sum = SalaryPayment.objects.filter(
             payment_date__gte=ob_date,
             payment_date__lt=target_date,
-            payment_mode=SalaryPayment.PaymentMode.CASH
+            payment_mode=SalaryPayment.PaymentMode.CASH,
+            is_cancelled=False
         ).aggregate(total=Sum("net_pay"))["total"] or Decimal("0.00")
         
         # 3. Voucher in/out
@@ -1835,7 +1864,7 @@ def cash_book(request):
                 "type": "SAL",
                 "ref": s,
                 "ref_no": f"SAL-{s.pk}",
-                "desc": f"Salary: {s.staff.full_name}",
+                "desc": f"Salary: {s.staff.full_name} | Gross Rs. {s.gross_pay} | Adv Recovery Rs. {s.advance_recovery} | Net Rs. {s.net_pay}",
                 "in_amt": Decimal("0.00"),
                 "out_amt": s.net_pay,
                 "sort_key": s.created_at
@@ -1862,3 +1891,175 @@ def cash_book(request):
         "lines": lines,
         "include_salary": include_salary
     })
+
+
+def salary_payment_list(request):
+    month = request.GET.get("month")
+    staff_id = request.GET.get("staff")
+    payment_mode = request.GET.get("payment_mode")
+    status = request.GET.get("status", "valid")
+
+    qs = SalaryPayment.objects.select_related("staff").all()
+
+    if month:
+        qs = qs.filter(pay_month=month)
+    if staff_id:
+        qs = qs.filter(staff_id=staff_id)
+    if payment_mode:
+        qs = qs.filter(payment_mode=payment_mode)
+
+    if status == "valid":
+        qs = qs.filter(is_cancelled=False)
+    elif status == "cancelled":
+        qs = qs.filter(is_cancelled=True)
+
+    # Calculate totals
+    if status == "cancelled":
+        qs_for_totals = qs
+    else:
+        qs_for_totals = qs.filter(is_cancelled=False)
+
+    total_gross = qs_for_totals.aggregate(t=Sum("basic_pay") + Sum("da") + Sum("other_allowances"))["t"] or Decimal("0.00")
+    total_deductions = qs_for_totals.aggregate(t=Sum("pf_deduction") + Sum("esi_deduction") + Sum("other_deduction"))["t"] or Decimal("0.00")
+    total_recovery = qs_for_totals.aggregate(t=Sum("advance_recovery"))["t"] or Decimal("0.00")
+    
+    total_net = total_gross - total_deductions - total_recovery
+
+    paginator = Paginator(qs, 50)
+    page_number = request.GET.get("page")
+    page_obj = paginator.get_page(page_number)
+
+    return render(request, "core/salary_list.html", {
+        "page_obj": page_obj,
+        "total_gross": total_gross,
+        "total_deductions": total_deductions,
+        "total_recovery": total_recovery,
+        "total_net": total_net,
+        "active_staff": Staff.objects.filter(is_active=True).order_by("full_name"),
+    })
+
+
+def salary_payment_detail(request, pk):
+    payment = get_object_or_404(SalaryPayment.objects.select_related("staff", "cancelled_by", "edited_by"), pk=pk)
+    logs = payment.audit_logs.select_related("changed_by").all()
+    return render(request, "core/salary_detail.html", {
+        "payment": payment,
+        "audit_logs": logs
+    })
+
+
+def salary_payment_edit(request, pk):
+    payment = get_object_or_404(SalaryPayment, pk=pk)
+    if payment.is_cancelled:
+        messages.error(request, "Cannot edit a cancelled salary payment.")
+        return redirect("core:salary_payment_detail", pk=pk)
+
+    if request.method == "POST":
+        form = SalaryPaymentForm(request.POST, instance=payment)
+        edit_reason = request.POST.get("edit_reason", "").strip()
+        if not edit_reason:
+            form.add_error(None, "An edit reason is required.")
+            
+        if form.is_valid():
+            if SalaryPayment.objects.filter(staff=form.cleaned_data["staff"], pay_month=form.cleaned_data["pay_month"], is_cancelled=False).exclude(pk=pk).exists():
+                form.add_error(None, "A valid salary payment for this staff for this month already exists.")
+            else:
+                updated_payment = form.save(commit=False)
+                
+                original_payment = SalaryPayment.objects.get(pk=pk)
+                # Snapshot before
+                before_snapshot = {
+                    "basic_pay": str(original_payment.basic_pay),
+                    "da": str(original_payment.da),
+                    "other_allowances": str(original_payment.other_allowances),
+                    "pf_deduction": str(original_payment.pf_deduction),
+                    "esi_deduction": str(original_payment.esi_deduction),
+                    "other_deduction": str(original_payment.other_deduction),
+                    "advance_recovery": str(original_payment.advance_recovery),
+                    "net_pay": str(original_payment.net_pay),
+                }
+                
+                updated_payment.is_edited = True
+                updated_payment.edited_at = timezone.now()
+                updated_payment.edited_by = request.user if request.user.is_authenticated else None
+                updated_payment.edit_reason = edit_reason
+                updated_payment.edit_count += 1
+                updated_payment.save()
+                
+                after_snapshot = {
+                    "basic_pay": str(updated_payment.basic_pay),
+                    "da": str(updated_payment.da),
+                    "other_allowances": str(updated_payment.other_allowances),
+                    "pf_deduction": str(updated_payment.pf_deduction),
+                    "esi_deduction": str(updated_payment.esi_deduction),
+                    "other_deduction": str(updated_payment.other_deduction),
+                    "advance_recovery": str(updated_payment.advance_recovery),
+                    "net_pay": str(updated_payment.net_pay),
+                }
+                
+                SalaryPaymentAuditLog.objects.create(
+                    payment=updated_payment,
+                    action=SalaryPaymentAuditLog.ActionChoices.EDITED,
+                    changed_by=request.user if request.user.is_authenticated else None,
+                    reason=edit_reason,
+                    before_snapshot=before_snapshot,
+                    after_snapshot=after_snapshot
+                )
+                messages.success(request, "Salary payment updated successfully.")
+                return redirect("core:salary_payment_detail", pk=updated_payment.pk)
+    else:
+        form = SalaryPaymentForm(instance=payment)
+
+    active_staff = Staff.objects.filter(is_active=True)
+    staff_defaults = {}
+    pending_advances = {}
+    
+    for staff in active_staff:
+        staff_defaults[staff.id] = {
+            "basic_pay": str(staff.basic_pay),
+            "da": str(staff.da),
+            "other_allowances": str(staff.other_allowances),
+        }
+        adv_given = Voucher.objects.filter(staff=staff, debit_account__group__name__iexact="Advance Given", is_cancelled=False).aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+        adv_recovered = SalaryPayment.objects.filter(staff=staff, is_cancelled=False).exclude(pk=pk).aggregate(total=Sum("advance_recovery"))["total"] or Decimal("0.00")
+        pending_advances[staff.id] = float(adv_given - adv_recovered)
+
+    return render(
+        request,
+        "core/salary_edit.html",
+        {
+            "form": form,
+            "payment": payment,
+            "staff_defaults": staff_defaults,
+            "pending_advances": pending_advances,
+        },
+    )
+
+
+def salary_payment_cancel(request, pk):
+    payment = get_object_or_404(SalaryPayment, pk=pk)
+    if payment.is_cancelled:
+        messages.error(request, "This salary payment is already cancelled.")
+        return redirect("core:salary_payment_detail", pk=pk)
+
+    if request.method == "POST":
+        reason = request.POST.get("cancel_reason", "").strip()
+        if not reason:
+            messages.error(request, "A cancellation reason is required.")
+        else:
+            payment.is_cancelled = True
+            payment.cancelled_at = timezone.now()
+            payment.cancelled_by = request.user if request.user.is_authenticated else None
+            payment.cancel_reason = reason
+            payment.save(update_fields=["is_cancelled", "cancelled_at", "cancelled_by", "cancel_reason"])
+
+            SalaryPaymentAuditLog.objects.create(
+                payment=payment,
+                action=SalaryPaymentAuditLog.ActionChoices.CANCELLED,
+                changed_by=request.user if request.user.is_authenticated else None,
+                reason=reason
+            )
+            messages.success(request, "Salary payment cancelled successfully.")
+            return redirect("core:salary_payment_detail", pk=pk)
+
+    return render(request, "core/salary_cancel_confirm.html", {"payment": payment})

@@ -529,7 +529,13 @@ class SalaryPayment(TimeStampedModel):
 
     class Meta:
         ordering = ["-pay_month", "-id"]
-        unique_together = [("staff", "pay_month")]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["staff", "pay_month"],
+                condition=models.Q(is_cancelled=False),
+                name="unique_active_salary"
+            )
+        ]
 
     @property
     def gross_pay(self):
@@ -822,7 +828,7 @@ class Voucher(TimeStampedModel):
         ]
 
     def __str__(self):
-        return f"{self.voucher_no} — ₹{self.amount}"
+        return f"{self.voucher_no} — Rs. {self.amount}"
 
 
 class VoucherAuditLog(models.Model):

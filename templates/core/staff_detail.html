@@ -137,8 +137,8 @@
                     </thead>
                     <tbody>
                         {% for payment in salary_payments %}
-                            <tr>
-                                <td>{{ payment.slip_no }}</td>
+                            <tr {% if payment.is_cancelled %}style="text-decoration: line-through; opacity: 0.6;"{% endif %}>
+                                <td>{{ payment.slip_no }} {% if payment.is_cancelled %}(Cancelled){% endif %}</td>
                                 <td>{{ payment.pay_month|date:"M Y" }}</td>
                                 <td>{{ payment.payment_date|date:"d M Y" }}</td>
                                 <td class="amount">{{ payment.gross_pay }}</td>

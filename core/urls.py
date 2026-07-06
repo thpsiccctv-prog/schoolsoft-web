@@ -56,7 +56,11 @@ urlpatterns = [
     path("students/<int:pk>/marksheet/<int:term_id>/pdf/", module_required("marks")(views.marksheet_pdf), name="marksheet_pdf"),
     path("staff/", module_required("staff")(views.staff_list), name="staff_list"),
     path("staff/<int:pk>/", module_required("staff")(views.staff_detail), name="staff_detail"),
+    path("staff/salary/", module_required("staff")(views.salary_payment_list), name="salary_payment_list"),
     path("staff/salary/new/", module_required("staff", write=True)(views.salary_payment_create), name="salary_payment_create"),
+    path("staff/salary/<int:pk>/", module_required("staff")(views.salary_payment_detail), name="salary_payment_detail"),
+    path("staff/salary/<int:pk>/edit/", module_required("staff", write=True)(views.salary_payment_edit), name="salary_payment_edit"),
+    path("staff/salary/<int:pk>/cancel/", module_required("staff", write=True)(views.salary_payment_cancel), name="salary_payment_cancel"),
     path("staff/salary/<int:pk>/pdf/", module_required("staff")(views.salary_payslip_pdf), name="salary_payslip_pdf"),
     path("transport/", module_required("transport")(views.transport_list), name="transport_list"),
 

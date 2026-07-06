@@ -772,12 +772,15 @@ class StaffTests(AuthenticatedClientMixin, TestCase):
                 "pf_deduction": "1200.00",
                 "esi_deduction": "0.00",
                 "other_deduction": "0.00",
+                "advance_recovery": "0.00",
                 "remarks": "July salary",
             },
         )
+        if post_response.status_code == 200:
+            print("Form errors:", post_response.context['form'].errors)
 
         payment = SalaryPayment.objects.get(staff=staff)
-        self.assertRedirects(post_response, reverse("core:salary_payslip_pdf", args=[payment.id]))
+        self.assertRedirects(post_response, reverse("core:salary_payment_detail", args=[payment.id]))
         self.assertTrue(payment.slip_no.startswith("SAL-"))
         self.assertEqual(payment.gross_pay, Decimal("16500.00"))
         self.assertEqual(payment.net_pay, Decimal("15300.00"))
@@ -785,6 +788,64 @@ class StaffTests(AuthenticatedClientMixin, TestCase):
         pdf_response = self.client.get(reverse("core:salary_payslip_pdf", args=[payment.id]))
         self.assertEqual(pdf_response.status_code, 200)
         self.assertEqual(pdf_response["Content-Type"], "application/pdf")
+
+    def test_salary_negative_net_pay(self):
+        staff = Staff.objects.create(
+            full_name="Negative Pay Teacher",
+            designation="Teacher",
+            basic_pay=Decimal("10000.00"),
+        )
+
+        post_response = self.client.post(
+            reverse("core:salary_payment_create"),
+            data={
+                "staff": staff.id,
+                "pay_month": "2026-07-01",
+                "payment_date": "2026-07-05",
+                "payment_mode": SalaryPayment.PaymentMode.CASH,
+                "basic_pay": "10000.00",
+                "da": "0.00",
+                "other_allowances": "0.00",
+                "pf_deduction": "12000.00",
+                "esi_deduction": "0.00",
+                "other_deduction": "0.00",
+                "advance_recovery": "0.00",
+                "remarks": "July salary",
+            },
+        )
+        self.assertContains(post_response, "Net pay cannot be negative")
+
+    def test_salary_duplicate_prevention(self):
+        staff = Staff.objects.create(
+            full_name="Duplicate Teacher",
+            designation="Teacher",
+            basic_pay=Decimal("10000.00"),
+        )
+        SalaryPayment.objects.create(
+            staff=staff,
+            pay_month="2026-07-01",
+            payment_date="2026-07-05",
+            payment_mode=SalaryPayment.PaymentMode.CASH,
+            basic_pay=Decimal("10000.00"),
+        )
+        
+        post_response = self.client.post(
+            reverse("core:salary_payment_create"),
+            data={
+                "staff": staff.id,
+                "pay_month": "2026-07-01",
+                "payment_date": "2026-07-05",
+                "payment_mode": SalaryPayment.PaymentMode.CASH,
+                "basic_pay": "10000.00",
+                "da": "0.00",
+                "other_allowances": "0.00",
+                "pf_deduction": "0.00",
+                "esi_deduction": "0.00",
+                "other_deduction": "0.00",
+                "advance_recovery": "0.00",
+            },
+        )
+        self.assertContains(post_response, "already exists")
 
 
 class TransportTests(AuthenticatedClientMixin, TestCase):

@@ -1,15 +1,15 @@
 {% extends "base.html" %}
 
-{% block title %}New Salary Payment | SchoolSoft Modernization{% endblock %}
+{% block title %}Edit Salary Payment | SchoolSoft Modernization{% endblock %}
 
 {% block content %}
 <section class="section">
     <div class="section-heading with-actions">
         <div>
-            <h2>New Salary Payment</h2>
-            <p>Record a monthly salary payslip for a staff member.</p>
+            <h2>Edit Salary Payment: {{ payment.slip_no }}</h2>
+            <p>Update payslip for {{ payment.staff.full_name }} ({{ payment.pay_month|date:"F Y" }})</p>
         </div>
-        <a class="button secondary" href="{% url 'core:staff_list' %}">Back</a>
+        <a class="button secondary" href="{% url 'core:salary_payment_detail' pk=payment.pk %}">Cancel</a>
     </div>
 
     {{ staff_defaults|json_script:"staff-defaults-data" }}
@@ -51,10 +51,17 @@
                     </label>
                 {% endfor %}
             </div>
+            
+            <h3 style="margin-top: 2rem;">Audit Information</h3>
+            <label>
+                <span>Reason for Edit (Required) <span style="color: var(--rose-600);">*</span></span>
+                <input type="text" name="edit_reason" class="form-control" required placeholder="Why are you changing this payment?">
+            </label>
         </section>
+        
         <div class="form-actions">
-            <button type="submit" id="save-btn">Save &amp; Generate Payslip</button>
-            <a class="button secondary" href="{% url 'core:staff_list' %}">Cancel</a>
+            <button type="submit" id="save-btn" class="button primary">Update &amp; Re-generate Payslip</button>
+            <a class="button secondary" href="{% url 'core:salary_payment_detail' pk=payment.pk %}">Cancel</a>
         </div>
     </form>
 </section>
@@ -121,7 +128,7 @@
         } else {
             document.getElementById("kpi-net-pay").style.color = "";
             saveBtn.disabled = false;
-            saveBtn.textContent = "Save & Generate Payslip";
+            saveBtn.textContent = "Update & Re-generate Payslip";
         }
     }
 

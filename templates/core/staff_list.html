@@ -9,7 +9,10 @@
             <h2>Staff</h2>
             <p>{{ total_staff }} matching records. {{ active_staff }} active staff. {{ salary_payments_count }} salary payments recorded.</p>
         </div>
-        <a class="button" href="{% url 'core:salary_payment_create' %}">New Salary Payment</a>
+        <div class="action-row">
+            <a class="button secondary" href="{% url 'core:salary_payment_list' %}">Salary Register</a>
+            <a class="button" href="{% url 'core:salary_payment_create' %}">New Salary Payment</a>
+        </div>
     </div>
 
     <p class="hint">Imported Basic Pay values are legacy placeholders until corrected in Admin.</p>
