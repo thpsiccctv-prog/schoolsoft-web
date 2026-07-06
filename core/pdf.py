@@ -1204,3 +1204,124 @@ def build_salary_payslip_pdf(payment, school_profile=None):
     document.build(story)
     buffer.seek(0)
     return buffer.getvalue()
+
+
+def build_voucher_pdf(voucher, school_profile=None):
+    buffer = BytesIO()
+    document = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=14 * mm,
+        leftMargin=14 * mm,
+        topMargin=10 * mm,
+        bottomMargin=10 * mm,
+        title=f"Voucher {voucher.voucher_no}",
+    )
+
+    styles = getSampleStyleSheet()
+    story = []
+
+    _school_header(story, school_profile, "PAYMENT VOUCHER" if voucher.voucher_type == "CPMT" else "RECEIPT VOUCHER", styles)
+    
+    # Voucher Meta
+    story.append(Spacer(1, 4 * mm))
+    meta_data = [
+        [f"Voucher No: {voucher.voucher_no}", f"Date: {voucher.voucher_date.strftime('%d/%m/%Y')}"],
+        [f"Mode: {voucher.get_payment_mode_display()}", f"Type: {voucher.get_voucher_type_display()}"],
+    ]
+    if voucher.physical_slip_no:
+        meta_data.append([f"Physical Slip: {voucher.physical_slip_no}", ""])
+
+    story.append(
+        Table(
+            meta_data,
+            colWidths=[90 * mm, 90 * mm],
+            style=TableStyle(
+                [
+                    ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"),
+                    ("FONTSIZE", (0, 0), (-1, -1), 10),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                    ("ALIGN", (1, 0), (1, -1), "RIGHT"),
+                ]
+            ),
+        )
+    )
+    story.append(Spacer(1, 4 * mm))
+
+    # Main details
+    party_label = "Paid To" if voucher.voucher_type == "CPMT" else "Received From"
+    
+    details_data = [
+        [f"{party_label}:", voucher.paid_to_or_received_from or "-"],
+        ["Debit Head:", voucher.debit_account.name],
+        ["Credit Head:", voucher.credit_account.name],
+        ["Amount:", f"Rs. {money(voucher.amount)}"],
+        ["Narration:", voucher.narration or "-"],
+    ]
+    
+    story.append(
+        Table(
+            details_data,
+            colWidths=[40 * mm, 140 * mm],
+            style=TableStyle(
+                [
+                    ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+                    ("FONTNAME", (1, 0), (1, -1), "Helvetica"),
+                    ("FONTSIZE", (0, 0), (-1, -1), 11),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                    ("TOPPADDING", (0, 0), (-1, -1), 4),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ]
+            ),
+        )
+    )
+    
+    story.append(Spacer(1, 20 * mm))
+
+    # Signatures
+    story.append(
+        Table(
+            [["Prepared By", "Approved By"]],
+            colWidths=[90 * mm, 90 * mm],
+            style=TableStyle(
+                [
+                    ("LINEABOVE", (0, 0), (0, 0), 0.5, colors.black),
+                    ("LINEABOVE", (1, 0), (1, 0), 0.5, colors.black),
+                    ("ALIGN", (0, 0), (0, 0), "CENTER"),
+                    ("ALIGN", (1, 0), (1, 0), "CENTER"),
+                    ("FONTSIZE", (0, 0), (-1, -1), 10),
+                    ("TOPPADDING", (0, 0), (-1, -1), 5),
+                ]
+            ),
+        )
+    )
+    
+    # Watermarks for Cancelled/Edited
+    def draw_watermark(canvas, doc):
+        canvas.saveState()
+        canvas.setFont("Helvetica-Bold", 60)
+        canvas.translate(A4[0] / 2, A4[1] / 2)
+        canvas.rotate(45)
+        if voucher.is_cancelled:
+            canvas.setFillColorRGB(0.9, 0.2, 0.2, alpha=0.15)
+            canvas.drawCentredString(0, 0, "CANCELLED")
+        elif voucher.is_edited:
+            canvas.setFillColorRGB(0.9, 0.6, 0.1, alpha=0.15)
+            canvas.drawCentredString(0, 0, "EDITED")
+        canvas.restoreState()
+
+        # Add edit/cancel details at the bottom
+        if voucher.is_cancelled or voucher.is_edited:
+            canvas.saveState()
+            canvas.setFont("Helvetica", 8)
+            canvas.setFillColorRGB(0.4, 0.4, 0.4)
+            if voucher.is_cancelled:
+                msg = f"Cancelled on {voucher.cancelled_at.strftime('%d/%m/%Y')} | Reason: {voucher.cancel_reason}"
+            else:
+                msg = f"Edited on {voucher.edited_at.strftime('%d/%m/%Y')} | Reason: {voucher.edit_reason}"
+            canvas.drawString(14 * mm, 10 * mm, msg)
+            canvas.restoreState()
+
+    document.build(story, onFirstPage=draw_watermark, onLaterPages=draw_watermark)
+    buffer.seek(0)
+    return buffer.getvalue()

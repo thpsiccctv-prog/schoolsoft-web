@@ -3,6 +3,7 @@ from decimal import Decimal
 
 from django.conf import settings
 from django.contrib import messages
+from django.contrib.auth.decorators import login_required, permission_required
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Count, ProtectedError, Q, Sum
@@ -67,12 +68,19 @@ def dashboard(request):
     active_students = Student.objects.filter(is_active=True).count()
     active_session_receipts = FeeReceipt.objects.filter(session=active_session, is_cancelled=False).count() if active_session else 0
 
+    from .models import Voucher
+    today_expenses = Voucher.objects.filter(
+        voucher_date=today, 
+        is_cancelled=False, 
+        voucher_type=Voucher.VoucherType.CASH_PAYMENT
+    ).aggregate(expense=Sum("amount"))["expense"] or Decimal("0.00")
+
     context = {
         "today": today,
         "active_session": active_session,
         "dashboard_kpis": [
             ("Today's Collection", today_totals["received"] or Decimal("0.00"), "success"),
-            ("Receipts Today", today_receipts.count(), "info"),
+            ("Today's Expense", today_expenses, "danger"),
             ("Total Dues", total_dues["due"] or Decimal("0.00"), "danger"),
             ("Active Students", active_students, "neutral"),
         ],
@@ -1398,3 +1406,458 @@ def student_delete(request, pk):
         return redirect("core:student_list")
         
     return render(request, "core/student_confirm_delete.html", {"student": student})
+
+# ---------------------------------------------------------------------------
+# Accounts / Cash Book (Phase 1)
+# ---------------------------------------------------------------------------
+
+def _generate_voucher_no(session, voucher_type):
+    from django.db import transaction
+    from .models import VoucherCounter
+    year_str = session.name
+    if not year_str and session.starts_on and session.ends_on:
+        year_str = f"{session.starts_on.year}-{str(session.ends_on.year)[-2:]}"
+    year_str = year_str or "SESSION"
+
+    with transaction.atomic():
+        counter, _ = VoucherCounter.objects.select_for_update().get_or_create(
+            session=session, voucher_type=voucher_type
+        )
+        counter.last_number += 1
+        counter.save()
+        return f"{voucher_type}-{year_str}-{counter.last_number:04d}"
+
+
+def _get_cash_account():
+    from .models import LedgerAccount
+    return LedgerAccount.objects.filter(is_cash_or_bank=True, name__icontains="cash").first()
+
+
+@login_required
+@permission_required('core.access_accounts', raise_exception=True)
+def expense_create(request):
+    from .forms import VoucherForm
+    from .models import AcademicSession, Voucher, VoucherAuditLog, AccountGroup, Staff
+    from django.utils import timezone
+    from django.db import transaction
+    
+    session = AcademicSession.objects.filter(is_active=True).first()
+    if not session:
+        messages.error(request, "No active academic session found.")
+        return redirect("core:dashboard")
+
+    if request.method == "POST":
+        form = VoucherForm(request.POST, voucher_kind="expense")
+        if form.is_valid():
+            voucher = form.save(commit=False)
+            voucher.session = session
+            voucher.voucher_type = Voucher.VoucherType.CASH_PAYMENT
+            voucher.created_by = request.user
+            
+            # For expense/advance payment, credit should be Cash/Bank and debit should be Expense or Advance Given.
+            if not voucher.credit_account.is_cash_or_bank:
+                messages.error(request, "For expenses/advances, the credit account must be a Cash or Bank account.")
+            elif not (
+                voucher.debit_account.group.group_type == AccountGroup.GroupType.EXPENSE
+                or voucher.debit_account.group.name.lower() == "advance given"
+            ):
+                messages.error(request, "For expenses/advances, the debit account must be an Expense or Advance Given account.")
+            else:
+                with transaction.atomic():
+                    voucher.voucher_no = _generate_voucher_no(session, Voucher.VoucherType.CASH_PAYMENT)
+                    voucher.save()
+                    
+                    VoucherAuditLog.objects.create(
+                        voucher=voucher,
+                        action=VoucherAuditLog.Action.CREATED,
+                        changed_by=request.user,
+                    )
+                
+                messages.success(request, f"Expense voucher {voucher.voucher_no} created successfully.")
+                if "save_and_add_another" in request.POST:
+                    return redirect("core:expense_create")
+                return redirect("core:voucher_detail", pk=voucher.pk)
+    else:
+        initial = {"credit_account": _get_cash_account()}
+        form = VoucherForm(initial=initial, voucher_kind="expense")
+
+    staff_names = Staff.objects.filter(is_active=True).order_by("full_name").values_list("full_name", flat=True)
+    return render(request, "core/expense_form.html", {"form": form, "staff_names": staff_names})
+
+
+@login_required
+@permission_required('core.access_accounts', raise_exception=True)
+def receipt_other_create(request):
+    from .forms import VoucherForm
+    from .models import AcademicSession, Voucher, VoucherAuditLog, AccountGroup
+    from django.utils import timezone
+    from django.db import transaction
+    
+    session = AcademicSession.objects.filter(is_active=True).first()
+    if not session:
+        messages.error(request, "No active academic session found.")
+        return redirect("core:dashboard")
+
+    if request.method == "POST":
+        form = VoucherForm(request.POST, voucher_kind="receipt")
+        if form.is_valid():
+            voucher = form.save(commit=False)
+            voucher.session = session
+            voucher.voucher_type = Voucher.VoucherType.CASH_RECEIPT
+            voucher.created_by = request.user
+            
+            # For receipts, debit should be Cash/Bank, credit should be Income
+            if not voucher.debit_account.is_cash_or_bank:
+                messages.error(request, "For receipts, the debit account must be a Cash or Bank account.")
+            elif voucher.credit_account.group.group_type != AccountGroup.GroupType.INCOME:
+                messages.error(request, "For receipts, the credit account must be an Income account.")
+            else:
+                with transaction.atomic():
+                    voucher.voucher_no = _generate_voucher_no(session, Voucher.VoucherType.CASH_RECEIPT)
+                    voucher.save()
+                    
+                    VoucherAuditLog.objects.create(
+                        voucher=voucher,
+                        action=VoucherAuditLog.Action.CREATED,
+                        changed_by=request.user,
+                    )
+                
+                messages.success(request, f"Receipt voucher {voucher.voucher_no} created successfully.")
+                if "save_and_add_another" in request.POST:
+                    return redirect("core:receipt_other_create")
+                return redirect("core:voucher_detail", pk=voucher.pk)
+    else:
+        initial = {"debit_account": _get_cash_account()}
+        form = VoucherForm(initial=initial, voucher_kind="receipt")
+        
+    return render(request, "core/receipt_other_form.html", {"form": form})
+
+
+@login_required
+@permission_required('core.access_accounts', raise_exception=True)
+def ledger_list(request):
+    from .models import LedgerAccount, AccountGroup
+    ledgers = LedgerAccount.objects.select_related("group").all()
+    return render(request, "core/ledger_list.html", {"ledgers": ledgers})
+
+
+@login_required
+@permission_required('core.access_accounts', raise_exception=True)
+def ledger_create(request):
+    from .forms import LedgerAccountForm
+    if request.method == "POST":
+        form = LedgerAccountForm(request.POST)
+        if form.is_valid():
+            ledger = form.save()
+            messages.success(request, f"Ledger '{ledger.name}' created.")
+            return redirect("core:ledger_list")
+    else:
+        form = LedgerAccountForm()
+    return render(request, "core/ledger_form.html", {"form": form, "is_edit": False})
+
+
+@login_required
+@permission_required('core.access_accounts', raise_exception=True)
+def ledger_edit(request, pk):
+    from .models import LedgerAccount
+    from .forms import LedgerAccountForm
+    ledger = get_object_or_404(LedgerAccount, pk=pk)
+    if request.method == "POST":
+        form = LedgerAccountForm(request.POST, instance=ledger)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f"Ledger '{ledger.name}' updated.")
+            return redirect("core:ledger_list")
+    else:
+        form = LedgerAccountForm(instance=ledger)
+    return render(request, "core/ledger_form.html", {"form": form, "is_edit": True})
+
+
+@login_required
+@permission_required('core.access_accounts', raise_exception=True)
+def voucher_list(request):
+    from .models import Voucher
+    vouchers = Voucher.objects.select_related("debit_account", "credit_account").all()
+    
+    q = request.GET.get("q", "").strip()
+    if q:
+        vouchers = vouchers.filter(voucher_no__icontains=q)
+        
+    v_type = request.GET.get("type", "")
+    if v_type:
+        vouchers = vouchers.filter(voucher_type=v_type)
+        
+    paginator = Paginator(vouchers, 50)
+    page_number = request.GET.get("page")
+    page_obj = paginator.get_page(page_number)
+    
+    return render(request, "core/voucher_list.html", {
+        "page_obj": page_obj,
+        "q": q,
+        "v_type": v_type,
+        "voucher_types": Voucher.VoucherType.choices,
+    })
+
+
+@login_required
+@permission_required('core.access_accounts', raise_exception=True)
+def voucher_detail(request, pk):
+    from .models import Voucher
+    voucher = get_object_or_404(Voucher.objects.select_related("debit_account", "credit_account", "created_by", "cancelled_by", "edited_by"), pk=pk)
+    logs = voucher.audit_logs.select_related("changed_by").all()
+    return render(request, "core/voucher_detail.html", {"voucher": voucher, "logs": logs})
+
+
+@login_required
+@permission_required('core.access_accounts', raise_exception=True)
+def voucher_edit(request, pk):
+    from .models import Voucher, VoucherAuditLog
+    from .forms import VoucherEditForm
+    from django.db import transaction
+    from django.forms.models import model_to_dict
+    
+    voucher = get_object_or_404(Voucher, pk=pk)
+    if voucher.is_cancelled:
+        messages.error(request, "Cannot edit a cancelled voucher.")
+        return redirect("core:voucher_detail", pk=voucher.pk)
+        
+    if request.method == "POST":
+        form = VoucherEditForm(request.POST, instance=voucher)
+        if form.is_valid():
+            before_snapshot = model_to_dict(voucher)
+            
+            updated = form.save(commit=False)
+            updated.is_edited = True
+            updated.edited_at = timezone.now()
+            updated.edited_by = request.user
+            updated.edit_count += 1
+            updated.edit_reason = form.cleaned_data["edit_reason"]
+            
+            with transaction.atomic():
+                updated.save()
+                after_snapshot = model_to_dict(updated)
+                
+                # compute changes
+                changes = {}
+                for field in before_snapshot:
+                    if field in ["edited_at", "edited_by", "edit_count", "is_edited", "edit_reason"]:
+                        continue
+                    if str(before_snapshot[field]) != str(after_snapshot[field]):
+                        changes[field] = {"old": str(before_snapshot[field]), "new": str(after_snapshot[field])}
+                
+                VoucherAuditLog.objects.create(
+                    voucher=updated,
+                    action=VoucherAuditLog.Action.EDITED,
+                    changed_by=request.user,
+                    reason=updated.edit_reason,
+                    before_snapshot=before_snapshot,
+                    after_snapshot=after_snapshot,
+                    changes=changes,
+                )
+            
+            messages.success(request, f"Voucher {voucher.voucher_no} edited.")
+            return redirect("core:voucher_detail", pk=voucher.pk)
+    else:
+        form = VoucherEditForm(instance=voucher)
+        
+    return render(request, "core/voucher_form.html", {"form": form, "voucher": voucher, "is_edit": True})
+
+
+@login_required
+@permission_required('core.access_accounts', raise_exception=True)
+def voucher_cancel(request, pk):
+    from .models import Voucher, VoucherAuditLog
+    from django.db import transaction
+    
+    voucher = get_object_or_404(Voucher, pk=pk)
+    if voucher.is_cancelled:
+        messages.warning(request, "Voucher is already cancelled.")
+        return redirect("core:voucher_detail", pk=voucher.pk)
+        
+    if request.method == "POST":
+        reason = request.POST.get("cancel_reason", "").strip()
+        if not reason:
+            messages.error(request, "Cancellation reason is required.")
+        else:
+            with transaction.atomic():
+                voucher.is_cancelled = True
+                voucher.cancelled_at = timezone.now()
+                voucher.cancelled_by = request.user
+                voucher.cancel_reason = reason
+                voucher.save()
+                
+                VoucherAuditLog.objects.create(
+                    voucher=voucher,
+                    action=VoucherAuditLog.Action.CANCELLED,
+                    changed_by=request.user,
+                    reason=reason,
+                )
+                
+            messages.success(request, f"Voucher {voucher.voucher_no} has been cancelled.")
+            return redirect("core:voucher_detail", pk=voucher.pk)
+            
+    return render(request, "core/voucher_cancel_confirm.html", {"voucher": voucher})
+
+
+@login_required
+@permission_required('core.access_accounts', raise_exception=True)
+def voucher_pdf(request, pk):
+    from .models import Voucher
+    from .pdf import build_voucher_pdf
+    
+    voucher = get_object_or_404(Voucher.objects.select_related("debit_account", "credit_account"), pk=pk)
+    pdf_bytes = build_voucher_pdf(voucher, get_active_school_profile())
+    
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
+    response["Content-Disposition"] = f'inline; filename="voucher_{voucher.voucher_no}.pdf"'
+    return response
+
+
+@login_required
+@permission_required('core.access_accounts', raise_exception=True)
+def cash_book(request):
+    from .models import Voucher, FeeReceipt, SalaryPayment, LedgerAccount
+    from django.db.models import Sum
+    import datetime
+    
+    date_str = request.GET.get("date")
+    if date_str:
+        try:
+            target_date = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
+        except ValueError:
+            target_date = timezone.localdate()
+    else:
+        target_date = timezone.localdate()
+        
+    include_salary = request.GET.get("include_salary") == "1"
+    
+    cash_ledger = _get_cash_account()
+    if not cash_ledger:
+        messages.error(request, "Cash ledger not found. Please run seed_accounts.")
+        return redirect("core:dashboard")
+        
+    # Get all transactions for the target date
+    
+    # 1. Fee Receipts (Cash Receipt)
+    fee_receipts = FeeReceipt.objects.filter(
+        receipt_date=target_date, 
+        is_cancelled=False,
+        payment_mode=FeeReceipt.PaymentMode.CASH
+    ).select_related("student")
+    
+    # 2. Vouchers (Cash Payments and Cash Receipts, Contra)
+    vouchers = Voucher.objects.filter(
+        voucher_date=target_date,
+        is_cancelled=False,
+    ).filter(Q(debit_account=cash_ledger) | Q(credit_account=cash_ledger)).select_related("debit_account", "credit_account")
+    
+    # 3. Salary Payments (Cash Payment)
+    salary_payments = []
+    if include_salary:
+        salary_payments = SalaryPayment.objects.filter(
+            payment_date=target_date,
+            payment_mode=SalaryPayment.PaymentMode.CASH
+        ).select_related("staff")
+        
+    # Calculate opening balance up to target_date - 1 day
+    # Base OB
+    ob = cash_ledger.opening_balance
+    ob_date = cash_ledger.opening_balance_date
+    
+    if ob_date and ob_date <= target_date:
+        # Calculate net change from ob_date to target_date - 1
+        
+        # 1. Fee Receipts sum
+        fr_sum = FeeReceipt.objects.filter(
+            receipt_date__gte=ob_date,
+            receipt_date__lt=target_date,
+            is_cancelled=False,
+            payment_mode=FeeReceipt.PaymentMode.CASH
+        ).aggregate(total=Sum("total_amount"))["total"] or Decimal("0.00")
+        
+        # 2. Salary sum
+        sal_sum = SalaryPayment.objects.filter(
+            payment_date__gte=ob_date,
+            payment_date__lt=target_date,
+            payment_mode=SalaryPayment.PaymentMode.CASH
+        ).aggregate(total=Sum("net_pay"))["total"] or Decimal("0.00")
+        
+        # 3. Voucher in/out
+        v_in_sum = Voucher.objects.filter(
+            voucher_date__gte=ob_date,
+            voucher_date__lt=target_date,
+            is_cancelled=False,
+            debit_account=cash_ledger
+        ).aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+        
+        v_out_sum = Voucher.objects.filter(
+            voucher_date__gte=ob_date,
+            voucher_date__lt=target_date,
+            is_cancelled=False,
+            credit_account=cash_ledger
+        ).aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+        
+        ob = ob + fr_sum + v_in_sum - sal_sum - v_out_sum
+        
+    
+    # Combine into lines
+    # { 'type': 'FR'/'VOUCHER'/'SAL', 'ref': obj, 'desc': str, 'in': 0.00, 'out': 0.00, 'time': datetime }
+    
+    lines = []
+    
+    for r in fee_receipts:
+        lines.append({
+            "type": "FR",
+            "ref": r,
+            "ref_no": r.receipt_no,
+            "desc": f"Fee Receipt: {r.student.full_name}",
+            "in_amt": r.total_amount,
+            "out_amt": Decimal("0.00"),
+            "sort_key": r.created_at
+        })
+        
+    for v in vouchers:
+        is_in = v.debit_account == cash_ledger
+        lines.append({
+            "type": "VOUCHER",
+            "ref": v,
+            "ref_no": v.voucher_no,
+            "desc": v.narration or (v.credit_account.name if is_in else v.debit_account.name),
+            "in_amt": v.amount if is_in else Decimal("0.00"),
+            "out_amt": Decimal("0.00") if is_in else v.amount,
+            "sort_key": v.created_at
+        })
+        
+    if include_salary:
+        for s in salary_payments:
+            lines.append({
+                "type": "SAL",
+                "ref": s,
+                "ref_no": f"SAL-{s.pk}",
+                "desc": f"Salary: {s.staff.full_name}",
+                "in_amt": Decimal("0.00"),
+                "out_amt": s.net_pay,
+                "sort_key": s.created_at
+            })
+            
+    lines.sort(key=lambda x: x["sort_key"])
+    
+    # Running balance
+    running = ob
+    for line in lines:
+        running = running + line["in_amt"] - line["out_amt"]
+        line["balance"] = running
+        
+    total_in = sum(l["in_amt"] for l in lines)
+    total_out = sum(l["out_amt"] for l in lines)
+    closing = ob + total_in - total_out
+    
+    return render(request, "core/cash_book.html", {
+        "target_date": target_date,
+        "ob": ob,
+        "closing": closing,
+        "total_in": total_in,
+        "total_out": total_out,
+        "lines": lines,
+        "include_salary": include_salary
+    })

@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}New Other Receipt | SchoolSoft{% endblock %}
+{% block content %}
+<div class="card" style="max-width: 600px; margin: 2rem auto;">
+    <div class="card-header">
+        <h2 class="card-title">New Other Receipt (Non-Fee)</h2>
+    </div>
+    <div class="card-body">
+        <form method="post" action="{% url 'core:receipt_other_create' %}">
+            {% csrf_token %}
+            {% include "core/partials/_form_errors.html" %}
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Date</label>
+                    {{ form.voucher_date }}
+                </div>
+                <div class="form-group">
+                    <label>Mode</label>
+                    {{ form.payment_mode }}
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Received Into (Debit)</label>
+                    {{ form.debit_account }}
+                    <small>Must be a Cash/Bank account</small>
+                </div>
+                <div class="form-group">
+                    <label>Income Head (Credit)</label>
+                    {{ form.credit_account }}
+                    <small>Must be an Income account</small>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Amount (Rs)</label>
+                    {{ form.amount }}
+                </div>
+                <div class="form-group">
+                    <label>Received From</label>
+                    {{ form.paid_to_or_received_from }}
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Narration (Details)</label>
+                {{ form.narration }}
+            </div>
+            <div class="form-group">
+                <label>Physical Slip No (Optional)</label>
+                {{ form.physical_slip_no }}
+            </div>
+            <div class="card-actions">
+                <button type="submit" class="btn btn-primary">Save Receipt</button>
+                <button type="submit" name="save_and_add_another" class="btn btn-secondary">Save & Add Another</button>
+                <a href="{% url 'core:voucher_list' %}" class="btn btn-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

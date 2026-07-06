@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Voucher {{ voucher.voucher_no }} | SchoolSoft{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div class="header-content">
+        <h1>Voucher: {{ voucher.voucher_no }}</h1>
+    </div>
+    <div class="header-actions">
+        <a href="{% url 'core:voucher_pdf' voucher.pk %}" target="_blank" class="btn btn-secondary">Print Voucher</a>
+        {% if not voucher.is_cancelled %}
+        <a href="{% url 'core:voucher_edit' voucher.pk %}" class="btn btn-secondary">Edit Voucher</a>
+        <a href="{% url 'core:voucher_cancel' voucher.pk %}" class="btn btn-danger">Cancel Voucher</a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card" style="max-width: 800px; margin: 2rem auto;">
+    <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+        <h2 class="card-title">{{ voucher.get_voucher_type_display }}</h2>
+        {% if voucher.is_cancelled %}
+        <span class="badge badge-danger">CANCELLED</span>
+        {% elif voucher.is_edited %}
+        <span class="badge badge-warning">EDITED</span>
+        {% endif %}
+    </div>
+    <div class="card-body">
+        <div class="detail-grid" style="display:grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 2rem;">
+            <div><strong>Date:</strong> {{ voucher.voucher_date|date:"d/m/Y" }}</div>
+            <div><strong>Amount:</strong> ₹ {{ voucher.amount }}</div>
+            <div><strong>Mode:</strong> {{ voucher.get_payment_mode_display }}</div>
+            <div><strong>Physical Slip:</strong> {{ voucher.physical_slip_no|default:"-" }}</div>
+            <div><strong>Debit Head:</strong> {{ voucher.debit_account.name }}</div>
+            <div><strong>Credit Head:</strong> {{ voucher.credit_account.name }}</div>
+            <div style="grid-column: 1/-1;"><strong>Party Name:</strong> {{ voucher.paid_to_or_received_from|default:"-" }}</div>
+            <div style="grid-column: 1/-1;"><strong>Narration:</strong> {{ voucher.narration|default:"-" }}</div>
+            <div style="grid-column: 1/-1; color:var(--text-muted); font-size:0.875rem;">
+                Created by {{ voucher.created_by.username|default:"System" }} on {{ voucher.created_at }}
+            </div>
+        </div>
+
+        {% if logs %}
+        <hr>
+        <h3 style="margin: 1.5rem 0 1rem;">Audit Trail</h3>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Action</th>
+                    <th>Date</th>
+                    <th>User</th>
+                    <th>Reason</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in logs %}
+                <tr>
+                    <td>{{ log.get_action_display }}</td>
+                    <td>{{ log.changed_at|date:"d/m/Y H:i" }}</td>
+                    <td>{{ log.changed_by.username|default:"System" }}</td>
+                    <td>{{ log.reason|default:"-" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

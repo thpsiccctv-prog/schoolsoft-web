@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}New Expense | SchoolSoft{% endblock %}
+{% block content %}
+<div class="card" style="max-width: 600px; margin: 2rem auto;">
+    <div class="card-header">
+        <h2 class="card-title">New Daily Expense</h2>
+    </div>
+    <div class="card-body">
+        <form method="post" action="{% url 'core:expense_create' %}">
+            {% csrf_token %}
+            {% include "core/partials/_form_errors.html" %}
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Date</label>
+                    {{ form.voucher_date }}
+                </div>
+                <div class="form-group">
+                    <label>Mode</label>
+                    {{ form.payment_mode }}
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Paid Out From (Credit)</label>
+                    {{ form.credit_account }}
+                    <small>Must be a Cash/Bank account</small>
+                </div>
+                <div class="form-group">
+                    <label>Expense / Advance Head (Debit)</label>
+                    {{ form.debit_account }}
+                    <small>Select Expense, Staff Advance, or Manager Advance</small>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Amount (Rs)</label>
+                    {{ form.amount }}
+                </div>
+                <div class="form-group">
+                    <label>Paid To</label>
+                    {{ form.paid_to_or_received_from }}
+                    <select id="staff-paid-to-select" class="form-control" style="display:none;">
+                        <option value="">Select staff</option>
+                        {% for staff_name in staff_names %}
+                            <option value="{{ staff_name }}">{{ staff_name }}</option>
+                        {% endfor %}
+                    </select>
+                    <small>Staff Advance ke liye staff ka naam list se select karein.</small>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Narration (Details)</label>
+                {{ form.narration }}
+            </div>
+            <div class="form-group">
+                <label>Physical Slip No (Optional)</label>
+                {{ form.physical_slip_no }}
+            </div>
+            <div class="card-actions">
+                <button type="submit" class="btn btn-primary">Save Expense</button>
+                <button type="submit" name="save_and_add_another" class="btn btn-secondary">Save & Add Another</button>
+                <a href="{% url 'core:voucher_list' %}" class="btn btn-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const debitSelect = document.getElementById("id_debit_account");
+    const paidInput = document.getElementById("id_paid_to_or_received_from");
+    const staffSelect = document.getElementById("staff-paid-to-select");
+
+    if (!debitSelect || !paidInput || !staffSelect) {
+        return;
+    }
+
+    function syncStaffSelectFromInput() {
+        const currentValue = paidInput.value || "";
+        for (const option of staffSelect.options) {
+            option.selected = option.value === currentValue;
+        }
+    }
+
+    function updatePaidToMode() {
+        const selectedText = debitSelect.options[debitSelect.selectedIndex]?.text || "";
+        const isStaffAdvance = selectedText.toLowerCase().includes("staff advance");
+
+        if (isStaffAdvance) {
+            syncStaffSelectFromInput();
+            paidInput.style.display = "none";
+            staffSelect.style.display = "";
+        } else {
+            staffSelect.style.display = "none";
+            paidInput.style.display = "";
+        }
+    }
+
+    staffSelect.addEventListener("change", function () {
+        paidInput.value = staffSelect.value;
+    });
+    debitSelect.addEventListener("change", updatePaidToMode);
+    updatePaidToMode();
+});
+</script>
+{% endblock %}

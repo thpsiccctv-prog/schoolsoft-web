@@ -4,7 +4,7 @@ from django import forms
 from django.db.models import Max
 from django.utils import timezone
 
-from .models import AcademicSession, FeeHead, FeeReceipt, SalaryPayment, Staff, Student, TransferCertificate
+from .models import AcademicSession, AccountGroup, FeeHead, FeeReceipt, SalaryPayment, Staff, Student, TransferCertificate, LedgerAccount, Voucher
 
 
 class StudentChoiceField(forms.ModelChoiceField):
@@ -102,10 +102,6 @@ class FeeReceiptEntryForm(forms.ModelForm):
         self.fields["receipt_date"].initial = timezone.localdate()
         self.fields["student"].empty_label = "Select active student"
         self.fields["session"].empty_label = "Select session"
-
-        for field in self.fields.values():
-            field.widget.attrs.setdefault("class", "form-control")
-
 
 class FeeReceiptEditForm(FeeReceiptEntryForm):
     edit_reason = forms.CharField(
@@ -241,3 +237,95 @@ class SalaryPaymentForm(forms.ModelForm):
         self.fields["payment_date"].initial = timezone.localdate()
         for field in self.fields.values():
             field.widget.attrs.setdefault("class", "form-control")
+
+
+class LedgerAccountForm(forms.ModelForm):
+    class Meta:
+        model = LedgerAccount
+        fields = ["group", "name", "opening_balance", "opening_balance_date", "is_cash_or_bank", "is_active", "display_order"]
+        widgets = {
+            "opening_balance_date": forms.DateInput(attrs={"type": "date"}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            if not isinstance(field.widget, forms.CheckboxInput):
+                field.widget.attrs.setdefault("class", "form-control")
+
+
+class VoucherForm(forms.ModelForm):
+    class Meta:
+        model = Voucher
+        fields = [
+            "voucher_date",
+            "payment_mode",
+            "debit_account",
+            "credit_account",
+            "amount",
+            "paid_to_or_received_from",
+            "narration",
+            "physical_slip_no",
+        ]
+        widgets = {
+            "voucher_date": forms.DateInput(attrs={"type": "date"}),
+            "narration": forms.Textarea(attrs={"rows": 2}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        self.voucher_kind = kwargs.pop("voucher_kind", None)
+        super().__init__(*args, **kwargs)
+        self.fields["voucher_date"].initial = timezone.localdate()
+
+        active_ledgers = LedgerAccount.objects.select_related("group").filter(is_active=True)
+        cash_ledgers = active_ledgers.filter(is_cash_or_bank=True)
+        expense_ledgers = active_ledgers.filter(group__group_type=AccountGroup.GroupType.EXPENSE)
+        advance_ledgers = active_ledgers.filter(group__name__iexact="Advance Given")
+        expense_payment_ledgers = (expense_ledgers | advance_ledgers).distinct()
+        income_ledgers = active_ledgers.filter(group__group_type=AccountGroup.GroupType.INCOME)
+
+        if self.voucher_kind == "expense":
+            self.fields["credit_account"].queryset = cash_ledgers
+            self.fields["debit_account"].queryset = expense_payment_ledgers
+            self.fields["credit_account"].empty_label = None
+            self.fields["debit_account"].empty_label = "Select expense / advance head"
+        elif self.voucher_kind == "receipt":
+            self.fields["debit_account"].queryset = cash_ledgers
+            self.fields["credit_account"].queryset = income_ledgers
+            self.fields["debit_account"].empty_label = None
+            self.fields["credit_account"].empty_label = "Select income head"
+
+        for field in self.fields.values():
+            field.widget.attrs.setdefault("class", "form-control")
+
+        if self.voucher_kind == "expense":
+            self.fields["paid_to_or_received_from"].widget.attrs.setdefault("list", "staff-name-options")
+            self.fields["paid_to_or_received_from"].widget.attrs.setdefault("autocomplete", "off")
+
+    def clean(self):
+        cleaned_data = super().clean()
+        debit_account = cleaned_data.get("debit_account")
+        credit_account = cleaned_data.get("credit_account")
+
+        if self.voucher_kind == "expense":
+            if credit_account and not credit_account.is_cash_or_bank:
+                self.add_error("credit_account", "Expense me payment Cash/Bank account se hi hoga.")
+            if debit_account:
+                is_expense = debit_account.group.group_type == AccountGroup.GroupType.EXPENSE
+                is_advance = debit_account.group.name.lower() == "advance given"
+                if not (is_expense or is_advance):
+                    self.add_error("debit_account", "Expense / Advance Head me Expense ya Advance Given ledger select kijiye.")
+        elif self.voucher_kind == "receipt":
+            if debit_account and not debit_account.is_cash_or_bank:
+                self.add_error("debit_account", "Receipt me paisa Cash/Bank account me hi aayega.")
+            if credit_account and credit_account.group.group_type != AccountGroup.GroupType.INCOME:
+                self.add_error("credit_account", "Income Head me sirf Income ledger select kijiye.")
+
+        return cleaned_data
+
+
+class VoucherEditForm(VoucherForm):
+    edit_reason = forms.CharField(max_length=255, required=True, widget=forms.TextInput(attrs={"class": "form-control"}))
+
+    class Meta(VoucherForm.Meta):
+        fields = VoucherForm.Meta.fields + ["edit_reason"]

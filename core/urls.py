@@ -60,6 +60,19 @@ urlpatterns = [
     path("staff/salary/<int:pk>/pdf/", module_required("staff")(views.salary_payslip_pdf), name="salary_payslip_pdf"),
     path("transport/", module_required("transport")(views.transport_list), name="transport_list"),
 
+    # Accounts / Cash Book
+    path("accounts/expense/new/", module_required("accounts", write=True)(views.expense_create), name="expense_create"),
+    path("accounts/receipt/new/", module_required("accounts", write=True)(views.receipt_other_create), name="receipt_other_create"),
+    path("accounts/ledgers/", module_required("accounts")(views.ledger_list), name="ledger_list"),
+    path("accounts/ledgers/new/", module_required("accounts", write=True)(views.ledger_create), name="ledger_create"),
+    path("accounts/ledgers/<int:pk>/edit/", module_required("accounts", write=True)(views.ledger_edit), name="ledger_edit"),
+    path("accounts/vouchers/", module_required("accounts")(views.voucher_list), name="voucher_list"),
+    path("accounts/vouchers/<int:pk>/", module_required("accounts")(views.voucher_detail), name="voucher_detail"),
+    path("accounts/vouchers/<int:pk>/edit/", module_required("accounts", write=True)(views.voucher_edit), name="voucher_edit"),
+    path("accounts/vouchers/<int:pk>/cancel/", module_required("accounts", write=True)(views.voucher_cancel), name="voucher_cancel"),
+    path("accounts/vouchers/<int:pk>/pdf/", module_required("accounts")(views.voucher_pdf), name="voucher_pdf"),
+    path("accounts/cash-book/", module_required("accounts")(views.cash_book), name="cash_book"),
+
     # Self-service password change (any logged-in user)
     path(
         "account/password/",

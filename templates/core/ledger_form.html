@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}{% if is_edit %}Edit Ledger{% else %}New Ledger{% endif %} | SchoolSoft{% endblock %}
+{% block content %}
+<div class="card" style="max-width: 500px; margin: 2rem auto;">
+    <div class="card-header">
+        <h2 class="card-title">{% if is_edit %}Edit Ledger Account{% else %}New Ledger Account{% endif %}</h2>
+    </div>
+    <div class="card-body">
+        <form method="post">
+            {% csrf_token %}
+            {% include "core/partials/_form_errors.html" %}
+            <div class="form-group">
+                <label>Account Group</label>
+                {{ form.group }}
+            </div>
+            <div class="form-group">
+                <label>Ledger Name</label>
+                {{ form.name }}
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Opening Balance</label>
+                    {{ form.opening_balance }}
+                </div>
+                <div class="form-group">
+                    <label>Balance As Of (Date)</label>
+                    {{ form.opening_balance_date }}
+                </div>
+            </div>
+            <div class="form-group checkbox-group" style="display:flex; gap: 0.5rem; align-items:center; margin-top: 1rem;">
+                {{ form.is_cash_or_bank }}
+                <label for="{{ form.is_cash_or_bank.id_for_label }}" style="margin:0;">Is Cash or Bank Account? (Appears in Cash Book)</label>
+            </div>
+            <div class="form-group checkbox-group" style="display:flex; gap: 0.5rem; align-items:center;">
+                {{ form.is_active }}
+                <label for="{{ form.is_active.id_for_label }}" style="margin:0;">Active</label>
+            </div>
+            <div class="form-group">
+                <label>Display Order (0 = first)</label>
+                {{ form.display_order }}
+            </div>
+            
+            <div class="card-actions" style="margin-top: 1.5rem;">
+                <button type="submit" class="btn btn-primary">Save Ledger</button>
+                <a href="{% url 'core:ledger_list' %}" class="btn btn-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
