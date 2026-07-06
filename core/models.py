@@ -500,7 +500,32 @@ class SalaryPayment(TimeStampedModel):
     pf_deduction = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
     esi_deduction = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
     other_deduction = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
+    advance_recovery = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
     remarks = models.CharField(max_length=255, blank=True)
+    
+    is_cancelled = models.BooleanField(default=False)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    cancelled_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="cancelled_salary_payments",
+        null=True,
+        blank=True,
+    )
+    cancel_reason = models.CharField(max_length=255, blank=True)
+    
+    is_edited = models.BooleanField(default=False)
+    edited_at = models.DateTimeField(null=True, blank=True)
+    edited_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="edited_salary_payments",
+        null=True,
+        blank=True,
+    )
+    edit_reason = models.CharField(max_length=255, blank=True)
+    edit_count = models.PositiveIntegerField(default=0)
+
 
     class Meta:
         ordering = ["-pay_month", "-id"]
@@ -516,10 +541,44 @@ class SalaryPayment(TimeStampedModel):
 
     @property
     def net_pay(self):
-        return self.gross_pay - self.total_deductions
+        return self.gross_pay - self.total_deductions - self.advance_recovery
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        if self.net_pay < 0:
+            raise ValidationError({"advance_recovery": "Net pay cannot be negative. Advance recovery is too high."})
 
     def __str__(self):
         return f"{self.slip_no} - {self.staff}"
+
+
+class SalaryPaymentAuditLog(TimeStampedModel):
+    class ActionChoices(models.TextChoices):
+        CREATED = "created", "Created"
+        EDITED = "edited", "Edited"
+        CANCELLED = "cancelled", "Cancelled"
+
+    payment = models.ForeignKey(SalaryPayment, on_delete=models.CASCADE, related_name="audit_logs")
+    action = models.CharField(max_length=20, choices=ActionChoices.choices)
+    changed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="salary_audit_logs",
+    )
+    changed_at = models.DateTimeField(default=timezone.now)
+    reason = models.TextField(blank=True)
+    before_snapshot = models.JSONField(null=True, blank=True)
+    after_snapshot = models.JSONField(null=True, blank=True)
+    changes = models.JSONField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-changed_at", "-id"]
+
+    def __str__(self):
+        return f"{self.payment.slip_no} - {self.get_action_display()} at {self.changed_at.strftime('%Y-%m-%d %H:%M')}"
+
 
 
 class TransportBus(TimeStampedModel):
