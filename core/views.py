@@ -1971,7 +1971,11 @@ def salary_payment_list(request):
     qs = SalaryPayment.objects.select_related("staff").all()
 
     if month:
-        qs = qs.filter(pay_month=month)
+        try:
+            parts = month.split("-")
+            qs = qs.filter(pay_month__year=parts[0], pay_month__month=parts[1])
+        except (ValueError, IndexError):
+            pass
     if staff_id:
         qs = qs.filter(staff_id=staff_id)
     if payment_mode:

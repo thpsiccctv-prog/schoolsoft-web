@@ -124,7 +124,7 @@ class Command(BaseCommand):
                                     'slip_no': slip_no,
                                     'payment_date': v_date,
                                     'basic_pay': amount,
-                                    'remarks': narration,
+                                    'remarks': narration[:250],
                                     'payment_mode': SalaryPayment.PaymentMode.CASH
                                 }
                             )
@@ -132,7 +132,7 @@ class Command(BaseCommand):
                                 salary_created += 1
                             else:
                                 salary.basic_pay += amount
-                                salary.remarks = f"{salary.remarks} | {narration}"
+                                salary.remarks = f"{salary.remarks} | {narration}"[:250]
                                 salary.save()
                                 salary_skipped += 1
 
