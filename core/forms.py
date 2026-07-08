@@ -28,6 +28,7 @@ class StudentForm(forms.ModelForm):
         fields = [
             "registration_no",
             "admission_no",
+            "pen_number",
             "legacy_sid",
             "admission_date",
             "full_name",
@@ -51,6 +52,9 @@ class StudentForm(forms.ModelForm):
             "date_of_birth": forms.DateInput(attrs={"type": "date"}),
             "address_local": forms.Textarea(attrs={"rows": 2}),
             "address_permanent": forms.Textarea(attrs={"rows": 2}),
+        }
+        labels = {
+            "pen_number": "PEN Number",
         }
 
     def __init__(self, *args, **kwargs):

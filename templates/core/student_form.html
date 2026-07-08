@@ -60,6 +60,11 @@
                             {{ form.admission_date }}
                             {% if form.admission_date.errors %}<div class="error-text">{{ form.admission_date.errors|striptags }}</div>{% endif %}
                         </div>
+                        <div class="entry-field">
+                            <label for="{{ form.pen_number.id_for_label }}">{{ form.pen_number.label }}</label>
+                            {{ form.pen_number }}
+                            {% if form.pen_number.errors %}<div class="error-text">{{ form.pen_number.errors|striptags }}</div>{% endif %}
+                        </div>
                     </div>
                 </section>
 

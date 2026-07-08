@@ -1084,16 +1084,21 @@ Completed today:
 ### Priority Action Items for Next Session / Developer
 
 1. **URGENT SECURITY FIXES**:
-   - The default admin passwords (`admin`/`admin12345`) MUST be changed on both Desktop and Render immediately, as this is now a production system with real data.
-   - The Render PostgreSQL Database credentials (`DATABASE_URL`) were accidentally pasted in chat screenshots. The database password must be rotated on Render immediately to prevent unauthorized access.
+   - [x] The default admin passwords (`admin`/`admin12345`) MUST be changed on both Desktop and Render immediately. (User confirmed changed on 2026-07-08).
+   - [ ] The Render PostgreSQL Database credentials (`DATABASE_URL`) were accidentally pasted in chat screenshots. The database password must be rotated on Render immediately to prevent unauthorized access.
 2. **Render Postgres Expiry**:
    - The Render free PostgreSQL database will expire on 1 August (in 3 weeks). The school must decide whether to upgrade to a paid plan (~$7/month) or commit to recreating and reloading the free DB every month.
-3. **Transfer Certificate (TC) Content Gaps**:
-   - Legally required fields are currently missing from the TC (UDISE, PEN, SC/ST/OBC, DOB in words, etc.).
-   - Hindi/Devanagari font is not embedded in the PDF generation.
-   - Since 849 students are marked as TC-issued, this needs to be fixed before cosmetic polishing.
-4. **Current Session (2026-27) Marks Data**:
-   - The fresh Testmark2 export for the 2026-27 session yielded 0 rows, though 10,036 historical marks were imported. Needs investigation into where current year marks are recorded in the legacy Access DB.
+3. **Transfer Certificate (TC) Content Gaps** — RESOLVED 2026-07-08 (owner decision: English-only TC):
+   - Code audit found `category` (SC/ST/OBC) and DOB-in-words were already wired into `build_transfer_certificate_pdf`; only `pen_number` had no input field anywhere in the UI. `udise_code` lives on `SchoolProfile` and is editable via `/admin/` (admin-only, one-time setup — no in-app form needed for a single-record settings field).
+   - Owner decided: TC stays **English-only**. ReportLab does not shape Devanagari matras correctly (a known ReportLab limitation, not a missing-font issue — `NotoSansDevanagari` font files/registration were already in place), so replicating the bilingual government format would have required swapping the whole PDF engine (ReportLab -> WeasyPrint/HTML-to-PDF). Not worth it for an English-medium school; skip unless a board/inspection explicitly demands Hindi labels later.
+   - Changes made:
+     - `core/forms.py` `StudentForm`: added `pen_number` field (label "PEN Number").
+     - `templates/core/student_form.html`: added PEN Number input in the "Identity & Enrollment" card.
+     - `core/pdf.py` `build_transfer_certificate_pdf`: removed all Devanagari labels/subtitle/`hindi_style`, switched `field_style` and the top meta table from `NotoSansDevanagari` to `Helvetica`. All 23 fields remain, English-only.
+   - Not touched: `_premium_header` (used by Character Certificate/Marksheet) still has its optional Devanagari title path — this decision was scoped to the TC only, per the owner's answer.
+   - TODO before considered fully closed: run `manage.py test core`, then re-issue/re-check one real student's TC PDF in browser to confirm PEN/UDISE now print when filled in.
+4. **Current Session (2026-27) Marks Data** — RESOLVED 2026-07-08 (owner confirmed):
+   - Owner confirmed no exams/marks entry has happened yet in the legacy software for 2026-27. `Testmark2.csv` correctly exporting 0 rows for this session is expected, not a bug. No code change needed. Re-export/re-import `Testmark2` once real exams for this session are conducted and entered in the legacy app.
 5. **Custom Domain Setup**:
    - Setup `english-medium.thpsic.com` CNAME on Render when convenient (low risk).
 6. **Deferred Polish Items**:

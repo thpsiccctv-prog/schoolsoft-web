@@ -566,14 +566,11 @@ def build_transfer_certificate_pdf(tc, school_profile=None):
     title_style = ParagraphStyle(
         "TcTitle", parent=styles["Title"], fontSize=16, leading=20, alignment=1, textColor=brand_color, fontName="Helvetica-Bold", spaceAfter=2*mm
     )
-    hindi_style = ParagraphStyle(
-        "TcHindi", parent=styles["Normal"], fontName="NotoSansDevanagari", fontSize=14, alignment=1, spaceAfter=4*mm
-    )
     small_style = ParagraphStyle(
         "TcSmall", parent=styles["Normal"], fontSize=9, leading=12, alignment=1
     )
     field_style = ParagraphStyle(
-        "TcField", parent=styles["Normal"], fontName="NotoSansDevanagari", fontSize=9, leading=14
+        "TcField", parent=styles["Normal"], fontName="Helvetica", fontSize=9, leading=14
     )
     value_style = ParagraphStyle(
         "TcValue", parent=styles["Normal"], fontSize=9, leading=14, fontName="Helvetica-Bold"
@@ -594,17 +591,16 @@ def build_transfer_certificate_pdf(tc, school_profile=None):
     
     story.append(Spacer(1, 4 * mm))
     story.append(Paragraph("TRANSFER CERTIFICATE", title_style))
-    story.append(Paragraph("स्थानान्तरण प्रमाण-पत्र", hindi_style))
 
     student = tc.student
-    
+
     top_meta = [
-        [f"Book No. / पुस्तक क्र.: {tc.book_no}", f"S.R. No. / छात्र पंजीका क्र.: {tc.sr_no}", f"Admission No. / प्रवेश क्र.: {student.admission_no}"],
-        [f"TC No. / टी.सी. क्र.: {tc.tc_number}", f"PEN: {getattr(student, 'pen_number', '')}", f"Affiliation No.: _________"]
+        [f"Book No.: {tc.book_no}", f"S.R. No.: {tc.sr_no}", f"Admission No.: {student.admission_no}"],
+        [f"TC No.: {tc.tc_number}", f"PEN: {getattr(student, 'pen_number', '')}", f"Affiliation No.: _________"]
     ]
     meta_t = Table(top_meta, colWidths=[60*mm, 60*mm, 60*mm])
     meta_t.setStyle(TableStyle([
-        ("FONTNAME", (0,0), (-1,-1), "NotoSansDevanagari"),
+        ("FONTNAME", (0,0), (-1,-1), "Helvetica"),
         ("FONTSIZE", (0,0), (-1,-1), 8),
         ("ALIGN", (0,0), (0,-1), "LEFT"),
         ("ALIGN", (1,0), (1,-1), "CENTER"),
@@ -616,34 +612,34 @@ def build_transfer_certificate_pdf(tc, school_profile=None):
 
     class_label = tc.last_class_studied.name if tc.last_class_studied else (student.current_class.name if student.current_class else "")
     if tc.last_section: class_label = f"{class_label}-{tc.last_section}" if class_label else tc.last_section
-    
+
     promoted_class = tc.promoted_to_class if getattr(tc, 'qualified_for_promotion', False) else "N/A"
 
     fields = [
-        ("1. Name of the Pupil / विद्यार्थी का नाम", student.full_name),
-        ("2. Mother's Name / माता का नाम", student.mother_name or ""),
-        ("3. Father's/Guardian's Name / पिता/अभिभावक का नाम", student.father_name or ""),
-        ("4. Nationality / राष्ट्रीयता", getattr(student, 'nationality', 'Indian')),
-        ("5. Whether belongs to SC/ST/OBC / क्या अनुसूचित जाति/जनजाति/अन्य पिछड़े वर्ग से हैं", getattr(student, 'category', '')),
-        ("6. Date of first admission in the School with class / विद्यालय में प्रवेश की तिथि व कक्षा", f"{student.admission_date.strftime('%d-%m-%Y') if student.admission_date else ''} - Class {student.current_class.name if student.current_class else ''}"),
-        ("7. Date of Birth / जन्म तिथि", student.date_of_birth.strftime('%d-%m-%Y') if student.date_of_birth else ""),
-        ("   (in words / शब्दों में)", date_to_words(student.date_of_birth)),
-        ("8. Class in which the pupil last studied / वह कक्षा जिसमें विद्यार्थी ने अंतिम बार अध्ययन किया", class_label),
-        ("9. School/Board Annual Exam last taken / अंतिम विद्यालय/बोर्ड वार्षिक परीक्षा", ""),
-        ("10. Whether failed, if so once/twice / क्या कभी अनुत्तीर्ण रहे", "Yes" if getattr(tc, 'whether_failed', False) else "No"),
-        ("11. Subjects Studied / विषय जिनका अध्ययन किया", getattr(tc, 'subjects_offered', '')),
-        ("12. Whether qualified for promotion / क्या पदोन्नति के अधिकारी हैं", f"Yes - {promoted_class}" if getattr(tc, 'qualified_for_promotion', False) else "No"),
-        ("13. Month upto which school dues paid / वह माह जहाँ तक शुल्क जमा है", tc.fees_paid_upto or ""),
-        ("14. Any fee concession availed of / क्या किसी शुल्क रियायत का लाभ उठाया गया", getattr(tc, 'fee_concession_nature', '') or "No"),
-        ("15. Total No. of working days / कुल कार्य दिवस", str(tc.total_working_days or '')),
-        ("16. Total working days present / विद्यार्थी की कुल उपस्थिति", str(tc.days_present or '')),
-        ("17. Whether NCC Cadet/Scout / क्या एनसीसी कैडेट / स्काउट हैं", getattr(tc, 'ncc_scout', '') or "No"),
-        ("18. Games played or extra-curricular activities / खेल-कूद व गतिविधियाँ", ""),
-        ("19. General conduct / सामान्य आचरण", tc.get_conduct_display()),
-        ("20. Date of application for certificate / आवेदन की तिथि", ""),
-        ("21. Date of issue of certificate / प्रमाण-पत्र जारी करने की तिथि", tc.issue_date.strftime('%d-%m-%Y') if tc.issue_date else ""),
-        ("22. Reasons for leaving the school / विद्यालय छोड़ने का कारण", tc.reason_for_leaving or ""),
-        ("23. Any other remarks / कोई अन्य टिप्पणी", tc.remarks or "")
+        ("1. Name of the Pupil", student.full_name),
+        ("2. Mother's Name", student.mother_name or ""),
+        ("3. Father's/Guardian's Name", student.father_name or ""),
+        ("4. Nationality", getattr(student, 'nationality', 'Indian')),
+        ("5. Whether belongs to SC/ST/OBC", getattr(student, 'category', '')),
+        ("6. Date of first admission in the School with class", f"{student.admission_date.strftime('%d-%m-%Y') if student.admission_date else ''} - Class {student.current_class.name if student.current_class else ''}"),
+        ("7. Date of Birth", student.date_of_birth.strftime('%d-%m-%Y') if student.date_of_birth else ""),
+        ("   (in words)", date_to_words(student.date_of_birth)),
+        ("8. Class in which the pupil last studied", class_label),
+        ("9. School/Board Annual Exam last taken", ""),
+        ("10. Whether failed, if so once/twice", "Yes" if getattr(tc, 'whether_failed', False) else "No"),
+        ("11. Subjects Studied", getattr(tc, 'subjects_offered', '')),
+        ("12. Whether qualified for promotion", f"Yes - {promoted_class}" if getattr(tc, 'qualified_for_promotion', False) else "No"),
+        ("13. Month upto which school dues paid", tc.fees_paid_upto or ""),
+        ("14. Any fee concession availed of", getattr(tc, 'fee_concession_nature', '') or "No"),
+        ("15. Total No. of working days", str(tc.total_working_days or '')),
+        ("16. Total working days present", str(tc.days_present or '')),
+        ("17. Whether NCC Cadet/Scout", getattr(tc, 'ncc_scout', '') or "No"),
+        ("18. Games played or extra-curricular activities", ""),
+        ("19. General conduct", tc.get_conduct_display()),
+        ("20. Date of application for certificate", ""),
+        ("21. Date of issue of certificate", tc.issue_date.strftime('%d-%m-%Y') if tc.issue_date else ""),
+        ("22. Reasons for leaving the school", tc.reason_for_leaving or ""),
+        ("23. Any other remarks", tc.remarks or "")
     ]
 
     table_data = []
