@@ -1963,19 +1963,18 @@ def cash_book(request):
 
 
 def salary_payment_list(request):
-    month = request.GET.get("month")
+    from_date = request.GET.get("from_date")
+    to_date = request.GET.get("to_date")
     staff_id = request.GET.get("staff")
     payment_mode = request.GET.get("payment_mode")
     status = request.GET.get("status", "valid")
 
     qs = SalaryPayment.objects.select_related("staff").all()
 
-    if month:
-        try:
-            parts = month.split("-")
-            qs = qs.filter(pay_month__year=parts[0], pay_month__month=parts[1])
-        except (ValueError, IndexError):
-            pass
+    if from_date:
+        qs = qs.filter(payment_date__gte=from_date)
+    if to_date:
+        qs = qs.filter(payment_date__lte=to_date)
     if staff_id:
         qs = qs.filter(staff_id=staff_id)
     if payment_mode:
@@ -1995,7 +1994,7 @@ def salary_payment_list(request):
     total_gross = qs_for_totals.aggregate(t=Sum("basic_pay") + Sum("da") + Sum("other_allowances"))["t"] or Decimal("0.00")
     total_deductions = qs_for_totals.aggregate(t=Sum("pf_deduction") + Sum("esi_deduction") + Sum("other_deduction"))["t"] or Decimal("0.00")
     total_recovery = qs_for_totals.aggregate(t=Sum("advance_recovery"))["t"] or Decimal("0.00")
-    
+
     total_net = total_gross - total_deductions - total_recovery
 
     paginator = Paginator(qs, 50)

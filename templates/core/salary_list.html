@@ -47,10 +47,15 @@
         </label>
         
         <label>
-            <span>Month</span>
-            <input type="month" name="month" class="form-control" value="{{ request.GET.month }}">
+            <span>From Date</span>
+            <input type="date" name="from_date" class="form-control" value="{{ request.GET.from_date }}">
         </label>
-        
+
+        <label>
+            <span>To Date</span>
+            <input type="date" name="to_date" class="form-control" value="{{ request.GET.to_date }}">
+        </label>
+
         <label>
             <span>Status</span>
             <select name="status" class="form-control">
@@ -70,6 +75,7 @@
                 <tr>
                     <th>Slip No</th>
                     <th>Month</th>
+                    <th>Payment Date</th>
                     <th>Staff</th>
                     <th class="text-right">Gross</th>
                     <th class="text-right">Ded+Adv</th>
@@ -84,6 +90,7 @@
                     <tr class="{% if p.is_cancelled %}cancelled-row{% endif %}">
                         <td><a href="{% url 'core:salary_payment_detail' pk=p.pk %}">{{ p.slip_no }}</a></td>
                         <td>{{ p.pay_month|date:"M Y" }}</td>
+                        <td>{{ p.payment_date|date:"d M Y" }}</td>
                         <td>{{ p.staff.full_name }}</td>
                         <td class="text-right">Rs.  {{ p.gross_pay }}</td>
                         <td class="text-right">Rs.  {{ p.total_deductions|add:p.advance_recovery }}</td>
@@ -104,7 +111,7 @@
                     </tr>
                 {% empty %}
                     <tr>
-                        <td colspan="9" class="empty-state">No salary payments found.</td>
+                        <td colspan="10" class="empty-state">No salary payments found.</td>
                     </tr>
                 {% endfor %}
             </tbody>
@@ -115,11 +122,11 @@
     {% if page_obj.has_other_pages %}
     <div class="pagination">
         {% if page_obj.has_previous %}
-            <a href="?page={{ page_obj.previous_page_number }}&staff={{ request.GET.staff }}&month={{ request.GET.month }}&status={{ request.GET.status }}">Prev</a>
+            <a href="?page={{ page_obj.previous_page_number }}&staff={{ request.GET.staff }}&from_date={{ request.GET.from_date }}&to_date={{ request.GET.to_date }}&status={{ request.GET.status }}">Prev</a>
         {% endif %}
         <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
         {% if page_obj.has_next %}
-            <a href="?page={{ page_obj.next_page_number }}&staff={{ request.GET.staff }}&month={{ request.GET.month }}&status={{ request.GET.status }}">Next</a>
+            <a href="?page={{ page_obj.next_page_number }}&staff={{ request.GET.staff }}&from_date={{ request.GET.from_date }}&to_date={{ request.GET.to_date }}&status={{ request.GET.status }}">Next</a>
         {% endif %}
     </div>
     {% endif %}

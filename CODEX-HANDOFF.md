@@ -1074,3 +1074,27 @@ Completed today:
 TEST STATUS:
 - Verified all visual elements with the user, confirming pixel-perfect match to their legacy expectations.
 - Ready for Final Deployment/Sync to online server.
+
+## 2026-07-08 Checkpoint - End of Day Sync & Pending Action Items
+
+Completed today:
+1. **Desktop-to-Online Sync Fixed**: The legacy Salaries and Vouchers were initially missed because the import script was run on the local dev DB instead of the Desktop EXE DB. Ran the imports on the Desktop DB, fixed the `SalaryPayment.remarks` 255-character length limit issue (PostgreSQL restriction) by truncating strings during import, and successfully synced 55,000+ records to Render.
+2. **Salary Register Date Range Filter**: Replaced the single "Month" filter with a "From Date" and "To Date" filter (filtering on `payment_date`). Added a "Payment Date" column to the table. Deployed to Render.
+
+### Priority Action Items for Next Session / Developer
+
+1. **URGENT SECURITY FIXES**:
+   - The default admin passwords (`admin`/`admin12345`) MUST be changed on both Desktop and Render immediately, as this is now a production system with real data.
+   - The Render PostgreSQL Database credentials (`DATABASE_URL`) were accidentally pasted in chat screenshots. The database password must be rotated on Render immediately to prevent unauthorized access.
+2. **Render Postgres Expiry**:
+   - The Render free PostgreSQL database will expire on 1 August (in 3 weeks). The school must decide whether to upgrade to a paid plan (~$7/month) or commit to recreating and reloading the free DB every month.
+3. **Transfer Certificate (TC) Content Gaps**:
+   - Legally required fields are currently missing from the TC (UDISE, PEN, SC/ST/OBC, DOB in words, etc.).
+   - Hindi/Devanagari font is not embedded in the PDF generation.
+   - Since 849 students are marked as TC-issued, this needs to be fixed before cosmetic polishing.
+4. **Current Session (2026-27) Marks Data**:
+   - The fresh Testmark2 export for the 2026-27 session yielded 0 rows, though 10,036 historical marks were imported. Needs investigation into where current year marks are recorded in the legacy Access DB.
+5. **Custom Domain Setup**:
+   - Setup `english-medium.thpsic.com` CNAME on Render when convenient (low risk).
+6. **Deferred Polish Items**:
+   - Accounts UI polish, Staff Advance FK constraints, Library module, native mobile app wrappers (PWA is sufficient for now).
