@@ -1025,6 +1025,7 @@ This new daily update summarizes:
 - Tests run and current pending commit/build steps.
 
 
+
 ## 2026-07-06 Checkpoint - Accounts/Cash Book Phase 1 & Staff Migration
 
 Completed today:
@@ -1032,8 +1033,44 @@ Completed today:
 1. **Staff Data Migration**: Migrated 21 active staff members from legacy Access SUBGROUP.csv (where they were stored under the SALARY group) into the Django Staff model. The staff dropdown now correctly shows real names like VIVEK SIR, RAVINDRAJI DRIVER, etc.
 2. **Staff Advance Logic**: Implemented dynamic JavaScript toggle on both New Daily Expense and New Other Receipt forms. When Staff Advance is selected as the Debit/Credit head, the Paid To text input is hidden and replaced by a dropdown of active staff members.
 3. **Receipts Update**: Modified VoucherForm in core/forms.py to allow Advance Ledgers (like Staff Advance) in the credit_account dropdown for receipts. A staff member returning an advance in cash is properly handled as a Receipt.
-4. **EXE Rebuilt**: uild-desktop.bat was run successfully. The new EXE is at dist/SchoolSoft/SchoolSoft.exe.
+4. **EXE Rebuilt**:  uild-desktop.bat was run successfully. The new EXE is at dist/SchoolSoft/SchoolSoft.exe.
 
 ### Open Question for Codex / User
 The user noticed that opening the New Daily Expense form still shows a text box by default. This is the **correct behavior**: the form defaults to Select expense / advance head. The staff dropdown *only* appears if the user explicitly changes the dropdown to Staff Advance.
 Please verify with the user if they actually selected Staff Advance in the dropdown before taking the screenshot, or if they expected the Staff Dropdown to appear by default regardless of the expense head.
+
+## 2026-07-06 Checkpoint - Salary Module Phase 2 Finalized
+
+Completed today:
+1. Salary Payment creation with live JS calculations for Gross and Net.
+2. Negative Net Pay blocked and duplicate valid salary blocked per staff/month.
+3. Salary Register implemented and added to sidebar.
+4. Salary detail page with PDF payslip generation (Rs. mojibake fixed).
+5. Edit and Cancel workflows added with full audit logs to `SalaryPaymentAuditLog`. Snapshot logic captures true DB old values.
+6. Cancelled salaries appear distinctly with strikethrough/badges and are excluded from Cash Book and top-level KPIs.
+7. Cancelled salary allows recreation of a new valid salary for the same staff/month using a conditional UniqueConstraint on `is_cancelled=False`.
+
+TEST STATUS:
+- `python manage.py test core` passed 30/30.
+- Manual workflow verified by user (Create, Duplicate block, Edit, Cancel, Recreate, Cash Book check).
+- Collectstatic and EXE build successful.
+
+## 2026-07-08 Checkpoint - Legacy Data Import & Cash Book T-Shape UI Redesign
+
+Completed today:
+1. **Legacy Data Import**: 
+   - `sync_recent_staff.py` and `sync_recent_vouchers.py` successfully imported Staff and Salary payments from old CSV exports into Django models.
+   - Handled UniqueConstraint conflicts on Salaries by merging multiple legacy voucher rows (e.g., April and May salaries) into a single `SalaryPayment` slip per staff per month, combining their net pay and remarks.
+2. **Cash Book Balance Fix**:
+   - Fixed `FeeReceipt` sum calculation in cash book view from `total_amount` to `received_amount`.
+   - Set the correct `opening_balance_date` in the local SQLite DB for the `Cash in Hand` ledger so past balances carry over correctly. The resulting negative balances accurately reflect the legacy software's credit balance.
+3. **Cash Book T-Shape Redesign**:
+   - Redesigned the Cash Book UI to completely mimic the legacy software's Double-Entry "T-Shape" Ledger format.
+   - Replaced single `target_date` with `from_date` and `to_date` range filtering.
+   - Grouped transactions by day, displaying Receipts on the Left and Payments on the Right.
+   - Displayed Opening Balance and Closing Balance to mathematically balance (tally) each day's totals.
+   - Fixed print UI in landscape mode using `<colgroup>` and strict `word-break: break-word` to ensure long remarks (like salary details) fit cleanly without breaking the split layout.
+
+TEST STATUS:
+- Verified all visual elements with the user, confirming pixel-perfect match to their legacy expectations.
+- Ready for Final Deployment/Sync to online server.

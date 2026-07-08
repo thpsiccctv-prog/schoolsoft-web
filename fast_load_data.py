@@ -98,6 +98,10 @@ def print_counts():
         "core.ExamMark",
         "core.Staff",
         "core.StudentTransport",
+        "core.AccountGroup",
+        "core.LedgerAccount",
+        "core.Voucher",
+        "core.SalaryPayment",
     ]:
         model = apps.get_model(label)
         print(f"    {label}: {model.objects.count()}")

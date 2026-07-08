@@ -1745,14 +1745,27 @@ def cash_book(request):
     from django.db.models import Sum
     import datetime
     
-    date_str = request.GET.get("date")
-    if date_str:
-        try:
-            target_date = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
-        except ValueError:
-            target_date = timezone.localdate()
-    else:
-        target_date = timezone.localdate()
+    from_date_str = request.GET.get("from_date")
+    to_date_str = request.GET.get("to_date")
+    
+    try:
+        if from_date_str:
+            from_date = datetime.datetime.strptime(from_date_str, "%Y-%m-%d").date()
+        else:
+            from_date = timezone.localdate()
+    except ValueError:
+        from_date = timezone.localdate()
+        
+    try:
+        if to_date_str:
+            to_date = datetime.datetime.strptime(to_date_str, "%Y-%m-%d").date()
+        else:
+            to_date = timezone.localdate()
+    except ValueError:
+        to_date = timezone.localdate()
+        
+    if from_date > to_date:
+        from_date, to_date = to_date, from_date
         
     include_salary = request.GET.get("include_salary") == "1"
     
@@ -1761,18 +1774,20 @@ def cash_book(request):
         messages.error(request, "Cash ledger not found. Please run seed_accounts.")
         return redirect("core:dashboard")
         
-    # Get all transactions for the target date
+    # Get all transactions for the date range
     
     # 1. Fee Receipts (Cash Receipt)
     fee_receipts = FeeReceipt.objects.filter(
-        receipt_date=target_date, 
+        receipt_date__gte=from_date,
+        receipt_date__lte=to_date,
         is_cancelled=False,
         payment_mode=FeeReceipt.PaymentMode.CASH
     ).select_related("student")
     
     # 2. Vouchers (Cash Payments and Cash Receipts, Contra)
     vouchers = Voucher.objects.filter(
-        voucher_date=target_date,
+        voucher_date__gte=from_date,
+        voucher_date__lte=to_date,
         is_cancelled=False,
     ).filter(Q(debit_account=cash_ledger) | Q(credit_account=cash_ledger)).select_related("debit_account", "credit_account")
     
@@ -1780,46 +1795,47 @@ def cash_book(request):
     salary_payments = []
     if include_salary:
         salary_payments = SalaryPayment.objects.filter(
-            payment_date=target_date,
+            payment_date__gte=from_date,
+            payment_date__lte=to_date,
             payment_mode=SalaryPayment.PaymentMode.CASH,
             is_cancelled=False
         ).select_related("staff")
         
-    # Calculate opening balance up to target_date - 1 day
+    # Calculate opening balance up to from_date - 1 day
     # Base OB
     ob = cash_ledger.opening_balance
     ob_date = cash_ledger.opening_balance_date
     
-    if ob_date and ob_date <= target_date:
-        # Calculate net change from ob_date to target_date - 1
+    if ob_date and ob_date <= from_date:
+        # Calculate net change from ob_date to from_date - 1
         
         # 1. Fee Receipts sum
         fr_sum = FeeReceipt.objects.filter(
             receipt_date__gte=ob_date,
-            receipt_date__lt=target_date,
+            receipt_date__lt=from_date,
             is_cancelled=False,
             payment_mode=FeeReceipt.PaymentMode.CASH
-        ).aggregate(total=Sum("total_amount"))["total"] or Decimal("0.00")
+        ).aggregate(total=Sum("received_amount"))["total"] or Decimal("0.00")
         
-        # 2. Salary sum
+        from django.db.models import F
         sal_sum = SalaryPayment.objects.filter(
             payment_date__gte=ob_date,
-            payment_date__lt=target_date,
+            payment_date__lt=from_date,
             payment_mode=SalaryPayment.PaymentMode.CASH,
             is_cancelled=False
-        ).aggregate(total=Sum("net_pay"))["total"] or Decimal("0.00")
+        ).aggregate(total=Sum(F('basic_pay') + F('da') + F('other_allowances') - F('pf_deduction') - F('esi_deduction') - F('other_deduction') - F('advance_recovery')))["total"] or Decimal("0.00")
         
         # 3. Voucher in/out
         v_in_sum = Voucher.objects.filter(
             voucher_date__gte=ob_date,
-            voucher_date__lt=target_date,
+            voucher_date__lt=from_date,
             is_cancelled=False,
             debit_account=cash_ledger
         ).aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
         
         v_out_sum = Voucher.objects.filter(
             voucher_date__gte=ob_date,
-            voucher_date__lt=target_date,
+            voucher_date__lt=from_date,
             is_cancelled=False,
             credit_account=cash_ledger
         ).aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
@@ -1827,20 +1843,18 @@ def cash_book(request):
         ob = ob + fr_sum + v_in_sum - sal_sum - v_out_sum
         
     
-    # Combine into lines
-    # { 'type': 'FR'/'VOUCHER'/'SAL', 'ref': obj, 'desc': str, 'in': 0.00, 'out': 0.00, 'time': datetime }
-    
-    lines = []
+    transactions = []
     
     for r in fee_receipts:
-        lines.append({
+        transactions.append({
             "type": "FR",
             "ref": r,
             "ref_no": r.receipt_no,
+            "date": r.receipt_date,
             "desc": f"Fee Receipt: {r.student.full_name}",
-            "in_amt": r.total_amount,
+            "in_amt": r.received_amount,
             "out_amt": Decimal("0.00"),
-            "sort_key": r.created_at
+            "sort_key": (r.receipt_date, r.created_at)
         })
         
     for v in vouchers:
@@ -1848,47 +1862,102 @@ def cash_book(request):
         party_name = v.staff.full_name if v.staff else v.paid_to_or_received_from
         head_name = v.credit_account.name if is_in else v.debit_account.name
         desc_bits = [part for part in [head_name, party_name, v.narration] if part]
-        lines.append({
+        transactions.append({
             "type": "VOUCHER",
             "ref": v,
             "ref_no": v.voucher_no,
+            "date": v.voucher_date,
             "desc": " - ".join(desc_bits),
             "in_amt": v.amount if is_in else Decimal("0.00"),
             "out_amt": Decimal("0.00") if is_in else v.amount,
-            "sort_key": v.created_at
+            "sort_key": (v.voucher_date, v.created_at)
         })
         
     if include_salary:
         for s in salary_payments:
-            lines.append({
+            desc_parts = [f"Salary: {s.staff.full_name}"]
+            if s.remarks:
+                desc_parts.append(f"({s.remarks})")
+            
+            transactions.append({
                 "type": "SAL",
                 "ref": s,
                 "ref_no": f"SAL-{s.pk}",
-                "desc": f"Salary: {s.staff.full_name} | Gross Rs. {s.gross_pay} | Adv Recovery Rs. {s.advance_recovery} | Net Rs. {s.net_pay}",
+                "date": s.payment_date,
+                "desc": " ".join(desc_parts),
                 "in_amt": Decimal("0.00"),
                 "out_amt": s.net_pay,
-                "sort_key": s.created_at
+                "sort_key": (s.payment_date, s.created_at)
             })
             
-    lines.sort(key=lambda x: x["sort_key"])
+    transactions.sort(key=lambda x: x["sort_key"])
     
-    # Running balance
-    running = ob
-    for line in lines:
-        running = running + line["in_amt"] - line["out_amt"]
-        line["balance"] = running
+    tx_by_date = {}
+    for tx in transactions:
+        tx_by_date.setdefault(tx["date"], []).append(tx)
         
-    total_in = sum(l["in_amt"] for l in lines)
-    total_out = sum(l["out_amt"] for l in lines)
-    closing = ob + total_in - total_out
+    dates_to_process = sorted(list(tx_by_date.keys()))
+    if from_date not in dates_to_process:
+        dates_to_process.insert(0, from_date)
+    if to_date not in dates_to_process:
+        dates_to_process.append(to_date)
+        
+    # Remove duplicates but keep sorted order
+    dates_to_process = sorted(list(set(dates_to_process)))
+    
+    daily_data = []
+    current_balance = ob
+    
+    from itertools import zip_longest
+    
+    for d in dates_to_process:
+        day_tx = tx_by_date.get(d, [])
+        receipts = []
+        payments = []
+        
+        # Add OB
+        if current_balance > 0:
+            receipts.append({"ref_no": "-", "desc": "To Balance b/d", "amount": current_balance})
+        elif current_balance < 0:
+            payments.append({"ref_no": "-", "desc": "By Balance b/d", "amount": abs(current_balance)})
+            
+        for tx in day_tx:
+            if tx["in_amt"] > 0:
+                receipts.append({"ref_no": tx["ref_no"], "desc": tx["desc"], "amount": tx["in_amt"]})
+            elif tx["out_amt"] > 0:
+                payments.append({"ref_no": tx["ref_no"], "desc": tx["desc"], "amount": tx["out_amt"]})
+                
+        day_total_in = sum(r["amount"] for r in receipts)
+        day_total_out = sum(p["amount"] for p in payments)
+        
+        cb = day_total_in - day_total_out
+        
+        if not day_tx and cb == 0:
+            continue
+            
+        if cb > 0:
+            payments.append({"ref_no": "-", "desc": "By Balance c/d", "amount": cb})
+            day_total = day_total_in
+        elif cb < 0:
+            receipts.append({"ref_no": "-", "desc": "To Balance c/d", "amount": abs(cb)})
+            day_total = day_total_out
+        else:
+            day_total = day_total_in
+            
+        current_balance = cb
+        
+        zipped_rows = list(zip_longest(receipts, payments, fillvalue=None))
+        
+        daily_data.append({
+            "date": d,
+            "rows": zipped_rows,
+            "total": day_total
+        })
     
     return render(request, "core/cash_book.html", {
-        "target_date": target_date,
-        "ob": ob,
-        "closing": closing,
-        "total_in": total_in,
-        "total_out": total_out,
-        "lines": lines,
+        "from_date": from_date,
+        "to_date": to_date,
+        "daily_data": daily_data,
         "include_salary": include_salary
     })
 
