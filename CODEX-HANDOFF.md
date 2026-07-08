@@ -1103,3 +1103,61 @@ Completed today:
    - Setup `english-medium.thpsic.com` CNAME on Render when convenient (low risk).
 6. **Deferred Polish Items**:
    - Accounts UI polish, Staff Advance FK constraints, Library module, native mobile app wrappers (PWA is sufficient for now).
+
+## 2026-07-08 Checkpoint - Category/Caste Data Bug + Full Admission Form Parity
+
+Trigger: owner compared the new-app TC PDF against the legacy TC (screenshots) and spotted
+`"5. Whether belongs to SC/ST/OBC"` printing `KOIRI` (a caste name) for one student instead of
+`OBC`/`SC`/`ST`/`General`. Owner also supplied the school's real, current official admission
+form: `EbenEzer_Admission_Form_English_2026-27.docx` (uploaded + read via Word) as ground truth,
+which is more authoritative than the legacy VB software's screen layout.
+
+**Root cause of the Category/Caste bug**: `import_legacy_students.py` line ~175 does
+`"category": self.clean(row.get("CATE")) or self.clean(row.get("cast"))`. Whenever the legacy
+`CATE` column was blank for a student, the caste name (`cast` column, e.g. KOIRI, YADAV,
+MUSLMAN) silently became the stored `category` value. This is a data problem, not something a
+code fix alone can safely repair (a caste name cannot be auto-mapped to General/OBC/SC/ST).
+
+**Fix shipped**:
+- New read-only audit command `core/management/commands/audit_student_categories.py` — lists
+  every student whose `category` is blank or doesn't look like General/OBC/SC/ST/GEN, writes
+  `migration_audit/category_audit.csv`. Run with:
+  `.\.venv\Scripts\python.exe manage.py audit_student_categories`
+  Office staff must review this list and correct each student's Category via the edit form
+  before their TC/admission paperwork is finalized. `category` was deliberately kept as a free
+  CharField (not a strict choices/enum) rather than force-converting it, since ~1213 live
+  student records may have legacy spelling variants (e.g. `GEN` vs `General`) that would
+  otherwise silently show as "unset" in a strict dropdown — safer to flag via CSV and let a
+  human confirm each one on a live production system.
+
+**Full admission-form field parity added to `Student` model** (owner chose "add everything at
+once" after reviewing the real form), all in migration to be created via
+`manage.py makemigrations`:
+- `apaar_id`, `caste` (separate from `category`), `guardian_name`, `mother_aadhaar_no`,
+  `father_aadhaar_no`, `is_minority`, `disability` (choices: None/Visually Impaired/Hearing
+  Impaired/Physically Disabled), `email`, `blood_group` (A+/A-/B+/B-/AB+/AB-/O+/O-),
+  `weight_kg`, `height_cm`, `village_locality`, `post`, `block`, `district`, `pin_code`.
+- Previous-school block (for transfer admissions): `previous_board_name`,
+  `previous_passing_year`, `previous_roll_no`, `previous_school_name`,
+  `previous_marks_obtained`, `previous_total_marks`, `previous_percentage`.
+- Documents Received checklist (admission desk): `doc_tc_received`, `doc_aadhar_received`,
+  `doc_marksheet_received`, `doc_birth_certificate_received`,
+  `doc_character_certificate_received`, `doc_photo_received`.
+- `core/forms.py` `StudentForm`: all new fields added to `Meta.fields`; checkbox fields now
+  correctly skip the `form-control` CSS class (loop changed from `field_name != "is_active"` to
+  `not isinstance(field.widget, forms.CheckboxInput)`).
+- `templates/core/student_form.html`: reorganized into new cards — Social Category (caste,
+  category, religion, disability, minority toggle), Health, Previous School (if admitted by
+  transfer), Documents Received — using the existing `.entry-card`/`.entry-grid-four` system,
+  no new CSS needed.
+
+**Not yet done / next session must**:
+1. Run `manage.py makemigrations core` then `manage.py migrate` (new migration not yet created
+   or applied — this was written by Claude/Opus without shell access; a human must run it).
+2. Run `manage.py test core` — should still be the same test count since no existing test posts
+   to the student form directly.
+3. Run `manage.py audit_student_categories` and review `migration_audit/category_audit.csv`.
+4. Manually open the student edit form in browser to confirm all new cards render correctly and
+   save/reload works, then `collectstatic` + `build-desktop.bat` before shipping desktop.
+5. TC PDF/print still only uses `category` (unchanged) for the SC/ST/OBC line — `caste` is not
+   printed anywhere yet (matches the legacy TC format, which also has no caste line).

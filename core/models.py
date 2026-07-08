@@ -86,24 +86,73 @@ class Student(TimeStampedModel):
         OTHER = "O", "Other"
         UNKNOWN = "U", "Unknown"
 
+    class Disability(models.TextChoices):
+        NONE = "none", "None"
+        VISUALLY_IMPAIRED = "visually_impaired", "Visually Impaired"
+        HEARING_IMPAIRED = "hearing_impaired", "Hearing Impaired"
+        PHYSICALLY_DISABLED = "physically_disabled", "Physically Disabled"
+
+    class BloodGroup(models.TextChoices):
+        A_POS = "A+", "A+"
+        A_NEG = "A-", "A-"
+        B_POS = "B+", "B+"
+        B_NEG = "B-", "B-"
+        AB_POS = "AB+", "AB+"
+        AB_NEG = "AB-", "AB-"
+        O_POS = "O+", "O+"
+        O_NEG = "O-", "O-"
+
     legacy_sid = models.PositiveIntegerField(null=True, blank=True, unique=True)
     pen_number = models.CharField(max_length=50, blank=True)
+    apaar_id = models.CharField(max_length=50, blank=True, verbose_name="APAAR ID")
     admission_no = models.CharField(max_length=30, blank=True)
     registration_no = models.CharField(max_length=30, blank=True)
     roll_no = models.PositiveIntegerField(null=True, blank=True)
     full_name = models.CharField(max_length=120)
     father_name = models.CharField(max_length=120, blank=True)
     mother_name = models.CharField(max_length=120, blank=True)
+    guardian_name = models.CharField(max_length=120, blank=True, help_text="Only if parents are not available.")
     gender = models.CharField(max_length=1, choices=Gender.choices, default=Gender.UNKNOWN)
     date_of_birth = models.DateField(null=True, blank=True)
     aadhaar_no = models.CharField(max_length=25, blank=True)
+    mother_aadhaar_no = models.CharField(max_length=25, blank=True)
+    father_aadhaar_no = models.CharField(max_length=25, blank=True)
     nationality = models.CharField(max_length=50, default="Indian")
-    category = models.CharField(max_length=50, blank=True)
+    caste = models.CharField(max_length=50, blank=True, help_text="Specific caste/community name, separate from reservation Category.")
+    category = models.CharField(max_length=50, blank=True, help_text="General / OBC / SC / ST only.")
+    is_minority = models.BooleanField(default=False)
+    disability = models.CharField(max_length=30, choices=Disability.choices, default=Disability.NONE)
     religion = models.CharField(max_length=50, blank=True)
+    email = models.EmailField(blank=True)
     mobile_primary = models.CharField(max_length=50, blank=True)
     mobile_secondary = models.CharField(max_length=50, blank=True)
+    blood_group = models.CharField(max_length=10, choices=BloodGroup.choices, blank=True)
+    weight_kg = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    height_cm = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     address_permanent = models.TextField(blank=True)
     address_local = models.TextField(blank=True)
+    village_locality = models.CharField(max_length=100, blank=True)
+    post = models.CharField(max_length=100, blank=True)
+    block = models.CharField(max_length=100, blank=True)
+    district = models.CharField(max_length=100, blank=True)
+    pin_code = models.CharField(max_length=10, blank=True)
+
+    # Previous school details (for students admitted by transfer, from the admission form)
+    previous_board_name = models.CharField(max_length=120, blank=True)
+    previous_passing_year = models.CharField(max_length=10, blank=True)
+    previous_roll_no = models.CharField(max_length=30, blank=True)
+    previous_school_name = models.CharField(max_length=150, blank=True)
+    previous_marks_obtained = models.DecimalField(max_digits=7, decimal_places=2, null=True, blank=True)
+    previous_total_marks = models.DecimalField(max_digits=7, decimal_places=2, null=True, blank=True)
+    previous_percentage = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+
+    # Documents Received checklist (admission desk)
+    doc_tc_received = models.BooleanField(default=False, verbose_name="TC Received")
+    doc_aadhar_received = models.BooleanField(default=False, verbose_name="Aadhar Card Received")
+    doc_marksheet_received = models.BooleanField(default=False, verbose_name="Marksheet Received")
+    doc_birth_certificate_received = models.BooleanField(default=False, verbose_name="Birth Certificate Received")
+    doc_character_certificate_received = models.BooleanField(default=False, verbose_name="Character Certificate Received")
+    doc_photo_received = models.BooleanField(default=False, verbose_name="Passport Photo Received")
     current_class = models.ForeignKey(
         SchoolClass,
         on_delete=models.PROTECT,

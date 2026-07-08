@@ -29,6 +29,7 @@ class StudentForm(forms.ModelForm):
             "registration_no",
             "admission_no",
             "pen_number",
+            "apaar_id",
             "legacy_sid",
             "admission_date",
             "full_name",
@@ -36,15 +37,43 @@ class StudentForm(forms.ModelForm):
             "current_section",
             "date_of_birth",
             "gender",
+            "aadhaar_no",
             "father_name",
             "mother_name",
+            "guardian_name",
+            "mother_aadhaar_no",
+            "father_aadhaar_no",
+            "caste",
             "category",
+            "is_minority",
+            "disability",
             "religion",
+            "email",
             "mobile_primary",
             "mobile_secondary",
-            "aadhaar_no",
+            "blood_group",
+            "weight_kg",
+            "height_cm",
             "address_local",
             "address_permanent",
+            "village_locality",
+            "post",
+            "block",
+            "district",
+            "pin_code",
+            "previous_board_name",
+            "previous_passing_year",
+            "previous_roll_no",
+            "previous_school_name",
+            "previous_marks_obtained",
+            "previous_total_marks",
+            "previous_percentage",
+            "doc_tc_received",
+            "doc_aadhar_received",
+            "doc_marksheet_received",
+            "doc_birth_certificate_received",
+            "doc_character_certificate_received",
+            "doc_photo_received",
             "is_active",
         ]
         widgets = {
@@ -55,6 +84,11 @@ class StudentForm(forms.ModelForm):
         }
         labels = {
             "pen_number": "PEN Number",
+            "apaar_id": "APAAR ID",
+            "caste": "Caste",
+            "category": "Category (General/OBC/SC/ST)",
+            "is_minority": "Minority",
+            "pin_code": "PIN Code",
         }
 
     def __init__(self, *args, **kwargs):
@@ -67,7 +101,7 @@ class StudentForm(forms.ModelForm):
                 self.fields["legacy_sid"].initial = (max_sid or 0) + 1
             
         for field_name, field in self.fields.items():
-            if field_name != "is_active":
+            if not isinstance(field.widget, forms.CheckboxInput):
                 field.widget.attrs.setdefault("class", "form-control")
 
 

@@ -65,6 +65,11 @@
                             {{ form.pen_number }}
                             {% if form.pen_number.errors %}<div class="error-text">{{ form.pen_number.errors|striptags }}</div>{% endif %}
                         </div>
+                        <div class="entry-field">
+                            <label for="{{ form.apaar_id.id_for_label }}">{{ form.apaar_id.label }}</label>
+                            {{ form.apaar_id }}
+                            {% if form.apaar_id.errors %}<div class="error-text">{{ form.apaar_id.errors|striptags }}</div>{% endif %}
+                        </div>
                     </div>
                 </section>
 
@@ -117,6 +122,32 @@
                             {{ form.mother_name }}
                             {% if form.mother_name.errors %}<div class="error-text">{{ form.mother_name.errors|striptags }}</div>{% endif %}
                         </div>
+                        <div class="entry-field entry-span-2">
+                            <label for="{{ form.guardian_name.id_for_label }}">{{ form.guardian_name.label }}</label>
+                            {{ form.guardian_name }}
+                            {% if form.guardian_name.errors %}<div class="error-text">{{ form.guardian_name.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.mother_aadhaar_no.id_for_label }}">{{ form.mother_aadhaar_no.label }}</label>
+                            {{ form.mother_aadhaar_no }}
+                            {% if form.mother_aadhaar_no.errors %}<div class="error-text">{{ form.mother_aadhaar_no.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.father_aadhaar_no.id_for_label }}">{{ form.father_aadhaar_no.label }}</label>
+                            {{ form.father_aadhaar_no }}
+                            {% if form.father_aadhaar_no.errors %}<div class="error-text">{{ form.father_aadhaar_no.errors|striptags }}</div>{% endif %}
+                        </div>
+                    </div>
+                </section>
+
+                <section class="entry-card">
+                    <div class="entry-card-title">Social Category</div>
+                    <div class="entry-grid entry-grid-four">
+                        <div class="entry-field">
+                            <label for="{{ form.caste.id_for_label }}">{{ form.caste.label }}</label>
+                            {{ form.caste }}
+                            {% if form.caste.errors %}<div class="error-text">{{ form.caste.errors|striptags }}</div>{% endif %}
+                        </div>
                         <div class="entry-field">
                             <label for="{{ form.category.id_for_label }}">{{ form.category.label }}</label>
                             {{ form.category }}
@@ -126,6 +157,18 @@
                             <label for="{{ form.religion.id_for_label }}">{{ form.religion.label }}</label>
                             {{ form.religion }}
                             {% if form.religion.errors %}<div class="error-text">{{ form.religion.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.disability.id_for_label }}">{{ form.disability.label }}</label>
+                            {{ form.disability }}
+                            {% if form.disability.errors %}<div class="error-text">{{ form.disability.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label class="student-active-toggle">
+                                {{ form.is_minority }}
+                                <span>{{ form.is_minority.label }}</span>
+                            </label>
+                            {% if form.is_minority.errors %}<div class="error-text">{{ form.is_minority.errors|striptags }}</div>{% endif %}
                         </div>
                     </div>
                 </section>
@@ -144,14 +187,148 @@
                             {% if form.mobile_secondary.errors %}<div class="error-text">{{ form.mobile_secondary.errors|striptags }}</div>{% endif %}
                         </div>
                         <div class="entry-field entry-span-2">
+                            <label for="{{ form.email.id_for_label }}">{{ form.email.label }}</label>
+                            {{ form.email }}
+                            {% if form.email.errors %}<div class="error-text">{{ form.email.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field entry-span-2">
                             <label for="{{ form.address_local.id_for_label }}">{{ form.address_local.label }}</label>
                             {{ form.address_local }}
                             {% if form.address_local.errors %}<div class="error-text">{{ form.address_local.errors|striptags }}</div>{% endif %}
                         </div>
-                        <div class="entry-field entry-span-full">
+                        <div class="entry-field entry-span-2">
                             <label for="{{ form.address_permanent.id_for_label }}">{{ form.address_permanent.label }}</label>
                             {{ form.address_permanent }}
                             {% if form.address_permanent.errors %}<div class="error-text">{{ form.address_permanent.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.village_locality.id_for_label }}">{{ form.village_locality.label }}</label>
+                            {{ form.village_locality }}
+                            {% if form.village_locality.errors %}<div class="error-text">{{ form.village_locality.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.post.id_for_label }}">{{ form.post.label }}</label>
+                            {{ form.post }}
+                            {% if form.post.errors %}<div class="error-text">{{ form.post.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.block.id_for_label }}">{{ form.block.label }}</label>
+                            {{ form.block }}
+                            {% if form.block.errors %}<div class="error-text">{{ form.block.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.district.id_for_label }}">{{ form.district.label }}</label>
+                            {{ form.district }}
+                            {% if form.district.errors %}<div class="error-text">{{ form.district.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.pin_code.id_for_label }}">{{ form.pin_code.label }}</label>
+                            {{ form.pin_code }}
+                            {% if form.pin_code.errors %}<div class="error-text">{{ form.pin_code.errors|striptags }}</div>{% endif %}
+                        </div>
+                    </div>
+                </section>
+
+                <section class="entry-card">
+                    <div class="entry-card-title">Health</div>
+                    <div class="entry-grid entry-grid-four">
+                        <div class="entry-field">
+                            <label for="{{ form.blood_group.id_for_label }}">{{ form.blood_group.label }}</label>
+                            {{ form.blood_group }}
+                            {% if form.blood_group.errors %}<div class="error-text">{{ form.blood_group.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.weight_kg.id_for_label }}">{{ form.weight_kg.label }}</label>
+                            {{ form.weight_kg }}
+                            {% if form.weight_kg.errors %}<div class="error-text">{{ form.weight_kg.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.height_cm.id_for_label }}">{{ form.height_cm.label }}</label>
+                            {{ form.height_cm }}
+                            {% if form.height_cm.errors %}<div class="error-text">{{ form.height_cm.errors|striptags }}</div>{% endif %}
+                        </div>
+                    </div>
+                </section>
+
+                <section class="entry-card">
+                    <div class="entry-card-title">Previous School (if admitted by transfer)</div>
+                    <div class="entry-grid entry-grid-four">
+                        <div class="entry-field entry-span-2">
+                            <label for="{{ form.previous_school_name.id_for_label }}">{{ form.previous_school_name.label }}</label>
+                            {{ form.previous_school_name }}
+                            {% if form.previous_school_name.errors %}<div class="error-text">{{ form.previous_school_name.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.previous_board_name.id_for_label }}">{{ form.previous_board_name.label }}</label>
+                            {{ form.previous_board_name }}
+                            {% if form.previous_board_name.errors %}<div class="error-text">{{ form.previous_board_name.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.previous_passing_year.id_for_label }}">{{ form.previous_passing_year.label }}</label>
+                            {{ form.previous_passing_year }}
+                            {% if form.previous_passing_year.errors %}<div class="error-text">{{ form.previous_passing_year.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.previous_roll_no.id_for_label }}">{{ form.previous_roll_no.label }}</label>
+                            {{ form.previous_roll_no }}
+                            {% if form.previous_roll_no.errors %}<div class="error-text">{{ form.previous_roll_no.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.previous_marks_obtained.id_for_label }}">{{ form.previous_marks_obtained.label }}</label>
+                            {{ form.previous_marks_obtained }}
+                            {% if form.previous_marks_obtained.errors %}<div class="error-text">{{ form.previous_marks_obtained.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.previous_total_marks.id_for_label }}">{{ form.previous_total_marks.label }}</label>
+                            {{ form.previous_total_marks }}
+                            {% if form.previous_total_marks.errors %}<div class="error-text">{{ form.previous_total_marks.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.previous_percentage.id_for_label }}">{{ form.previous_percentage.label }}</label>
+                            {{ form.previous_percentage }}
+                            {% if form.previous_percentage.errors %}<div class="error-text">{{ form.previous_percentage.errors|striptags }}</div>{% endif %}
+                        </div>
+                    </div>
+                </section>
+
+                <section class="entry-card">
+                    <div class="entry-card-title">Documents Received</div>
+                    <div class="entry-grid entry-grid-four">
+                        <div class="entry-field">
+                            <label class="student-active-toggle">
+                                {{ form.doc_tc_received }}
+                                <span>{{ form.doc_tc_received.label }}</span>
+                            </label>
+                        </div>
+                        <div class="entry-field">
+                            <label class="student-active-toggle">
+                                {{ form.doc_aadhar_received }}
+                                <span>{{ form.doc_aadhar_received.label }}</span>
+                            </label>
+                        </div>
+                        <div class="entry-field">
+                            <label class="student-active-toggle">
+                                {{ form.doc_marksheet_received }}
+                                <span>{{ form.doc_marksheet_received.label }}</span>
+                            </label>
+                        </div>
+                        <div class="entry-field">
+                            <label class="student-active-toggle">
+                                {{ form.doc_birth_certificate_received }}
+                                <span>{{ form.doc_birth_certificate_received.label }}</span>
+                            </label>
+                        </div>
+                        <div class="entry-field">
+                            <label class="student-active-toggle">
+                                {{ form.doc_character_certificate_received }}
+                                <span>{{ form.doc_character_certificate_received.label }}</span>
+                            </label>
+                        </div>
+                        <div class="entry-field">
+                            <label class="student-active-toggle">
+                                {{ form.doc_photo_received }}
+                                <span>{{ form.doc_photo_received.label }}</span>
+                            </label>
                         </div>
                     </div>
                 </section>
