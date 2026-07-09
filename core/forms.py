@@ -11,24 +11,21 @@ class SectionSelect(forms.Select):
     """Renders each <option> with a data-class attribute so student_form.html can
     show only the sections belonging to the currently selected class, client-side."""
 
-    @property
-    def section_class_map(self):
-        if not hasattr(self, "_section_class_map"):
-            try:
-                from core.models import Section
-                self._section_class_map = dict(Section.objects.values_list("id", "school_class_id"))
-            except Exception:
-                self._section_class_map = {}
-        return self._section_class_map
+    def optgroups(self, name, value, attrs=None):
+        try:
+            from core.models import Section
+            self._temp_map = {s.id: str(s.school_class_id) for s in Section.objects.all()}
+        except Exception:
+            self._temp_map = {}
+        return super().optgroups(name, value, attrs)
 
     def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
         option = super().create_option(name, value, label, selected, index, subindex, attrs)
-        if value:
-            # Handle empty values ('') which might be passed for the placeholder
+        if value and hasattr(self, "_temp_map"):
             try:
-                class_id = self.section_class_map.get(int(value))
+                class_id = self._temp_map.get(int(value))
                 if class_id:
-                    option["attrs"]["data-class"] = str(class_id)
+                    option["attrs"]["data-class"] = class_id
             except (ValueError, TypeError):
                 pass
         return option
@@ -129,6 +126,8 @@ class StudentForm(forms.ModelForm):
             if "legacy_sid" not in self.initial:
                 max_sid = Student.objects.aggregate(max_sid=Max("legacy_sid"))["max_sid"]
                 self.fields["legacy_sid"].initial = (max_sid or 0) + 1
+                
+        self.fields["current_section"].label_from_instance = lambda obj: obj.name
             
         for field_name, field in self.fields.items():
             if not isinstance(field.widget, forms.CheckboxInput):
