@@ -11,15 +11,26 @@ class SectionSelect(forms.Select):
     """Renders each <option> with a data-class attribute so student_form.html can
     show only the sections belonging to the currently selected class, client-side."""
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._section_class_map = dict(Section.objects.values_list("id", "school_class_id"))
+    @property
+    def section_class_map(self):
+        if not hasattr(self, "_section_class_map"):
+            try:
+                from core.models import Section
+                self._section_class_map = dict(Section.objects.values_list("id", "school_class_id"))
+            except Exception:
+                self._section_class_map = {}
+        return self._section_class_map
 
     def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
         option = super().create_option(name, value, label, selected, index, subindex, attrs)
-        class_id = self._section_class_map.get(value)
-        if class_id:
-            option["attrs"]["data-class"] = str(class_id)
+        if value:
+            # Handle empty values ('') which might be passed for the placeholder
+            try:
+                class_id = self.section_class_map.get(int(value))
+                if class_id:
+                    option["attrs"]["data-class"] = str(class_id)
+            except (ValueError, TypeError):
+                pass
         return option
 
 
