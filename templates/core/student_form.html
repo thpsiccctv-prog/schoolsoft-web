@@ -432,7 +432,7 @@
                     opt.hidden = false;
                     return;
                 }
-                const matches = !classId || opt.dataset.class === classId;
+                const matches = classId && opt.dataset.class === classId;
                 opt.hidden = !matches;
                 if (matches && opt.selected) {
                     selectedStillVisible = true;
