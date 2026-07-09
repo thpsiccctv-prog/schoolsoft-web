@@ -1,10 +1,10 @@
 from decimal import Decimal
 
 from django import forms
-from django.db.models import Max
+from django.db.models import Count, Max
 from django.utils import timezone
 
-from .models import AcademicSession, AccountGroup, FeeHead, FeeReceipt, SalaryPayment, Section, Staff, Student, TransferCertificate, LedgerAccount, Voucher
+from .models import AcademicSession, AccountGroup, DisciplineRecord, FeeHead, FeeReceipt, House, InventoryIssue, InventoryItem, SalaryPayment, Section, Staff, Student, TransferCertificate, LedgerAccount, Voucher
 
 
 class SectionSelect(forms.Select):
@@ -60,6 +60,7 @@ class StudentForm(forms.ModelForm):
             "full_name",
             "current_class",
             "current_section",
+            "house",
             "roll_no",
             "photo",
             "date_of_birth",
@@ -127,9 +128,20 @@ class StudentForm(forms.ModelForm):
             if "legacy_sid" not in self.initial:
                 max_sid = Student.objects.aggregate(max_sid=Max("legacy_sid"))["max_sid"]
                 self.fields["legacy_sid"].initial = (max_sid or 0) + 1
-                
+            if "house" not in self.initial:
+                # Auto-suggest the least-populated active house (round-robin
+                # balance). Staff can still change it before saving.
+                suggested = (
+                    House.objects.filter(is_active=True)
+                    .annotate(student_count=Count("students"))
+                    .order_by("student_count", "display_order")
+                    .first()
+                )
+                if suggested:
+                    self.fields["house"].initial = suggested.pk
+
         self.fields["current_section"].label_from_instance = lambda obj: obj.name
-            
+
         for field_name, field in self.fields.items():
             if not isinstance(field.widget, forms.CheckboxInput):
                 field.widget.attrs.setdefault("class", "form-control")
@@ -231,6 +243,64 @@ class FeeReceiptLineEntryForm(forms.Form):
 
     def field_name(self, fee_head):
         return f"fee_head_{fee_head.id}"
+
+
+class DisciplineRecordForm(forms.ModelForm):
+    class Meta:
+        model = DisciplineRecord
+        fields = [
+            "incident_date",
+            "category",
+            "severity",
+            "description",
+            "action_taken",
+            "parent_notified",
+        ]
+        widgets = {
+            "incident_date": forms.DateInput(attrs={"type": "date"}),
+            "description": forms.Textarea(attrs={"rows": 3}),
+            "action_taken": forms.Textarea(attrs={"rows": 2}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["incident_date"].initial = timezone.localdate()
+        for field_name, field in self.fields.items():
+            if not isinstance(field.widget, forms.CheckboxInput):
+                field.widget.attrs.setdefault("class", "form-control")
+
+
+class InventoryItemForm(forms.ModelForm):
+    class Meta:
+        model = InventoryItem
+        fields = ["name", "category", "unit_price", "is_active"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            if not isinstance(field.widget, forms.CheckboxInput):
+                field.widget.attrs.setdefault("class", "form-control")
+
+
+class InventoryIssueForm(forms.ModelForm):
+    class Meta:
+        model = InventoryIssue
+        fields = ["item", "issue_date", "quantity", "amount_charged", "remarks"]
+        widgets = {
+            "issue_date": forms.DateInput(attrs={"type": "date"}),
+            "remarks": forms.TextInput(),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["item"].queryset = InventoryItem.objects.filter(is_active=True)
+        self.fields["issue_date"].initial = timezone.localdate()
+        self.fields["amount_charged"].help_text = (
+            "Defaults to item price x quantity - reduce for a concession, or set to 0 for a free issue."
+        )
+        for field in self.fields.values():
+            if not isinstance(field.widget, forms.CheckboxInput):
+                field.widget.attrs.setdefault("class", "form-control")
 
 
 class TransferCertificateForm(forms.ModelForm):

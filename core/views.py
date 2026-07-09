@@ -12,15 +12,19 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 
-from .forms import FeeReceiptEditForm, FeeReceiptEntryForm, FeeReceiptLineEntryForm, SalaryPaymentForm, StudentForm, TransferCertificateForm
+from .forms import DisciplineRecordForm, FeeReceiptEditForm, FeeReceiptEntryForm, FeeReceiptLineEntryForm, InventoryIssueForm, InventoryItemForm, SalaryPaymentForm, StudentForm, TransferCertificateForm
 from .models import (
     AcademicSession,
+    DisciplineRecord,
     ExamMark,
     ExamTerm,
     FeeHead,
     FeeReceipt,
     FeeReceiptAuditLog,
     FeeStructure,
+    House,
+    InventoryIssue,
+    InventoryItem,
     SalaryPayment,
     SalaryPaymentAuditLog,
     SchoolClass,
@@ -37,8 +41,11 @@ from .models import (
 from .pdf import (
     build_admission_form_pdf,
     build_character_certificate_pdf,
+    build_discipline_summary_pdf,
     build_due_report_pdf,
     build_fee_receipt_pdf,
+    build_id_card_batch_pdf,
+    build_id_card_pdf,
     build_marksheet_pdf,
     build_salary_payslip_pdf,
     build_transfer_certificate_pdf,
@@ -190,11 +197,17 @@ def student_detail(request, pk):
         Student.objects.select_related("current_class", "current_section"),
         pk=pk,
     )
+    due_total = FeeReceipt.objects.filter(
+        student=student, is_cancelled=False, legacy_due_amount__gt=0
+    ).aggregate(total=Sum("legacy_due_amount"))["total"] or 0
+    school_profile = get_active_school_profile()
     return render(
         request,
         "core/student_detail.html",
         {
             "student": student,
+            "due_total": due_total,
+            "school_name": school_profile.name if school_profile else "",
         },
     )
 
@@ -450,6 +463,7 @@ def due_report(request):
     rows, totals = get_due_report_rows(request)
     paginator = Paginator(rows, 50)
     page = paginator.get_page(request.GET.get("page"))
+    school_profile = get_active_school_profile()
 
     return render(
         request,
@@ -464,6 +478,7 @@ def due_report(request):
             "sessions": AcademicSession.objects.order_by("-starts_on", "name"),
             "total_students": rows.count(),
             "totals": totals,
+            "school_name": school_profile.name if school_profile else "",
         },
     )
 
@@ -523,6 +538,7 @@ def get_due_report_rows(request):
         "student__current_class__display_order",
         "student__current_section__name",
         "student__mobile_primary",
+        "student__admission_no",
     ).annotate(
         due_amount=Sum("legacy_due_amount"),
         paid_amount=Sum("received_amount"),
@@ -918,6 +934,23 @@ def character_certificate_pdf(request, pk):
     return response
 
 
+def id_card_pdf(request, pk):
+    student = get_object_or_404(Student.objects.select_related("current_class", "current_section", "house"), pk=pk)
+    pdf_bytes = build_id_card_pdf(student, get_active_school_profile())
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
+    response["Content-Disposition"] = f'inline; filename="id-card-{student.admission_no or student.pk}.pdf"'
+    return response
+
+
+def id_card_batch_pdf(request):
+    students, query, class_id, section_id, status = _get_filtered_students(request)
+    students = students.select_related("current_class", "current_section", "house")
+    pdf_bytes = build_id_card_batch_pdf(list(students), get_active_school_profile())
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
+    response["Content-Disposition"] = 'inline; filename="id-cards.pdf"'
+    return response
+
+
 def next_tc_number():
     timestamp = timezone.localtime().strftime("%Y%m%d%H%M%S")
     base = f"TC-{timestamp}"
@@ -1048,6 +1081,150 @@ def marksheet_pdf(request, pk, term_id):
     response = HttpResponse(pdf_bytes, content_type="application/pdf")
     response["Content-Disposition"] = f'attachment; filename="marksheet-{student.admission_no or student.pk}-{term.name}.pdf"'
     return response
+
+
+def discipline_list(request, pk):
+    student = get_object_or_404(Student, pk=pk)
+    records = student.discipline_records.select_related("reported_by").all()
+    school_profile = get_active_school_profile()
+    return render(
+        request,
+        "core/discipline_list.html",
+        {
+            "student": student,
+            "records": records,
+            "school_name": school_profile.name if school_profile else "",
+        },
+    )
+
+
+def discipline_create(request, pk):
+    student = get_object_or_404(Student, pk=pk)
+    if request.method == "POST":
+        form = DisciplineRecordForm(request.POST)
+        if form.is_valid():
+            record = form.save(commit=False)
+            record.student = student
+            record.reported_by = request.user
+            record.save()
+            messages.success(request, "Discipline record added.")
+            return redirect("core:discipline_list", pk=student.pk)
+    else:
+        form = DisciplineRecordForm()
+    return render(request, "core/discipline_form.html", {"student": student, "form": form})
+
+
+def discipline_pdf(request, pk):
+    student = get_object_or_404(Student, pk=pk)
+    records = list(student.discipline_records.select_related("reported_by").all())
+    pdf_bytes = build_discipline_summary_pdf(student, records, get_active_school_profile())
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
+    response["Content-Disposition"] = f'inline; filename="discipline-{student.admission_no or student.pk}.pdf"'
+    return response
+
+
+def inventory_item_list(request):
+    items = InventoryItem.objects.all()
+    return render(request, "core/inventory_item_list.html", {"items": items})
+
+
+def inventory_item_create(request):
+    if request.method == "POST":
+        form = InventoryItemForm(request.POST)
+        if form.is_valid():
+            item = form.save()
+            messages.success(request, f"Item '{item.name}' added.")
+            return redirect("core:inventory_item_list")
+    else:
+        form = InventoryItemForm()
+    return render(request, "core/inventory_item_form.html", {"form": form})
+
+
+def inventory_item_toggle_active(request, pk):
+    item = get_object_or_404(InventoryItem, pk=pk)
+    if request.method == "POST":
+        item.is_active = not item.is_active
+        item.save(update_fields=["is_active"])
+        messages.success(request, f"'{item.name}' is now {'active' if item.is_active else 'inactive'}.")
+    return redirect("core:inventory_item_list")
+
+
+def inventory_report(request):
+    issues = InventoryIssue.objects.select_related(
+        "student", "student__current_class", "student__current_section", "item"
+    ).all()
+
+    query = request.GET.get("q", "").strip()
+    class_id = request.GET.get("class", "").strip()
+    item_id = request.GET.get("item", "").strip()
+    date_from = request.GET.get("from_date", "").strip()
+    date_to = request.GET.get("to_date", "").strip()
+
+    if query:
+        issues = issues.filter(
+            Q(student__full_name__icontains=query)
+            | Q(student__admission_no__icontains=query)
+            | Q(student__legacy_sid__icontains=query)
+        )
+    if class_id:
+        issues = issues.filter(student__current_class_id=class_id)
+    if item_id:
+        issues = issues.filter(item_id=item_id)
+    if date_from:
+        issues = issues.filter(issue_date__gte=date_from)
+    if date_to:
+        issues = issues.filter(issue_date__lte=date_to)
+
+    issues = issues.order_by("-issue_date", "-id")
+    totals = issues.aggregate(total_quantity=Sum("quantity"), total_charged=Sum("amount_charged"))
+
+    paginator = Paginator(issues, 50)
+    page = paginator.get_page(request.GET.get("page"))
+
+    return render(
+        request,
+        "core/inventory_report.html",
+        {
+            "page": page,
+            "query": query,
+            "selected_class": class_id,
+            "selected_item": item_id,
+            "date_from": date_from,
+            "date_to": date_to,
+            "classes": SchoolClass.objects.order_by("display_order", "name"),
+            "items": InventoryItem.objects.filter(is_active=True),
+            "totals": totals,
+            "total_records": issues.count(),
+        },
+    )
+
+
+def inventory_issue_list(request, pk):
+    student = get_object_or_404(Student, pk=pk)
+    issues = student.inventory_issues.select_related("item", "issued_by").all()
+    total_charged = issues.aggregate(total=Sum("amount_charged"))["total"] or 0
+    return render(
+        request,
+        "core/inventory_issue_list.html",
+        {"student": student, "issues": issues, "total_charged": total_charged},
+    )
+
+
+def inventory_issue_create(request, pk):
+    student = get_object_or_404(Student, pk=pk)
+    if request.method == "POST":
+        form = InventoryIssueForm(request.POST)
+        if form.is_valid():
+            issue = form.save(commit=False)
+            issue.student = student
+            issue.unit_price = issue.item.unit_price
+            issue.issued_by = request.user
+            issue.save()
+            messages.success(request, f"Issued {issue.item.name} to {student.full_name}.")
+            return redirect("core:inventory_issue_list", pk=student.pk)
+    else:
+        form = InventoryIssueForm()
+    return render(request, "core/inventory_issue_form.html", {"student": student, "form": form})
 
 
 def staff_list(request):

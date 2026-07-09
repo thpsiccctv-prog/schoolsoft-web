@@ -2,6 +2,7 @@
 
 {% block title %}{{ student.full_name }} | Students{% endblock %}
 
+{% load schoolsoft_extras %}
 {% block content %}
 <section class="section student-profile-page">
     <div class="profile-header-card">
@@ -91,6 +92,39 @@
             </svg>
             Char Cert.
         </a>
+        <a class="action-btn action-secondary" href="{% url 'core:id_card_pdf' student.pk %}" target="_blank">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M4 4a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2H4zm2 5a2 2 0 114 0 2 2 0 01-4 0zm2 3a3 3 0 00-3 3h6a3 3 0 00-3-3zm5-3a1 1 0 100-2 1 1 0 000 2zm0 2a1 1 0 100 2h1a1 1 0 100-2h-1z" clip-rule="evenodd" />
+            </svg>
+            ID Card
+        </a>
+        {% if access.inventory %}
+        <a class="action-btn action-secondary" href="{% url 'core:inventory_issue_list' student.pk %}">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M10.362 1.093a.75.75 0 00-.724 0L2.523 5.018 10 9.143l7.477-4.125-7.115-3.925zM18 6.443l-7.25 4v8.25l6.862-3.786A.75.75 0 0018 14.25V6.443zM9.25 18.693v-8.25l-7.25-4v7.807a.75.75 0 00.388.657l6.862 3.786z" clip-rule="evenodd" />
+            </svg>
+            Inventory
+        </a>
+        {% endif %}
+        {% if can_manage_users %}
+        <a class="action-btn action-secondary" href="{% url 'core:discipline_list' student.pk %}">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+            </svg>
+            Discipline Record
+        </a>
+        {% endif %}
+        {% if due_total > 0 %}
+            {% wa_fee_link student.mobile_primary student.father_name student.full_name student.current_class student.current_section.name student.admission_no due_total school_name as wa_fee_url %}
+            {% if wa_fee_url %}
+            <a class="action-btn action-secondary" href="{{ wa_fee_url }}" target="_blank" rel="noopener" title="Open WhatsApp with a fee-due reminder pre-filled - review and press Send yourself">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 7.757 8.586 6.343 10l2.95 2.95z" clip-rule="evenodd" />
+                </svg>
+                WhatsApp Fee Reminder
+            </a>
+            {% endif %}
+        {% endif %}
     </div>
 
     <div class="profile-data-grid">
@@ -100,6 +134,10 @@
                 <div class="info-item">
                     <span class="info-label">Roll No.</span>
                     <span class="info-value">{{ student.roll_no|default:"-" }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">House</span>
+                    <span class="info-value">{{ student.house|default:"-" }}</span>
                 </div>
                 <div class="info-item">
                     <span class="info-label">Gender</span>
@@ -160,6 +198,32 @@
             </div>
         </div>
         
+        <div class="profile-card">
+            <h3>Send WhatsApp Message</h3>
+            <div class="profile-info-list">
+                <div class="info-item info-item-full">
+                    <label for="wa-custom-mobile" class="info-label">Send to</label>
+                    <select id="wa-custom-mobile" class="form-control">
+                        {% if student.mobile_primary %}<option value="{{ student.mobile_primary }}">Primary - {{ student.mobile_primary }}</option>{% endif %}
+                        {% if student.mobile_secondary %}<option value="{{ student.mobile_secondary }}">Secondary - {{ student.mobile_secondary }}</option>{% endif %}
+                        {% if not student.mobile_primary and not student.mobile_secondary %}<option value="">No mobile number on file</option>{% endif %}
+                    </select>
+                </div>
+                <div class="info-item info-item-full">
+                    <label for="wa-custom-message" class="info-label">Message</label>
+                    <textarea id="wa-custom-message" class="form-control" rows="3">Namaste {{ student.father_name|default:"Guardian" }} ji,
+{% if school_name %}{{ school_name }} se suchna:
+{% endif %}</textarea>
+                </div>
+                <div class="info-item info-item-full">
+                    <button type="button" class="button action-primary" onclick="openWaCustomMessage()">Open in WhatsApp</button>
+                </div>
+                <p class="text-muted" style="font-size: 0.85rem; margin: 0;">
+                    Free wa.me link - opens WhatsApp with this message typed in. You still need to press Send yourself inside WhatsApp. No message is sent automatically.
+                </p>
+            </div>
+        </div>
+
         {% if not is_readonly %}
         <div class="profile-card danger-zone">
             <h3>Danger Zone</h3>
@@ -173,4 +237,30 @@
         {% endif %}
     </div>
 </section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function normalizeIndianMobile(raw) {
+    var digits = (raw || "").replace(/\D/g, "");
+    if (!digits) return null;
+    if (digits.length === 10) return "91" + digits;
+    if (digits.length === 11 && digits[0] === "0") return "91" + digits.slice(1);
+    if (digits.length === 12 && digits.slice(0, 2) === "91") return digits;
+    if (digits.length < 10) return null;
+    return digits;
+}
+
+function openWaCustomMessage() {
+    var mobileSelect = document.getElementById("wa-custom-mobile");
+    var messageBox = document.getElementById("wa-custom-message");
+    var number = normalizeIndianMobile(mobileSelect ? mobileSelect.value : "");
+    if (!number) {
+        alert("Is student ke liye koi valid mobile number nahi mila.");
+        return;
+    }
+    var text = messageBox ? messageBox.value : "";
+    window.open("https://wa.me/" + number + "?text=" + encodeURIComponent(text), "_blank");
+}
+</script>
 {% endblock %}

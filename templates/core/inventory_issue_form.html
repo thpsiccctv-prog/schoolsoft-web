@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block title %}Issue Item | {{ student.full_name }}{% endblock %}
+
+{% block content %}
+<section class="section">
+    <div class="section-heading with-actions">
+        <div>
+            <h2>Issue Inventory Item</h2>
+            <p>{{ student.full_name }} | SID {{ student.legacy_sid|default:"-" }} | {{ student.current_class|default:"-" }}{% if student.current_section %}-{{ student.current_section.name }}{% endif %}</p>
+        </div>
+        <a class="button secondary" href="{% url 'core:inventory_issue_list' student.pk %}">Back</a>
+    </div>
+
+    <form class="entry-form" method="post">
+        {% csrf_token %}
+        {% if form.non_field_errors %}
+            <div class="form-errors">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        <section class="form-panel">
+            <h3>Issue Details</h3>
+            <div class="form-grid">
+                {% for field in form %}
+                    <label>
+                        <span>{{ field.label }}</span>
+                        {{ field }}
+                        {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}
+                        {% if field.errors %}<small>{{ field.errors|striptags }}</small>{% endif %}
+                    </label>
+                {% endfor %}
+            </div>
+        </section>
+        <div class="form-actions">
+            <button type="submit">Save Issue</button>
+            <a class="button secondary" href="{% url 'core:inventory_issue_list' student.pk %}">Cancel</a>
+        </div>
+    </form>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+var ITEM_PRICES = {
+    {% for item in form.fields.item.queryset %}"{{ item.pk }}": {{ item.unit_price|stringformat:"f" }}{% if not forloop.last %},{% endif %}{% endfor %}
+};
+
+function recalcAmountCharged() {
+    var itemSelect = document.getElementById("id_item");
+    var qtyInput = document.getElementById("id_quantity");
+    var amountInput = document.getElementById("id_amount_charged");
+    if (!itemSelect || !qtyInput || !amountInput) return;
+    var price = ITEM_PRICES[itemSelect.value];
+    var qty = parseInt(qtyInput.value, 10) || 0;
+    if (price !== undefined) {
+        amountInput.value = (price * qty).toFixed(2);
+    }
+}
+
+document.addEventListener("DOMContentLoaded", function () {
+    var itemSelect = document.getElementById("id_item");
+    var qtyInput = document.getElementById("id_quantity");
+    if (itemSelect) itemSelect.addEventListener("change", recalcAmountCharged);
+    if (qtyInput) qtyInput.addEventListener("change", recalcAmountCharged);
+});
+</script>
+{% endblock %}

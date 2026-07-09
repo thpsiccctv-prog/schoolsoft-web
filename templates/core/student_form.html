@@ -97,6 +97,11 @@
                             {% if form.roll_no.errors %}<div class="error-text">{{ form.roll_no.errors|striptags }}</div>{% endif %}
                         </div>
                         <div class="entry-field">
+                            <label for="{{ form.house.id_for_label }}">{{ form.house.label }}</label>
+                            {{ form.house }}
+                            {% if form.house.errors %}<div class="error-text">{{ form.house.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
                             <label for="{{ form.date_of_birth.id_for_label }}">{{ form.date_of_birth.label }}</label>
                             {{ form.date_of_birth }}
                             {% if form.date_of_birth.errors %}<div class="error-text">{{ form.date_of_birth.errors|striptags }}</div>{% endif %}
@@ -341,14 +346,14 @@
 
             <aside class="student-entry-rail">
                 <section class="entry-card student-photo-card">
-                    <div class="student-photo-box">
+                    <div class="student-photo-box" id="student-photo-box">
                         {% if student.photo %}
-                            <img src="{{ student.photo.url }}" alt="{{ student.full_name }}" class="student-photo-preview">
+                            <img src="{{ student.photo.url }}" alt="{{ student.full_name }}" class="student-photo-preview" id="student-photo-preview-img">
                         {% else %}
-                            <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true" id="student-photo-placeholder-icon">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M4 16l4.4-4.4a2 2 0 0 1 2.8 0L16 16m-2-2 1.5-1.5a2 2 0 0 1 2.8 0L20 14M7 5h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z" />
                             </svg>
-                            <span>No Photo</span>
+                            <span id="student-photo-placeholder-text">No Photo</span>
                         {% endif %}
                     </div>
                     <div class="entry-field">
@@ -446,6 +451,27 @@
         if (classSelect && sectionSelect) {
             classSelect.addEventListener("change", filterSectionsByClass);
             filterSectionsByClass();
+        }
+
+        // Instant photo preview - the file only actually saves on form submit,
+        // but the clerk should see what they picked immediately.
+        const photoInput = document.getElementById("{{ form.photo.id_for_label }}");
+        const photoBox = document.getElementById("student-photo-box");
+        if (photoInput && photoBox) {
+            photoInput.addEventListener("change", function () {
+                const file = this.files && this.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = function (event) {
+                    photoBox.innerHTML = "";
+                    const img = document.createElement("img");
+                    img.src = event.target.result;
+                    img.alt = "Selected photo";
+                    img.className = "student-photo-preview";
+                    photoBox.appendChild(img);
+                };
+                reader.readAsDataURL(file);
+            });
         }
 
         function hideWarning() {

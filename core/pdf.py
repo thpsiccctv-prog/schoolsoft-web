@@ -676,6 +676,102 @@ def build_transfer_certificate_pdf(tc, school_profile=None):
     return buffer.getvalue()
 
 
+def build_discipline_summary_pdf(student, records, school_profile=None):
+    """Admin/Principal-only PTM handout: full discipline history for one student."""
+    buffer = BytesIO()
+    document = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=14 * mm,
+        leftMargin=14 * mm,
+        topMargin=12 * mm,
+        bottomMargin=12 * mm,
+        title=f"Discipline Record - {student.full_name}",
+    )
+    styles = getSampleStyleSheet()
+    story = []
+    _school_header(story, school_profile, "DISCIPLINE RECORD SUMMARY", styles)
+
+    small_style = ParagraphStyle("DiscSmall", parent=styles["Normal"], fontSize=9, leading=13)
+    cell_style = ParagraphStyle("DiscCell", parent=styles["Normal"], fontSize=8.5, leading=11)
+
+    class_label = student.current_class.name if student.current_class else ""
+    if student.current_section:
+        class_label = f"{class_label}-{student.current_section.name}" if class_label else student.current_section.name
+
+    info_rows = [
+        ["Student Name", student.full_name, "Class", class_label],
+        ["Father's Name", student.father_name or "", "Admission No.", student.admission_no or ""],
+    ]
+    info_table = Table(info_rows, colWidths=[32 * mm, 58 * mm, 32 * mm, 58 * mm])
+    info_table.setStyle(TableStyle([
+        ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#9aa4b2")),
+        ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f1f5f9")),
+        ("BACKGROUND", (2, 0), (2, -1), colors.HexColor("#f1f5f9")),
+        ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+        ("FONTNAME", (2, 0), (2, -1), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+    ]))
+    story.append(info_table)
+    story.append(Spacer(1, 5 * mm))
+
+    if not records:
+        story.append(Paragraph("No discipline records on file for this student.", small_style))
+    else:
+        severity_counts = {"minor": 0, "major": 0, "severe": 0}
+        for r in records:
+            severity_counts[r.severity] = severity_counts.get(r.severity, 0) + 1
+        summary = f"Total incidents: {len(records)}  |  Minor: {severity_counts.get('minor', 0)}  |  Major: {severity_counts.get('major', 0)}  |  Severe: {severity_counts.get('severe', 0)}"
+        story.append(Paragraph(summary, small_style))
+        story.append(Spacer(1, 3 * mm))
+
+        header = ["Date", "Category", "Severity", "Description", "Action Taken", "Parent Notified"]
+        table_data = [header]
+        for r in records:
+            table_data.append([
+                Paragraph(r.incident_date.strftime("%d-%m-%Y"), cell_style),
+                Paragraph(r.get_category_display(), cell_style),
+                Paragraph(r.get_severity_display(), cell_style),
+                Paragraph(r.description or "", cell_style),
+                Paragraph(r.action_taken or "", cell_style),
+                Paragraph("Yes" if r.parent_notified else "No", cell_style),
+            ])
+        records_table = Table(
+            table_data,
+            colWidths=[20 * mm, 26 * mm, 18 * mm, 50 * mm, 46 * mm, 22 * mm],
+            repeatRows=1,
+        )
+        records_table.setStyle(TableStyle([
+            ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#9aa4b2")),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0f766e")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, 0), 8.5),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ]))
+        story.append(records_table)
+
+    story.append(Spacer(1, 12 * mm))
+    sig_data = [["Class Teacher", "Principal (Seal)"]]
+    sig_t = Table(sig_data, colWidths=[90 * mm, 90 * mm])
+    sig_t.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("ALIGN", (0, 0), (0, 0), "LEFT"),
+        ("ALIGN", (1, 0), (1, 0), "RIGHT"),
+    ]))
+    story.append(sig_t)
+
+    document.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
 # ---- premium palette (official certificates: report card + character cert) ----
 _C_INK = colors.HexColor("#1e293b")
 _C_BRAND = colors.HexColor("#0f766e")
@@ -1345,5 +1441,156 @@ def build_voucher_pdf(voucher, school_profile=None):
             canvas.restoreState()
 
     document.build(story, onFirstPage=draw_watermark, onLaterPages=draw_watermark)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+# ---- ID Cards ----
+_ID_CARD_WIDTH = 85.6 * mm  # standard CR80 card size
+_ID_CARD_HEIGHT = 54 * mm
+
+
+def _id_card_photo_flowable(student):
+    photo_path = None
+    if student.photo:
+        try:
+            candidate = student.photo.path
+            if os.path.exists(candidate):
+                photo_path = candidate
+        except (ValueError, NotImplementedError, OSError):
+            photo_path = None
+    if photo_path:
+        try:
+            return Image(photo_path, width=20 * mm, height=24 * mm)
+        except Exception:
+            pass
+    return Paragraph(
+        "No<br/>Photo",
+        ParagraphStyle("IdNoPhoto", fontSize=7, leading=9, alignment=1, textColor=_C_MUTED),
+    )
+
+
+def _id_card_flowable(student, school_profile):
+    school_name = (school_profile.name if school_profile else "SCHOOLSOFT").upper()
+
+    header_style = ParagraphStyle(
+        "IdHeader", fontSize=8.5, leading=10, fontName="Helvetica-Bold",
+        textColor=colors.white, alignment=1,
+    )
+    name_style = ParagraphStyle("IdName", fontSize=10, leading=12, fontName="Helvetica-Bold", textColor=_C_BRAND_DK)
+    info_style = ParagraphStyle("IdInfo", fontSize=7.5, leading=9.5)
+    footer_style = ParagraphStyle("IdFooter", fontSize=6.5, leading=8, alignment=1, textColor=colors.white)
+
+    class_label = student.current_class.name if student.current_class else ""
+    if student.current_section:
+        class_label = f"{class_label}-{student.current_section.name}" if class_label else student.current_section.name
+
+    info_cell = [
+        Paragraph(student.full_name, name_style),
+        Paragraph(f"Class: {class_label or '-'}  |  Roll: {student.roll_no or '-'}", info_style),
+        Paragraph(f"House: {student.house.name if student.house else '-'}", info_style),
+        Paragraph(f"DOB: {student.date_of_birth.strftime('%d-%m-%Y') if student.date_of_birth else '-'}", info_style),
+        Paragraph(f"Father: {student.father_name or '-'}", info_style),
+        Paragraph(f"Ph: {student.mobile_primary or '-'}", info_style),
+    ]
+
+    body = Table(
+        [[_id_card_photo_flowable(student), info_cell]],
+        colWidths=[22 * mm, _ID_CARD_WIDTH - 26 * mm],
+    )
+    body.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 3),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 2),
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
+    ]))
+
+    session_label = getattr(school_profile, "current_year", "") if school_profile else ""
+    footer_text = f"Adm No: {student.admission_no or '-'}" + (f"  |  Session {session_label}" if session_label else "")
+
+    card = Table(
+        [
+            [Paragraph(school_name, header_style)],
+            [body],
+            [Paragraph(footer_text, footer_style)],
+        ],
+        colWidths=[_ID_CARD_WIDTH],
+    )
+    card.setStyle(TableStyle([
+        ("BOX", (0, 0), (-1, -1), 1, _C_BRAND),
+        ("BACKGROUND", (0, 0), (0, 0), _C_BRAND),
+        ("BACKGROUND", (0, 2), (0, 2), _C_BRAND),
+        ("TOPPADDING", (0, 0), (0, 0), 3),
+        ("BOTTOMPADDING", (0, 0), (0, 0), 3),
+        ("TOPPADDING", (0, 2), (0, 2), 2),
+        ("BOTTOMPADDING", (0, 2), (0, 2), 2),
+    ]))
+    return card
+
+
+def build_id_card_pdf(student, school_profile=None):
+    """Single ID card, one per A4 page (print + cut + laminate)."""
+    buffer = BytesIO()
+    document = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=14 * mm,
+        leftMargin=14 * mm,
+        topMargin=14 * mm,
+        bottomMargin=14 * mm,
+        title=f"ID Card - {student.full_name}",
+    )
+    story = [Spacer(1, 100 * mm)]
+    card = _id_card_flowable(student, school_profile)
+    wrapper = Table([[card]], colWidths=[document.width])
+    wrapper.setStyle(TableStyle([("ALIGN", (0, 0), (-1, -1), "CENTER")]))
+    story.append(wrapper)
+    document.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+def build_id_card_batch_pdf(students, school_profile=None):
+    """Grid of ID cards (2 per row) across as many A4 pages as needed - for
+    printing a whole class/section at once, then cutting apart."""
+    buffer = BytesIO()
+    document = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=12 * mm,
+        leftMargin=12 * mm,
+        topMargin=10 * mm,
+        bottomMargin=10 * mm,
+        title="ID Cards",
+    )
+    story = []
+    cards = [_id_card_flowable(s, school_profile) for s in students]
+
+    if not cards:
+        story.append(Paragraph("No students matched the current filter.", getSampleStyleSheet()["Normal"]))
+    else:
+        cols = 2
+        rows_data = []
+        for i in range(0, len(cards), cols):
+            row = cards[i:i + cols]
+            while len(row) < cols:
+                row.append("")
+            rows_data.append(row)
+        grid = Table(
+            rows_data,
+            colWidths=[_ID_CARD_WIDTH] * cols,
+        )
+        grid.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("TOPPADDING", (0, 0), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ("LEFTPADDING", (0, 0), (-1, -1), 4),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+        ]))
+        story.append(grid)
+
+    document.build(story)
     buffer.seek(0)
     return buffer.getvalue()

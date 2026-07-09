@@ -2,6 +2,7 @@ from django.contrib import admin
 
 from .models import (
     AcademicSession,
+    DisciplineRecord,
     ExamMark,
     ExamTerm,
     ExamTest,
@@ -10,6 +11,9 @@ from .models import (
     FeeReceiptAuditLog,
     FeeReceiptLine,
     FeeStructure,
+    House,
+    InventoryIssue,
+    InventoryItem,
     LegacyImportBatch,
     SalaryPayment,
     SchoolClass,
@@ -62,6 +66,13 @@ class SchoolProfileAdmin(admin.ModelAdmin):
     search_fields = ("name", "phone", "email")
 
 
+@admin.register(House)
+class HouseAdmin(admin.ModelAdmin):
+    list_display = ("name", "color_code", "display_order", "is_active")
+    list_filter = ("is_active",)
+    search_fields = ("name",)
+
+
 @admin.register(Student)
 class StudentAdmin(admin.ModelAdmin):
     list_display = (
@@ -70,11 +81,12 @@ class StudentAdmin(admin.ModelAdmin):
         "legacy_sid",
         "current_class",
         "current_section",
+        "house",
         "roll_no",
         "mobile_primary",
         "is_active",
     )
-    list_filter = ("is_active", "current_class", "current_section", "gender", "category")
+    list_filter = ("is_active", "current_class", "current_section", "house", "gender", "category")
     search_fields = ("full_name", "father_name", "mother_name", "admission_no", "legacy_sid")
     autocomplete_fields = ("current_class", "current_section")
 
@@ -159,6 +171,29 @@ class TransferCertificateAdmin(admin.ModelAdmin):
     list_filter = ("conduct", "qualified_for_promotion", "last_class_studied")
     search_fields = ("tc_number", "student__full_name", "student__admission_no", "student__legacy_sid")
     autocomplete_fields = ("student", "last_class_studied")
+
+
+@admin.register(DisciplineRecord)
+class DisciplineRecordAdmin(admin.ModelAdmin):
+    list_display = ("student", "incident_date", "category", "severity", "parent_notified", "reported_by")
+    list_filter = ("category", "severity", "parent_notified", "incident_date")
+    search_fields = ("student__full_name", "student__admission_no", "student__legacy_sid", "description")
+    autocomplete_fields = ("student",)
+
+
+@admin.register(InventoryItem)
+class InventoryItemAdmin(admin.ModelAdmin):
+    list_display = ("name", "category", "unit_price", "is_active")
+    list_filter = ("category", "is_active")
+    search_fields = ("name",)
+
+
+@admin.register(InventoryIssue)
+class InventoryIssueAdmin(admin.ModelAdmin):
+    list_display = ("student", "item", "issue_date", "quantity", "unit_price", "amount_charged", "issued_by")
+    list_filter = ("item", "issue_date")
+    search_fields = ("student__full_name", "student__admission_no", "student__legacy_sid")
+    autocomplete_fields = ("student",)
 
 
 @admin.register(Subject)

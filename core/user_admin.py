@@ -27,6 +27,7 @@ MODULES_UI = [
     ("transport", "Transport"),
     ("school_profile", "School Profile"),
     ("accounts", "Accounts & Cash Book"),
+    ("inventory", "Inventory (Uniform/Books)"),
 ]
 ALL_KEYS = [key for key, _ in MODULES_UI]
 

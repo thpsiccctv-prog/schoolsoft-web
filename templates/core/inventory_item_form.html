@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}New Inventory Item | SchoolSoft{% endblock %}
+
+{% block content %}
+<section class="section">
+    <div class="section-heading with-actions">
+        <div>
+            <h2>New Inventory Item</h2>
+            <p>Add a uniform, book, shoe or stationery item to the catalog.</p>
+        </div>
+        <a class="button secondary" href="{% url 'core:inventory_item_list' %}">Back</a>
+    </div>
+
+    <form class="entry-form" method="post">
+        {% csrf_token %}
+        {% if form.non_field_errors %}
+            <div class="form-errors">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        <section class="form-panel">
+            <h3>Item Details</h3>
+            <div class="form-grid">
+                {% for field in form %}
+                    <label>
+                        <span>{{ field.label }}</span>
+                        {{ field }}
+                        {% if field.errors %}<small>{{ field.errors|striptags }}</small>{% endif %}
+                    </label>
+                {% endfor %}
+            </div>
+        </section>
+        <div class="form-actions">
+            <button type="submit">Save Item</button>
+            <a class="button secondary" href="{% url 'core:inventory_item_list' %}">Cancel</a>
+        </div>
+    </form>
+</section>
+{% endblock %}

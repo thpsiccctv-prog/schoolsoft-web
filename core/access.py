@@ -17,6 +17,7 @@ MODULE_PERMISSIONS = {
     "transport": "access_transport",
     "school_profile": "access_school_profile",
     "accounts": "access_accounts",
+    "inventory": "access_inventory",
 }
 
 # Membership in this group marks a user as "view / print only": they keep read
@@ -101,6 +102,30 @@ def manage_users_required(view_func):
         return view_func(request, *args, **kwargs)
 
     return wrapper
+
+
+def admin_only_required(module_name):
+    """Guard a view so only full administrators (superuser or
+    access_all_modules) can reach it - not assignable to any role preset.
+    Used for Discipline Records: owner wants this strictly Admin/Principal
+    only, unlike the per-module MODULE_PERMISSIONS which fee/exam/staff/
+    viewer roles can be granted."""
+    def decorator(view_func):
+        @wraps(view_func)
+        @login_required
+        def wrapper(request, *args, **kwargs):
+            if not user_can_manage_users(request.user):
+                return render(
+                    request,
+                    "core/permission_denied.html",
+                    {"module_name": module_name},
+                    status=403,
+                )
+            return view_func(request, *args, **kwargs)
+
+        return wrapper
+
+    return decorator
 
 
 def access_context(request):

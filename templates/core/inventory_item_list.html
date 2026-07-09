@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% load schoolsoft_extras %}
+{% block title %}Inventory Items | SchoolSoft{% endblock %}
+
+{% block content %}
+<section class="section">
+    <div class="section-heading with-actions">
+        <div>
+            <h2>Inventory Items</h2>
+            <p>Master catalog of uniform, books, shoes and stationery the school issues to students.</p>
+        </div>
+        <div class="table-actions">
+            <a class="button secondary" href="{% url 'core:inventory_report' %}">Distribution Report</a>
+            {% if not is_readonly %}
+                <a class="button primary" href="{% url 'core:inventory_item_create' %}">New Item</a>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Category</th>
+                    <th class="amount">Unit Price</th>
+                    <th>Status</th>
+                    {% if not is_readonly %}<th>Actions</th>{% endif %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                    <tr>
+                        <td>{{ item.name }}</td>
+                        <td>{{ item.get_category_display }}</td>
+                        <td class="amount">&#8377; {{ item.unit_price|indian_number }}</td>
+                        <td>
+                            <span class="badge {% if item.is_active %}badge-success{% else %}badge-secondary{% endif %}">
+                                {% if item.is_active %}Active{% else %}Inactive{% endif %}
+                            </span>
+                        </td>
+                        {% if not is_readonly %}
+                        <td>
+                            <form method="post" action="{% url 'core:inventory_item_toggle_active' item.pk %}" style="display:inline;">
+                                {% csrf_token %}
+                                <button type="submit" class="button secondary">
+                                    {% if item.is_active %}Deactivate{% else %}Activate{% endif %}
+                                </button>
+                            </form>
+                        </td>
+                        {% endif %}
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="5" class="empty-state">No inventory items yet. Add uniform, book and stationery items here first.</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

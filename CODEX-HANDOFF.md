@@ -1225,3 +1225,306 @@ reimbursement by bank transfer).
 4. `collectstatic` + `build-desktop.bat`, then fully close/reopen the EXE and re-test the same
    upload flow inside the packaged app (PyInstaller ONEDIR sometimes behaves differently than
    `runserver` for file writes — verify for real, don't assume).
+
+## 2026-07-08 Checkpoint - Photo Instant Preview + House System + Discipline Record
+
+Note: `core/forms.py`'s `SectionSelect` widget was rewritten by another session between the
+previous checkpoint and this one (now uses `optgroups()` + a `_temp_map` dict with defensive
+`int(str(value))` handling for `ModelChoiceIteratorValue`, and `current_section.label_from_instance`
+was overridden to show just the section letter). Everything below was built on top of that
+current version — re-read `core/forms.py` fresh before editing it further, don't assume it still
+matches older checkpoints in this file.
+
+**1. Photo instant preview** (owner reported: picked a file, nothing appeared until they
+imagined it needed a Save click). Added to `templates/core/student_form.html`: a `change`
+listener on the photo `<input>` that reads the picked file with `FileReader` and swaps it into
+`#student-photo-box` immediately, client-side only. Actual upload still only persists on submit
+(unchanged) - this was a display-only gap, not a save bug.
+
+**2. House System** (owner decisions: auto-suggest + manual override; 4 standard houses
+Red/Blue/Green/Yellow, renamable later; not linked to TC General Conduct - separate feature):
+- `core/models.py`: new `House(TimeStampedModel)` model (name, color_code, display_order,
+  is_active) - a real master-data model, not a hardcoded enum, so it can be renamed/recolored via
+  Django admin without a code change. `Student.house` FK added (`on_delete=SET_NULL`, nullable).
+- `core/management/commands/seed_houses.py`: creates the 4 default houses if missing (idempotent,
+  same pattern as `seed_accounts.py`). Run once: `manage.py seed_houses`.
+- `core/forms.py` `StudentForm.__init__`: for NEW students only, auto-suggests the least-populated
+  *active* house (`House.objects.filter(is_active=True).annotate(student_count=Count("students")).order_by("student_count", "display_order").first()`)
+  as the initial value - staff can still override before saving. Same pattern already used for
+  `legacy_sid` auto-suggest.
+- `core/admin.py`: `HouseAdmin` registered; `StudentAdmin.list_display`/`list_filter` now include
+  `house`.
+- `templates/core/student_form.html`: House dropdown added next to Roll No.
+- `templates/core/student_detail.html`: House shown in the Student Details card.
+- Tests: `HouseAssignmentTests` (2 tests) confirm the least-populated-active-house suggestion
+  logic, including that inactive houses are never suggested.
+
+**3. Discipline Record** (owner decisions: Admin/Principal only - not a MODULE_PERMISSIONS entry
+assignable to other roles; PTM PDF summary needed; deliberately NOT linked to TC General
+Conduct):
+- `core/models.py`: new `DisciplineRecord(TimeStampedModel)` - `student` FK, `incident_date`,
+  `category` (Late Coming / Attendance / Misconduct / Bullying-Ragging / Property Damage /
+  Academic Dishonesty / Uniform-Grooming / Other), `severity` (Minor/Major/Severe),
+  `description`, `action_taken`, `parent_notified`, `reported_by` (auto-set to the logged-in
+  admin on create).
+- `core/access.py`: new `admin_only_required(module_name)` decorator - reuses the existing
+  `user_can_manage_users()` check (superuser or `access_all_modules` perm), same gate as the
+  Users & Permissions screen. Deliberately NOT added to `MODULE_PERMISSIONS`, so no role preset
+  (fee/admission/exam/staff/viewer) can ever be granted this - only a true admin.
+- `core/urls.py`: `students/<pk>/discipline/`, `.../discipline/new/`, `.../discipline/pdf/`, all
+  wrapped in `admin_only_required("Discipline Records")`.
+- `core/views.py`: `discipline_list`, `discipline_create`, `discipline_pdf` (undecorated - the
+  urls.py wrapper is where every other view in this app gets its permission gate, matched that
+  convention).
+- `core/pdf.py`: `build_discipline_summary_pdf(student, records, school_profile)` - PTM handout:
+  student info block, severity-count summary line, full records table, teacher/principal
+  signature line. Uses the existing `_school_header()` (same as receipts/TC), not the "premium"
+  certificate header.
+- `core/admin.py`: `DisciplineRecordAdmin` registered (normal CRUD, not read-only - admins may
+  need to correct a typo; the record itself is still fully audit-visible via `created_at`/
+  `updated_at` on every row from `TimeStampedModel`).
+- Templates: `templates/core/discipline_list.html` (table + Add/PDF buttons),
+  `templates/core/discipline_form.html` (plain `.form-panel`/`.form-grid`, same pattern as
+  `salary_payment_form.html`).
+- `templates/core/student_detail.html`: "Discipline Record" quick-action button added, wrapped in
+  `{% if can_manage_users %}` (already in the context processor - no new context plumbing
+  needed).
+- Tests: `DisciplineRecordTests` (2 tests) - confirms a non-admin gets a 403 with "Discipline
+  Records" in the response, and that an admin can create a record, see it in the list, and
+  download the PDF (200 + `application/pdf`).
+
+**Not yet done / next session must**:
+1. Run `manage.py makemigrations core` + `manage.py migrate` (adds `House`, `Student.house`,
+   `DisciplineRecord` - likely bundled with the still-unrun photo/admission-form-parity migration
+   from the earlier checkpoint above, since none of that has been migrated yet either).
+2. Run `manage.py seed_houses` once to create the 4 default houses.
+3. Run `manage.py test core` - expect the existing count plus 4 new tests (2 House, 2 Discipline)
+   to pass.
+4. Manually verify in browser: new student form shows a pre-selected House (and it's the
+   least-populated one); Discipline Record button only appears for an admin login, a non-admin
+   hitting `/students/<id>/discipline/` directly gets the Hindi permission-denied page; PTM PDF
+   downloads and lists incidents correctly.
+5. `collectstatic` + `build-desktop.bat` before shipping desktop, same as always.
+6. Consider (not done): showing House as a column/filter on `student_list.html` - skipped this
+   pass for time, low risk to add later.
+
+## 2026-07-08/09 Checkpoint - ID Card Generator
+
+Owner's "Grand Plan" review offered 5 village-school features (Attendance+WhatsApp alerts, ID
+Card Generator, Inventory, Hindi/Bilingual UI, Family Ledger). Owner picked **ID Card Generator
+first** (fastest win given Photo upload already exists) and chose to keep working rather than
+stop for the night. The other 4 ideas are NOT built - see "Ideas not yet started" below before
+picking one up.
+
+What was built:
+- `core/pdf.py`: `_id_card_flowable(student, school_profile)` builds one CR80-sized
+  (85.6mm x 54mm) card - green header strip with school name, photo (falls back to "No Photo"
+  text if the file is missing/unset - wrapped in try/except, never crashes the PDF), name, class-
+  section, roll no, **house** (reuses the House feature from the earlier checkpoint), DOB,
+  father's name, mobile, footer strip with admission no + session.
+  - `build_id_card_pdf(student, school_profile)` - ONE card centered on an A4 page (print, cut,
+    laminate individually).
+  - `build_id_card_batch_pdf(students, school_profile)` - a 2-column grid of cards across as many
+    A4 pages as needed, for printing a whole class/section at once. Handles an empty result set
+    without crashing (shows "No students matched the current filter." instead of a blank/broken
+    PDF).
+- `core/views.py`: `id_card_pdf(request, pk)` (single) and `id_card_batch_pdf(request)` (batch -
+  reuses the existing `_get_filtered_students(request)` helper, so it respects whatever
+  q/class/section/status filters are currently applied on the Students list - filter to one
+  class/section first, then print just that class).
+- `core/urls.py`: `students/<pk>/id-card/pdf/` and `students/id-cards/pdf/`, both gated by
+  `module_required("students")` (read-only action, no `write=True` needed - same as Admission
+  Form/Character Certificate PDFs).
+- `templates/core/student_detail.html`: "ID Card" quick-action button (visible to anyone with
+  Students access, not admin-only - unlike Discipline Records).
+- `templates/core/student_list.html`: "Print ID Cards" button next to "Print Register"/"Export
+  Excel", carries `{{ request.GET.urlencode }}` so it prints exactly the currently filtered/
+  searched set of students.
+- Tests: `IdCardTests` (3 tests) - single card PDF, batch respects class filter, batch with zero
+  matching students doesn't error.
+
+Not done / worth knowing:
+- Card design is single-sided only (no back side with rules/emergency-contact text) - owner did
+  not ask for a back side; add one later if wanted (would need a second `_id_card_flowable`-style
+  function and either a second batch grid pass or manual duplex printing).
+- No barcode/QR code on the card (would need `reportlab.graphics.barcode` module or a QR library -
+  not added, wasn't requested).
+- Batch PDF is NOT capped - if run with "All classes" and no filter (1200+ students), it will
+  generate a very large PDF and may be slow. Not artificially limited, but the realistic workflow
+  (and what the UI nudges toward) is to filter to one class/section first, matching how a school
+  actually prints ID cards in batches.
+
+**Update (same day):** migrations `0017_student_apaar_id_...`, `0018_student_photo`, and
+`0019_house_disciplinerecord_student_house` have been created and applied, `seed_houses` has been
+run (4 default houses exist), and `manage.py test core` passes all 37 tests (House, Discipline,
+ID Card, plus the full prior suite). The "run migrations" pending item from every earlier
+checkpoint in this file is now DONE - no schema changes are outstanding as of this checkpoint.
+
+## 2026-07-09 Checkpoint - WhatsApp Alerts (free wa.me links)
+
+Owner picked **WhatsApp Alerts** next from the Grand Plan, and explicitly chose the free `wa.me`
+deep-link approach over a paid WhatsApp Business API (no signup/business verification/monthly
+cost, but every message needs a manual tap-to-send by a staff member - not true bulk-blast).
+
+What was built:
+- `core/whatsapp.py` (new) - `normalize_indian_mobile(raw)` turns any stored mobile format
+  (10-digit bare, leading-0 11-digit, already-91-prefixed 12-digit) into the digits-only form
+  `wa.me` needs, returning `None` for anything too short/garbled rather than guessing.
+  `build_wa_link(mobile, message)` returns a `https://wa.me/<number>?text=<urlencoded message>`
+  URL or `None`. Plus three message-builders: `fee_due_message`, `ptm_message`,
+  `discipline_message`, `general_message` - all plain-string-in/string-out (no model coupling),
+  Hinglish wording matching how the school actually talks to parents.
+- `core/templatetags/schoolsoft_extras.py` - four new `simple_tag`s (`wa_fee_link`, `wa_ptm_link`,
+  `wa_discipline_link`, `wa_general_link`) so templates can build a link in one line:
+  `{% wa_fee_link mobile father_name full_name class_name section_name admission_no due_amount school_name as wa_url %}`.
+- **Due Report** (`due_report.html` + `due_report` view): new "WhatsApp" column, one link per
+  defaulter row with the fee-due amount already filled into the message. `get_due_report_rows`
+  now also selects `student__admission_no` (was missing) so the message can include it.
+- **Student Profile** (`student_detail.html` + `student_detail` view): a "WhatsApp Fee Reminder"
+  quick-action button (only shown if the student has a due balance > 0 - view now computes
+  `due_total` via `FeeReceipt` aggregate), plus a general-purpose "Send WhatsApp Message" card
+  with a mobile-number dropdown (primary/secondary) and an editable textarea pre-filled with a
+  greeting - "Open in WhatsApp" builds the link **client-side in JS** (mirrors
+  `normalize_indian_mobile` in JS) so staff can freely edit the message before it's sent, e.g. for
+  PTM reminders, general notices, TC-ready notices - anything that doesn't have its own template.
+- **Discipline Record list** (`discipline_list.html` + `discipline_list` view): new "WhatsApp"
+  column with a "Notify" link per record (pairs with the existing `parent_notified` field - this
+  gives staff a one-click way to actually send that notification, doesn't change the field itself).
+- Tests: `WhatsAppLinkTests` (8 unit tests on `core/whatsapp.py` directly - number normalization
+  edge cases, link building, message content) + `WhatsAppViewIntegrationTests` (3 tests - Due
+  Report page contains a `wa.me` link for a student with dues, Student Profile contains one when
+  due > 0, Student Profile doesn't crash when the student has no mobile number at all).
+
+Design notes / things to know:
+- **Nothing is ever sent automatically.** Every link just opens WhatsApp with text pre-filled;
+  the staff member still has to look at it and press Send inside WhatsApp themselves. This was
+  the whole point of choosing the free approach - it's a convenience/time-saver, not automation.
+- Numbers that don't normalize to something wa.me-shaped (too short, blank, garbled legacy data)
+  quietly show "No mobile" instead of a broken link - never guesses or 500s.
+- The message-builder functions in `core/whatsapp.py` take plain strings/numbers, not model
+  instances, on purpose - keeps them usable from both a `.values()` dict (Due Report rows) and a
+  real `Student` object (Profile page, Discipline list) without needing two code paths.
+
+Not done / worth knowing:
+- No dedicated PTM or "TC ready" button anywhere yet - the general free-text WhatsApp card on the
+  Student Profile page covers those use cases today (staff types/edits the message there). Could
+  add dedicated one-click buttons later if a specific message gets used often enough to be worth
+  hardcoding.
+- No bulk multi-select-and-send-all - by design, this is the free/manual tier. A real bulk-blast
+  would need the paid WhatsApp Business API (still not decided/started).
+- No migrations needed for this checkpoint - no model changes, just a new plain Python module +
+  template tags + view/template edits.
+- Next session should still run `manage.py test core` after this checkpoint to confirm the 11 new
+  WhatsApp tests pass alongside everything else.
+
+## 2026-07-09 Checkpoint - Inventory (Uniform/Books)
+
+Owner picked **Inventory** next from the Grand Plan (after WhatsApp Alerts). Scope: track what
+uniform/shoes/books/stationery is issued to which student, at what price, with support for
+concessions/free issues - not a stock-in/purchasing system (no supplier-side "stock on hand"
+tracking was requested or built).
+
+What was built:
+- `core/models.py` - two new models after `DisciplineRecord`:
+  - `InventoryItem` - master catalog: `name`, `category` (uniform/shoes/book/stationery/other),
+    `unit_price`, `is_active`.
+  - `InventoryIssue` - one row per issue: `student` FK, `item` FK (PROTECT - can't delete an item
+    that's been issued), `issue_date`, `quantity`, `unit_price` (**snapshotted** from the item at
+    issue time so a later price change doesn't rewrite history), `amount_charged` (what was
+    actually collected - the single source of truth for concessions, not a separate flag),
+    `remarks`, `issued_by`. Properties: `is_free` (`amount_charged == 0`), `full_price`
+    (`unit_price * quantity`), `concession_amount` (`full_price - amount_charged`, floored at 0).
+  - New custom permission `access_inventory` added to the existing `ModuleAccess` Meta.permissions
+    list (same mechanism as every other module) - **needs a migration**, see below.
+- `core/access.py` - `"inventory": "access_inventory"` added to `MODULE_PERMISSIONS`. This is a
+  normal module (unlike Discipline Records) - assignable to any role via Users & Permissions, not
+  admin-only. No role preset grants it by default except Administrator and Viewer (both use
+  `ALL_KEYS`); Fee/Admission/Exam/Staff/Accounts desks don't get it automatically - owner can add
+  it to a user via the "Custom" role checkboxes in Users & Permissions if a specific staff member
+  (e.g. store clerk) needs it.
+- `core/user_admin.py` - `("inventory", "Inventory (Uniform/Books)")` added to `MODULES_UI` so it
+  shows as a checkbox on the Users & Permissions screen.
+- `core/forms.py` - `InventoryItemForm` (name/category/unit_price/is_active) and
+  `InventoryIssueForm` (item/issue_date/quantity/amount_charged/remarks - `unit_price` is NOT a
+  form field, it's set server-side from the item at save time so it can't be spoofed/mistyped).
+  `InventoryIssueForm.__init__` restricts the item dropdown to `is_active=True` items only.
+- `core/views.py` - `inventory_item_list`, `inventory_item_create`, `inventory_item_toggle_active`
+  (POST-only, mirrors `user_toggle_active`), `inventory_report` (global filterable list - q/class/
+  item/date range, with quantity + amount-collected totals), `inventory_issue_list` (per-student,
+  same shape as `discipline_list`), `inventory_issue_create` (sets `unit_price` from the item,
+  `issued_by` from `request.user`).
+- `core/urls.py` - `inventory/items/`, `inventory/items/new/`, `inventory/items/<pk>/toggle-active/`,
+  `inventory/report/`, `students/<pk>/inventory/`, `students/<pk>/inventory/new/` - all gated by
+  `module_required("inventory", ...)` (read vs write split same as every other module).
+- Templates (new): `inventory_item_list.html`, `inventory_item_form.html`,
+  `inventory_issue_list.html` (shows per-row concession amount, "Free" badge when
+  `amount_charged` is 0), `inventory_issue_form.html` (JS auto-fills `amount_charged` as
+  `item.unit_price * quantity` when the item or quantity changes - staff can still edit it down
+  for a concession/free issue afterward), `inventory_report.html` (Due-Report-style filter bar +
+  table + totals).
+- `templates/base.html` - new "Inventory" nav link, gated by `access.inventory`, placed after
+  Transport.
+- `templates/core/student_detail.html` - new "Inventory" quick-action button, gated by
+  `access.inventory` (visible to anyone with the module, not admin-only).
+- `core/admin.py` - `InventoryItemAdmin`, `InventoryIssueAdmin` registered.
+- Tests: `InventoryTests` (6 tests) - item create + appears in catalog, toggle active, issue with
+  a concession (checks `unit_price` snapshot, `concession_amount`, `is_free`, `issued_by`), a
+  fully-free issue shows "Free" in the list, report filters correctly by item, report doesn't
+  crash on an empty result.
+
+**Update (same day):** migrations applied, `manage.py test core` passes all **54 tests** (6 new
+`InventoryTests` + prior 48). One small bug was caught and fixed during this pass:
+`inventory_issue_list.html` rendered `issue.issued_by.get_full_name|default:issue.issued_by.username`
+directly, which is unsafe when `issued_by` is `NULL` (e.g. an issue created without a logged-in
+user, or after a user account is deleted - the FK is `on_delete=SET_NULL`); it's now wrapped in an
+explicit `{% if issue.issued_by %}...{% else %}-{% endif %}`. Migrations item below is DONE.
+
+Not done / next session must:
+1. ~~Run migrations~~ - DONE, applied.
+2. ~~Run `manage.py test core`~~ - DONE, 54/54 pass.
+3. Manually verify in browser: add an item on the Items page, toggle it inactive and confirm it
+   disappears from the issue-form dropdown, issue an item to a student (check the JS auto-fills
+   the amount and that editing it down for a concession sticks), confirm the Distribution Report
+   filters work, and grant a non-admin test user the "Inventory" checkbox via Users & Permissions
+   to confirm normal (non-superuser) access works end to end.
+4. No supplier-side "stock on hand" / purchase-in tracking exists - if the school later wants to
+   know "how many uniform sets are left in the store room", that would need a separate
+   stock-transaction model (`StockIn`) and is out of scope for this checkpoint.
+5. `collectstatic` + `build-desktop.bat` - owner has now asked for this rebuild (after stacking ID
+   Card, House, Discipline, WhatsApp, Inventory across several checkpoints without rebuilding).
+   **Next action: run the rebuild**, then fully close and reopen the desktop EXE (not just
+   refresh) and spot-check all five features there, since the desktop build is the real
+   source-of-truth environment, not the dev server.
+
+Ideas from the Grand Plan NOT yet started (still on the table for a future session):
+1. **Hindi/Bilingual UI** - large scope (every template, ~50+ files use `{% trans %}` /
+   `django.utils.translation`, plus locale files). NOT the same problem as the TC's Devanagari-
+   in-ReportLab issue (that was PDF-specific) - a web UI in Hindi is technically straightforward
+   for Django (`USE_I18N`, `LocaleMiddleware`, `.po` files), just very high volume of translation
+   work. Plan for multiple sessions if picked up.
+2. **Family Ledger** (group siblings) - `Student.father_name`/`mother_name` are free text today,
+   no `Guardian`/`Family` model exists. Would need a new model plus a one-time matching pass over
+   the existing 1213 students (father name + mobile number heuristic) that will need manual
+   review for typos/variants before it can be trusted - the messiest of the 5 ideas data-wise.
+3. **Paid WhatsApp Business API** (real automatic bulk send) - only worth revisiting if the free
+   `wa.me` approach above turns out to be too slow/manual in daily use; needs a business
+   verification + ongoing cost decision from the owner first.
+    just distribution tracking (see "Not done" item 4 above).
+
+## ✅ Feature Sprint & Bugfixes (July 9, 2026)
+
+Following the implementation of the House System, Discipline Records, ID Cards, WhatsApp buttons, and Inventory modules, several crucial bug fixes and improvements were made during the final EXE rebuild phase:
+
+1. **Section Dropdown Fixes & Seeding (`core/forms.py`)**:
+   - The `SectionSelect` widget was causing `OperationalError` during fresh database migrations because its `__init__` method queried `Section.objects` before the table existed. This was fixed by deferring the query to `optgroups()` which runs at render time.
+   - The JavaScript filter in `student_form.html` was incorrectly showing all sections (A, B, A, B...) when no class was selected. The condition was updated to `classId && opt.dataset.class === classId` to keep the dropdown empty until a class is selected.
+   - The `create_option` method was failing silently to add `data-class` attributes because `value` was a `ModelChoiceIteratorValue` and `int(value)` raised a `TypeError`. This was fixed by casting to string first: `int(str(value))`.
+   - The labels for the options were customized to show just the section name (e.g., "A", "B") instead of the `__str__` representation ("I - A").
+   - A one-time seed script was run against both the development and local Desktop (`%LOCALAPPDATA%`) SQLite databases to add sections **C, D, E, F, G** to all classes, as the legacy database only had A and B for most classes.
+
+2. **Photo Preview Implementation (`student_form.html`)**:
+   - The photo upload functionality was augmented with client-side JavaScript using `FileReader` to instantly preview the selected image file before form submission. The "No Photo" SVG placeholder is now dynamically hidden, and an `<img>` tag is injected to display the chosen file immediately.
+
+3. **Desktop EXE Rebuild Sequence**:
+   - The `build-desktop.bat` script encountered `PermissionError: [WinError 5] Access is denied` because the legacy `SchoolSoft.exe` process was still running in the background and holding locks on DLLs.
+   - The issue was resolved by explicitly killing the background processes before triggering the final build. The new EXE is now fully packed and verified to work locally.

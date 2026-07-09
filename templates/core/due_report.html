@@ -111,6 +111,7 @@
                     <th class="amount">Net</th>
                     <th class="amount">Paid</th>
                     <th class="amount">Due</th>
+                    <th class="no-print">WhatsApp</th>
                 </tr>
             </thead>
             <tbody>
@@ -128,10 +129,18 @@
                         <td data-label="Net" class="amount font-medium">{{ row.net_amount|indian_number }}</td>
                         <td data-label="Paid" class="amount text-success font-medium">{{ row.paid_amount|indian_number }}</td>
                         <td data-label="Due" class="amount due-amount font-bold text-danger">{{ row.due_amount|indian_number }}</td>
+                        <td data-label="WhatsApp" class="no-print">
+                            {% wa_fee_link row.student__mobile_primary row.student__father_name row.student__full_name row.student__current_class__name row.student__current_section__name row.student__admission_no row.due_amount school_name as wa_url %}
+                            {% if wa_url %}
+                                <a class="button secondary action-secondary" href="{{ wa_url }}" target="_blank" rel="noopener" title="Open WhatsApp with fee-due reminder pre-filled - review and press Send yourself">WhatsApp</a>
+                            {% else %}
+                                <span class="text-muted">No mobile</span>
+                            {% endif %}
+                        </td>
                     </tr>
                 {% empty %}
                     <tr>
-                        <td colspan="8" class="text-center py-8 text-muted">No dues found matching your criteria.</td>
+                        <td colspan="9" class="text-center py-8 text-muted">No dues found matching your criteria.</td>
                     </tr>
                 {% endfor %}
             </tbody>

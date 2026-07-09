@@ -6,9 +6,11 @@ from django.test import TestCase
 from django.urls import reverse
 
 from .forms import VoucherForm
+from .whatsapp import build_wa_link, fee_due_message, normalize_indian_mobile
 from .models import (
     AccountGroup,
     AcademicSession,
+    DisciplineRecord,
     ExamMark,
     ExamTerm,
     ExamTest,
@@ -16,6 +18,9 @@ from .models import (
     FeeReceipt,
     FeeReceiptLine,
     FeeStructure,
+    House,
+    InventoryIssue,
+    InventoryItem,
     LedgerAccount,
     SalaryPayment,
     SchoolClass,
@@ -902,6 +907,282 @@ class TransportTests(AuthenticatedClientMixin, TestCase):
         self.assertContains(all_status_response, "Old Stop")
         self.assertContains(route_response, "2")
         self.assertContains(route_response, "Legacy BUS_APPLICABLE")
+
+
+class HouseAssignmentTests(AuthenticatedClientMixin, TestCase):
+    def test_new_student_form_suggests_least_populated_active_house(self):
+        school_class = SchoolClass.objects.create(name="II", display_order=1)
+        red = House.objects.create(name="Red House", display_order=1)
+        blue = House.objects.create(name="Blue House", display_order=2)
+        # Red already has 2 students, Blue has 0 - Blue should be suggested.
+        Student.objects.create(full_name="Existing One", current_class=school_class, house=red)
+        Student.objects.create(full_name="Existing Two", current_class=school_class, house=red)
+
+        response = self.client.get(reverse("core:student_create"))
+
+        self.assertEqual(response.status_code, 200)
+        form = response.context["form"]
+        self.assertEqual(form.fields["house"].initial, blue.pk)
+
+    def test_inactive_house_not_suggested(self):
+        school_class = SchoolClass.objects.create(name="III", display_order=1)
+        House.objects.create(name="Retired House", display_order=1, is_active=False)
+        active_house = House.objects.create(name="Active House", display_order=2)
+
+        response = self.client.get(reverse("core:student_create"))
+
+        form = response.context["form"]
+        self.assertEqual(form.fields["house"].initial, active_house.pk)
+
+
+class DisciplineRecordTests(TestCase):
+    def setUp(self):
+        self.admin = get_user_model().objects.create_superuser(
+            username="admin_tester", email="admin@example.com", password="testpass123"
+        )
+        self.plain_user = get_user_model().objects.create_user(
+            username="plain_tester", email="plain@example.com", password="testpass123"
+        )
+        school_class = SchoolClass.objects.create(name="IV", display_order=1)
+        self.student = Student.objects.create(full_name="Discipline Student", current_class=school_class)
+
+    def test_non_admin_blocked_from_discipline_list(self):
+        self.client.force_login(self.plain_user)
+        response = self.client.get(reverse("core:discipline_list", args=[self.student.id]))
+
+        self.assertEqual(response.status_code, 403)
+        self.assertContains(response, "Discipline Records", status_code=403)
+
+    def test_admin_can_create_and_view_discipline_record(self):
+        self.client.force_login(self.admin)
+
+        create_response = self.client.post(
+            reverse("core:discipline_create", args=[self.student.id]),
+            {
+                "incident_date": "2026-07-08",
+                "category": DisciplineRecord.Category.LATE_COMING,
+                "severity": DisciplineRecord.Severity.MINOR,
+                "description": "Arrived 20 minutes late without a note.",
+                "action_taken": "Verbal warning given.",
+            },
+        )
+        self.assertRedirects(create_response, reverse("core:discipline_list", args=[self.student.id]))
+
+        record = DisciplineRecord.objects.get(student=self.student)
+        self.assertEqual(record.reported_by, self.admin)
+        self.assertEqual(record.category, DisciplineRecord.Category.LATE_COMING)
+
+        list_response = self.client.get(reverse("core:discipline_list", args=[self.student.id]))
+        self.assertContains(list_response, "Late Coming")
+
+        pdf_response = self.client.get(reverse("core:discipline_pdf", args=[self.student.id]))
+        self.assertEqual(pdf_response.status_code, 200)
+        self.assertEqual(pdf_response["Content-Type"], "application/pdf")
+
+
+class IdCardTests(AuthenticatedClientMixin, TestCase):
+    def test_single_id_card_pdf(self):
+        school_class = SchoolClass.objects.create(name="V", display_order=1)
+        student = Student.objects.create(full_name="ID Card Student", current_class=school_class)
+
+        response = self.client.get(reverse("core:id_card_pdf", args=[student.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+
+    def test_batch_id_card_pdf_respects_class_filter(self):
+        class_one = SchoolClass.objects.create(name="VI", display_order=1)
+        class_two = SchoolClass.objects.create(name="VII", display_order=2)
+        Student.objects.create(full_name="In Class One", current_class=class_one)
+        Student.objects.create(full_name="In Class Two", current_class=class_two)
+
+        response = self.client.get(reverse("core:id_card_batch_pdf"), {"class": class_one.id, "status": "all"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+
+    def test_batch_id_card_pdf_empty_result_does_not_crash(self):
+        response = self.client.get(reverse("core:id_card_batch_pdf"), {"q": "no-such-student-xyz"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+
+
+class WhatsAppLinkTests(TestCase):
+    def test_normalize_ten_digit_number(self):
+        self.assertEqual(normalize_indian_mobile("9876543210"), "919876543210")
+
+    def test_normalize_strips_spaces_and_dashes(self):
+        self.assertEqual(normalize_indian_mobile("98765 43210"), "919876543210")
+        self.assertEqual(normalize_indian_mobile("98765-43210"), "919876543210")
+
+    def test_normalize_leading_zero(self):
+        self.assertEqual(normalize_indian_mobile("09876543210"), "919876543210")
+
+    def test_normalize_already_has_country_code(self):
+        self.assertEqual(normalize_indian_mobile("919876543210"), "919876543210")
+
+    def test_normalize_rejects_short_garbage(self):
+        self.assertIsNone(normalize_indian_mobile("12345"))
+        self.assertIsNone(normalize_indian_mobile(""))
+        self.assertIsNone(normalize_indian_mobile(None))
+
+    def test_build_wa_link_contains_number_and_message(self):
+        link = build_wa_link("9876543210", "Hello there")
+        self.assertIsNotNone(link)
+        self.assertTrue(link.startswith("https://wa.me/919876543210?text="))
+        self.assertIn("Hello", link)
+
+    def test_build_wa_link_none_for_bad_number(self):
+        self.assertIsNone(build_wa_link("123", "Hello"))
+
+    def test_fee_due_message_includes_key_details(self):
+        message = fee_due_message("Ram Prasad", "Sita Devi", "V", "A", "1234", Decimal("500.00"), "THPS")
+        self.assertIn("Ram Prasad", message)
+        self.assertIn("Sita Devi", message)
+        self.assertIn("500.00", message)
+        self.assertIn("1234", message)
+        self.assertIn("THPS", message)
+
+
+class WhatsAppViewIntegrationTests(AuthenticatedClientMixin, TestCase):
+    def test_due_report_shows_whatsapp_link_for_student_with_mobile(self):
+        school_class = SchoolClass.objects.create(name="V", display_order=1)
+        session = AcademicSession.objects.create(name="2025-26", starts_on="2025-04-01", ends_on="2026-03-31")
+        student = Student.objects.create(
+            full_name="Due WA Student",
+            current_class=school_class,
+            father_name="Father Name",
+            mobile_primary="9876543210",
+            admission_no="ADM-WA-1",
+        )
+        FeeReceipt.objects.create(
+            receipt_no="WA-DUE-1",
+            student=student,
+            session=session,
+            received_amount=Decimal("50.00"),
+            legacy_net_total=Decimal("100.00"),
+            legacy_due_amount=Decimal("50.00"),
+        )
+
+        response = self.client.get(reverse("core:due_report"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "wa.me/919876543210")
+
+    def test_student_detail_shows_fee_reminder_link_when_due(self):
+        school_class = SchoolClass.objects.create(name="VI", display_order=1)
+        session = AcademicSession.objects.create(name="2025-26", starts_on="2025-04-01", ends_on="2026-03-31")
+        student = Student.objects.create(
+            full_name="Profile WA Student",
+            current_class=school_class,
+            father_name="Father Name",
+            mobile_primary="9876543210",
+        )
+        FeeReceipt.objects.create(
+            receipt_no="WA-DUE-2",
+            student=student,
+            session=session,
+            received_amount=Decimal("0.00"),
+            legacy_net_total=Decimal("100.00"),
+            legacy_due_amount=Decimal("100.00"),
+        )
+
+        response = self.client.get(reverse("core:student_detail", args=[student.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "wa.me/919876543210")
+
+    def test_student_detail_no_crash_without_mobile(self):
+        school_class = SchoolClass.objects.create(name="VII", display_order=1)
+        student = Student.objects.create(full_name="No Mobile Student", current_class=school_class)
+
+        response = self.client.get(reverse("core:student_detail", args=[student.id]))
+
+        self.assertEqual(response.status_code, 200)
+
+
+class InventoryTests(AuthenticatedClientMixin, TestCase):
+    def test_create_item_and_it_appears_in_catalog(self):
+        response = self.client.post(
+            reverse("core:inventory_item_create"),
+            {"name": "Summer Uniform Set", "category": InventoryItem.Category.UNIFORM, "unit_price": "650.00", "is_active": "on"},
+        )
+        self.assertRedirects(response, reverse("core:inventory_item_list"))
+
+        item = InventoryItem.objects.get(name="Summer Uniform Set")
+        self.assertEqual(item.unit_price, Decimal("650.00"))
+
+        list_response = self.client.get(reverse("core:inventory_item_list"))
+        self.assertContains(list_response, "Summer Uniform Set")
+
+    def test_toggle_item_active(self):
+        item = InventoryItem.objects.create(name="Notebook Set", category=InventoryItem.Category.BOOK, unit_price=Decimal("120.00"))
+
+        response = self.client.post(reverse("core:inventory_item_toggle_active", args=[item.id]))
+        self.assertRedirects(response, reverse("core:inventory_item_list"))
+
+        item.refresh_from_db()
+        self.assertFalse(item.is_active)
+
+    def test_issue_item_to_student_snapshots_price_and_supports_concession(self):
+        school_class = SchoolClass.objects.create(name="IV", display_order=1)
+        student = Student.objects.create(full_name="Inventory Student", current_class=school_class)
+        item = InventoryItem.objects.create(name="Winter Sweater", category=InventoryItem.Category.UNIFORM, unit_price=Decimal("400.00"))
+
+        create_response = self.client.post(
+            reverse("core:inventory_issue_create", args=[student.id]),
+            {
+                "item": item.id,
+                "issue_date": "2026-07-01",
+                "quantity": 1,
+                "amount_charged": "200.00",
+                "remarks": "Concession - 50% for BPL family",
+            },
+        )
+        self.assertRedirects(create_response, reverse("core:inventory_issue_list", args=[student.id]))
+
+        issue = InventoryIssue.objects.get(student=student, item=item)
+        self.assertEqual(issue.unit_price, Decimal("400.00"))
+        self.assertEqual(issue.amount_charged, Decimal("200.00"))
+        self.assertEqual(issue.concession_amount, Decimal("200.00"))
+        self.assertFalse(issue.is_free)
+        self.assertEqual(issue.issued_by, self.user)
+
+        list_response = self.client.get(reverse("core:inventory_issue_list", args=[student.id]))
+        self.assertContains(list_response, "Winter Sweater")
+
+    def test_free_issue_shows_as_free(self):
+        school_class = SchoolClass.objects.create(name="III", display_order=1)
+        student = Student.objects.create(full_name="Free Issue Student", current_class=school_class)
+        item = InventoryItem.objects.create(name="Shoes", category=InventoryItem.Category.SHOES, unit_price=Decimal("300.00"))
+
+        InventoryIssue.objects.create(student=student, item=item, unit_price=item.unit_price, quantity=1, amount_charged=Decimal("0.00"))
+
+        response = self.client.get(reverse("core:inventory_issue_list", args=[student.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Free")
+
+    def test_inventory_report_filters_by_item(self):
+        school_class = SchoolClass.objects.create(name="II", display_order=1)
+        student_a = Student.objects.create(full_name="Report Student A", current_class=school_class)
+        student_b = Student.objects.create(full_name="Report Student B", current_class=school_class)
+        book = InventoryItem.objects.create(name="Maths Textbook", category=InventoryItem.Category.BOOK, unit_price=Decimal("150.00"))
+        shoes = InventoryItem.objects.create(name="School Shoes", category=InventoryItem.Category.SHOES, unit_price=Decimal("350.00"))
+        InventoryIssue.objects.create(student=student_a, item=book, unit_price=book.unit_price, quantity=1, amount_charged=Decimal("150.00"))
+        InventoryIssue.objects.create(student=student_b, item=shoes, unit_price=shoes.unit_price, quantity=1, amount_charged=Decimal("350.00"))
+
+        response = self.client.get(reverse("core:inventory_report"), {"item": book.id})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Report Student A")
+        self.assertNotContains(response, "Report Student B")
+
+    def test_inventory_report_empty_does_not_crash(self):
+        response = self.client.get(reverse("core:inventory_report"), {"q": "no-such-student-xyz"})
+
+        self.assertEqual(response.status_code, 200)
 
 
 # Create your tests here.

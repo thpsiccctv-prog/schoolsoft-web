@@ -52,6 +52,23 @@ class Section(TimeStampedModel):
         return f"{self.school_class} - {self.name}"
 
 
+class House(TimeStampedModel):
+    """Student house (Red/Blue/Green/Yellow by default) - editable/renameable via
+    Django admin, not hardcoded, so the school can rename or add houses later
+    without a code change."""
+
+    name = models.CharField(max_length=50, unique=True)
+    color_code = models.CharField(max_length=20, blank=True, help_text="e.g. #DC2626 or 'Red'")
+    display_order = models.PositiveSmallIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["display_order", "name"]
+
+    def __str__(self):
+        return self.name
+
+
 class SchoolProfile(TimeStampedModel):
     legacy_comp_code = models.PositiveIntegerField(null=True, blank=True, unique=True)
     udise_code = models.CharField(max_length=50, blank=True)
@@ -164,6 +181,13 @@ class Student(TimeStampedModel):
     current_section = models.ForeignKey(
         Section,
         on_delete=models.PROTECT,
+        related_name="students",
+        null=True,
+        blank=True,
+    )
+    house = models.ForeignKey(
+        House,
+        on_delete=models.SET_NULL,
         related_name="students",
         null=True,
         blank=True,
@@ -393,6 +417,116 @@ class TransferCertificate(TimeStampedModel):
 
     def __str__(self):
         return f"TC {self.tc_number} - {self.student}"
+
+
+class DisciplineRecord(TimeStampedModel):
+    """Admin/Principal-only disciplinary incident log, kept separate from the
+    TC's General Conduct rating (that stays a manual staff judgment call made
+    at TC time). Used for internal tracking and a printable PTM summary."""
+
+    class Severity(models.TextChoices):
+        MINOR = "minor", "Minor"
+        MAJOR = "major", "Major"
+        SEVERE = "severe", "Severe"
+
+    class Category(models.TextChoices):
+        LATE_COMING = "late_coming", "Late Coming"
+        ATTENDANCE = "attendance", "Attendance Issue"
+        MISCONDUCT = "misconduct", "Misconduct"
+        BULLYING = "bullying", "Bullying / Ragging"
+        PROPERTY_DAMAGE = "property_damage", "Property Damage"
+        ACADEMIC_DISHONESTY = "academic_dishonesty", "Academic Dishonesty (Cheating)"
+        UNIFORM_GROOMING = "uniform_grooming", "Uniform / Grooming"
+        OTHER = "other", "Other"
+
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name="discipline_records")
+    incident_date = models.DateField(default=timezone.localdate)
+    category = models.CharField(max_length=30, choices=Category.choices, default=Category.OTHER)
+    severity = models.CharField(max_length=10, choices=Severity.choices, default=Severity.MINOR)
+    description = models.TextField()
+    action_taken = models.TextField(blank=True)
+    parent_notified = models.BooleanField(default=False)
+    reported_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="discipline_records_reported",
+    )
+
+    class Meta:
+        ordering = ["-incident_date", "-id"]
+
+    def __str__(self):
+        return f"{self.student.full_name} - {self.get_category_display()} ({self.incident_date})"
+
+
+class InventoryItem(TimeStampedModel):
+    """Master catalog of uniform/book/stationery items the school issues to
+    students - just a name, category and standard price. Kept separate from
+    FeeHead on purpose: this is physical-goods distribution/concession
+    tracking, not a fee ledger entry."""
+
+    class Category(models.TextChoices):
+        UNIFORM = "uniform", "Uniform"
+        SHOES = "shoes", "Shoes"
+        BOOK = "book", "Book"
+        STATIONERY = "stationery", "Stationery"
+        OTHER = "other", "Other"
+
+    name = models.CharField(max_length=120)
+    category = models.CharField(max_length=20, choices=Category.choices, default=Category.OTHER)
+    unit_price = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0"))
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["category", "name"]
+
+    def __str__(self):
+        return self.name
+
+
+class InventoryIssue(TimeStampedModel):
+    """One record of an item (or a quantity of it) handed to a student.
+    unit_price is snapshotted from the item at issue time so a later price
+    change doesn't rewrite history. amount_charged is what was actually
+    collected - staff can reduce it below quantity*unit_price for a
+    concession, or set it to 0 for a fully free issue; amount_charged is the
+    single source of truth rather than a separate is_free flag."""
+
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name="inventory_issues")
+    item = models.ForeignKey(InventoryItem, on_delete=models.PROTECT, related_name="issues")
+    issue_date = models.DateField(default=timezone.localdate)
+    quantity = models.PositiveIntegerField(default=1)
+    unit_price = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0"))
+    amount_charged = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0"))
+    remarks = models.CharField(max_length=200, blank=True)
+    issued_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="inventory_issues_recorded",
+    )
+
+    class Meta:
+        ordering = ["-issue_date", "-id"]
+
+    @property
+    def is_free(self):
+        return self.amount_charged == 0
+
+    @property
+    def full_price(self):
+        return self.unit_price * self.quantity
+
+    @property
+    def concession_amount(self):
+        full = self.full_price
+        return full - self.amount_charged if full > self.amount_charged else Decimal("0")
+
+    def __str__(self):
+        return f"{self.item.name} x{self.quantity} -> {self.student.full_name}"
 
 
 class Subject(TimeStampedModel):
@@ -930,4 +1064,5 @@ class ModuleAccess(models.Model):
             ("access_transport", "SchoolSoft: Transport"),
             ("access_school_profile", "SchoolSoft: School profile"),
             ("access_accounts", "SchoolSoft: Accounts and cash book"),
+            ("access_inventory", "SchoolSoft: Inventory (uniform/books)"),
         ]

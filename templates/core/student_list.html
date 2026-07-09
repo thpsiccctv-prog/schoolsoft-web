@@ -18,6 +18,7 @@
                 <a class="button action-primary" href="{% url 'core:student_create' %}">New Admission</a>
             {% endif %}
             <a class="button secondary action-secondary" href="{% url 'core:student_register' %}?{{ request.GET.urlencode }}" target="_blank">Print Register</a>
+            <a class="button secondary action-secondary" href="{% url 'core:id_card_batch_pdf' %}?{{ request.GET.urlencode }}" target="_blank">Print ID Cards</a>
             <a class="button secondary action-secondary" href="{% url 'core:student_export_csv' %}?{{ request.GET.urlencode }}">Export Excel</a>
         </div>
     </div>

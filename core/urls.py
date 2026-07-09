@@ -3,7 +3,7 @@ from django.urls import path
 
 from . import views
 from . import user_admin
-from .access import module_required
+from .access import admin_only_required, module_required
 
 from django.views.generic import TemplateView
 
@@ -31,6 +31,7 @@ urlpatterns = [
     path("students/", module_required("students")(views.student_list), name="student_list"),
     path("students/register/", module_required("students")(views.student_register), name="student_register"),
     path("students/export/", module_required("students")(views.student_export_csv), name="student_export_csv"),
+    path("students/id-cards/pdf/", module_required("students")(views.id_card_batch_pdf), name="id_card_batch_pdf"),
     path("students/new/", module_required("students", write=True)(views.student_create), name="student_create"),
     path("students/<int:pk>/", module_required("students")(views.student_detail), name="student_detail"),
     path("students/<int:pk>/edit/", module_required("students", write=True)(views.student_update), name="student_update"),
@@ -50,10 +51,23 @@ urlpatterns = [
     path("collection/pdf/", module_required("collection")(views.collection_report_pdf), name="collection_report_pdf"),
     path("students/<int:pk>/admission-form/pdf/", module_required("students")(views.admission_form_pdf), name="admission_form_pdf"),
     path("students/<int:pk>/character-certificate/pdf/", module_required("students")(views.character_certificate_pdf), name="character_certificate_pdf"),
+    path("students/<int:pk>/id-card/pdf/", module_required("students")(views.id_card_pdf), name="id_card_pdf"),
     path("students/<int:pk>/tc/", module_required("students", write=True)(views.tc_detail), name="tc_detail"),
     path("students/<int:pk>/tc/pdf/", module_required("students")(views.tc_pdf), name="tc_pdf"),
     path("students/<int:pk>/marksheet/", module_required("marks")(views.marksheet_select), name="marksheet_select"),
     path("students/<int:pk>/marksheet/<int:term_id>/pdf/", module_required("marks")(views.marksheet_pdf), name="marksheet_pdf"),
+    path("students/<int:pk>/discipline/", admin_only_required("Discipline Records")(views.discipline_list), name="discipline_list"),
+    path("students/<int:pk>/discipline/new/", admin_only_required("Discipline Records")(views.discipline_create), name="discipline_create"),
+    path("students/<int:pk>/discipline/pdf/", admin_only_required("Discipline Records")(views.discipline_pdf), name="discipline_pdf"),
+
+    # Inventory (Uniform/Books)
+    path("inventory/items/", module_required("inventory")(views.inventory_item_list), name="inventory_item_list"),
+    path("inventory/items/new/", module_required("inventory", write=True)(views.inventory_item_create), name="inventory_item_create"),
+    path("inventory/items/<int:pk>/toggle-active/", module_required("inventory", write=True)(views.inventory_item_toggle_active), name="inventory_item_toggle_active"),
+    path("inventory/report/", module_required("inventory")(views.inventory_report), name="inventory_report"),
+    path("students/<int:pk>/inventory/", module_required("inventory")(views.inventory_issue_list), name="inventory_issue_list"),
+    path("students/<int:pk>/inventory/new/", module_required("inventory", write=True)(views.inventory_issue_create), name="inventory_issue_create"),
+
     path("staff/", module_required("staff")(views.staff_list), name="staff_list"),
     path("staff/<int:pk>/", module_required("staff")(views.staff_detail), name="staff_detail"),
     path("staff/salary/", module_required("staff")(views.salary_payment_list), name="salary_payment_list"),
