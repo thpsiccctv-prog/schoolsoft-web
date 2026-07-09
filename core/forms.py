@@ -4,7 +4,23 @@ from django import forms
 from django.db.models import Max
 from django.utils import timezone
 
-from .models import AcademicSession, AccountGroup, FeeHead, FeeReceipt, SalaryPayment, Staff, Student, TransferCertificate, LedgerAccount, Voucher
+from .models import AcademicSession, AccountGroup, FeeHead, FeeReceipt, SalaryPayment, Section, Staff, Student, TransferCertificate, LedgerAccount, Voucher
+
+
+class SectionSelect(forms.Select):
+    """Renders each <option> with a data-class attribute so student_form.html can
+    show only the sections belonging to the currently selected class, client-side."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._section_class_map = dict(Section.objects.values_list("id", "school_class_id"))
+
+    def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
+        option = super().create_option(name, value, label, selected, index, subindex, attrs)
+        class_id = self._section_class_map.get(value)
+        if class_id:
+            option["attrs"]["data-class"] = str(class_id)
+        return option
 
 
 class StudentChoiceField(forms.ModelChoiceField):
@@ -35,6 +51,8 @@ class StudentForm(forms.ModelForm):
             "full_name",
             "current_class",
             "current_section",
+            "roll_no",
+            "photo",
             "date_of_birth",
             "gender",
             "aadhaar_no",
@@ -81,6 +99,7 @@ class StudentForm(forms.ModelForm):
             "date_of_birth": forms.DateInput(attrs={"type": "date"}),
             "address_local": forms.Textarea(attrs={"rows": 2}),
             "address_permanent": forms.Textarea(attrs={"rows": 2}),
+            "current_section": SectionSelect(),
         }
         labels = {
             "pen_number": "PEN Number",

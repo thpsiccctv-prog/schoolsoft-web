@@ -187,6 +187,17 @@ STATIC_URL = 'static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
+# Media files (user uploads, e.g. student photos).
+# Desktop EXE: desktop.py sets SCHOOLSOFT_MEDIA_ROOT to %LOCALAPPDATA%\SchoolSoft\media,
+# the same reasoning as the sqlite db - anything saved next to the EXE is wiped on
+# rebuild, so uploads must live in the per-user app-data folder instead.
+# Render: falls back to a folder on the instance's local disk. That disk is NOT
+# persistent across redeploys/restarts on the free plan - acceptable for now since the
+# Desktop EXE remains the source of truth, but revisit with real object storage
+# (e.g. S3/Cloudinary) if online photo uploads need to survive redeploys.
+MEDIA_URL = 'media/'
+MEDIA_ROOT = Path(os.environ.get("SCHOOLSOFT_MEDIA_ROOT", local_data_dir() / "media"))
+
 LOGIN_URL = "core:login"
 LOGIN_REDIRECT_URL = "core:dashboard"
 LOGOUT_REDIRECT_URL = "core:login"

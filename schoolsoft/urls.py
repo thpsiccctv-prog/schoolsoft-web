@@ -14,10 +14,24 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
+from django.conf import settings
 from django.contrib import admin
 from django.urls import include, path
+from django.views.static import serve as serve_static
 
 urlpatterns = [
     path('', include('core.urls')),
     path('admin/', admin.site.urls),
+]
+
+# Serve uploaded media (student photos, etc.) ourselves in every environment.
+# WhiteNoise only serves STATIC_URL, not MEDIA_URL, and this app is small/low-traffic
+# enough (single school) that Django's own file serving is fine - no need for a
+# separate nginx/object-storage layer just to show a photo.
+urlpatterns += [
+    path(
+        f"{settings.MEDIA_URL.lstrip('/')}<path:path>",
+        serve_static,
+        {"document_root": settings.MEDIA_ROOT},
+    ),
 ]

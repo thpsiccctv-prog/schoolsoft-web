@@ -4,6 +4,7 @@ Data layout:
   %LOCALAPPDATA%\SchoolSoft\db.sqlite3          <- live user database
   %LOCALAPPDATA%\SchoolSoft\db.backup-*.sqlite3 <- automatic pre-migrate backups
   %LOCALAPPDATA%\SchoolSoft\SchoolSoft-error.log
+  %LOCALAPPDATA%\SchoolSoft\media\               <- uploaded student photos, etc.
 The EXE bundle only ships a clean seed database (db.seed.sqlite3); user data
 is never inside the install folder, so updates can never overwrite it.
 """
@@ -39,6 +40,12 @@ def configure_desktop_environment():
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "schoolsoft.settings")
     os.environ["SCHOOLSOFT_SQLITE_PATH"] = str(DB_PATH)
     os.environ["SCHOOLSOFT_LOG_FILE"] = str(LOG_FILE)
+    # Student photos and other uploads: same reasoning as the sqlite db above -
+    # must live under %LOCALAPPDATA%\SchoolSoft\, never beside the EXE, so a
+    # rebuild/update can never wipe them.
+    media_dir = APP_DATA / "media"
+    media_dir.mkdir(parents=True, exist_ok=True)
+    os.environ["SCHOOLSOFT_MEDIA_ROOT"] = str(media_dir)
 
     logging.basicConfig(
         filename=str(LOG_FILE),

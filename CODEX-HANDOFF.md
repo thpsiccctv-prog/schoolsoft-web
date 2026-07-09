@@ -1161,3 +1161,67 @@ once" after reviewing the real form), all in migration to be created via
    save/reload works, then `collectstatic` + `build-desktop.bat` before shipping desktop.
 5. TC PDF/print still only uses `category` (unchanged) for the SC/ST/OBC line — `caste` is not
    printed anywhere yet (matches the legacy TC format, which also has no caste line).
+
+## 2026-07-08 Checkpoint - Roll No + Section-by-Class Filter (same review pass)
+
+Owner (via another AI session's review) also found: `roll_no` exists on `Student` but was never
+in `StudentForm`, and `current_section` showed ALL sections from every class (A/B/C/D x every
+grade) instead of just the ones under the selected class.
+
+Fixed:
+- `core/forms.py`: added `roll_no` to `StudentForm.Meta.fields`. Added a `SectionSelect(forms.Select)`
+  widget that stamps each `<option data-class="{school_class_id}">` so the browser can filter
+  client-side with no extra request. Set as the widget for `current_section`.
+- `templates/core/student_form.html`: added a Roll No field next to Current Section. Added JS in
+  the existing `DOMContentLoaded` block — on `current_class` change, hides `current_section`
+  options whose `data-class` doesn't match, resets the selection if it becomes hidden. Runs once
+  on page load too, so the edit form pre-filters correctly for an existing student.
+
+**Owner decision (same session)**: build Photo upload now; skip Bank Details (not needed for
+real operations right now — revisit only if the school starts doing scholarship/RTE
+reimbursement by bank transfer).
+
+## 2026-07-08 Checkpoint - Student Photo Upload
+
+- `core/models.py`: `Student.photo = models.ImageField(upload_to="student_photos/", null=True, blank=True)`.
+- `schoolsoft/settings.py`: added `MEDIA_URL = 'media/'` and
+  `MEDIA_ROOT = Path(os.environ.get("SCHOOLSOFT_MEDIA_ROOT", local_data_dir() / "media"))` —
+  same env-var-with-fallback pattern already used for `SCHOOLSOFT_SQLITE_PATH`.
+- `desktop.py` `configure_desktop_environment()`: now also creates
+  `%LOCALAPPDATA%\SchoolSoft\media\` and sets `SCHOOLSOFT_MEDIA_ROOT` to it, so uploaded photos
+  survive EXE rebuilds exactly like the sqlite db does.
+- `schoolsoft/urls.py`: added an explicit route serving `MEDIA_URL` via
+  `django.views.static.serve`, unconditionally (not just when `DEBUG=True`). WhiteNoise only
+  serves `STATIC_URL`, not `MEDIA_URL`. This is fine for a single small school's traffic — no
+  nginx/object-storage layer needed. **On Render this storage is NOT persistent across
+  redeploys/restarts** (ephemeral disk on the free plan) — acceptable since the Desktop EXE
+  remains the source of truth; revisit with S3/Cloudinary only if online photo uploads need to
+  survive redeploys.
+- `core/forms.py` `StudentForm`: added `photo` to `Meta.fields`.
+- `core/views.py`: `student_create`/`student_update` now pass `request.FILES` into `StudentForm`
+  (required for file uploads — was missing before, would have silently dropped any uploaded
+  file).
+- `templates/core/student_form.html`: `<form>` tag now has `enctype="multipart/form-data"`
+  (REQUIRED for file uploads to reach the server at all — easy to forget). Photo box shows the
+  existing photo if set, plus the file input below it.
+- `templates/core/student_detail.html`: profile avatar circle shows the real photo when present,
+  falls back to the placeholder icon otherwise.
+- `static/core/styles.css`: `.student-entry .student-photo-box` gained `overflow: hidden`; added
+  `.student-photo-preview { width/height:100%; object-fit:cover }`.
+- `.gitignore`: added `media/` — uploaded photos (real student data) must never be committed.
+- `SchoolSoft.spec`: NOT changed — `media/` must stay a runtime-only per-user folder, never
+  bundled into the EXE build (same rule as the sqlite db). Pillow is not in `hiddenimports`
+  explicitly; PyInstaller has a built-in hook for Pillow so this is normally fine, but if the EXE
+  rebuild fails to find `PIL`, add `collect_submodules('PIL')` to `hiddenimports` as a fallback.
+
+**Not yet done / next session must**:
+1. Run `manage.py makemigrations core` + `manage.py migrate` (adds the `photo` column — bundled
+   with the same migration as the admission-form-parity fields above, or its own, whichever
+   `makemigrations` generates).
+2. Run `manage.py test core`.
+3. Manually test: open a student, upload a photo, save, confirm it shows on the edit form photo
+   box AND the student profile page avatar. Confirm the image file actually lands under
+   `%LOCALAPPDATA%\SchoolSoft\media\student_photos\` (desktop) — not next to the EXE.
+4. `collectstatic` + `build-desktop.bat`, then fully close/reopen the EXE and re-test the same
+   upload flow inside the packaged app (PyInstaller ONEDIR sometimes behaves differently than
+   `runserver` for file writes — verify for real, don't assume).

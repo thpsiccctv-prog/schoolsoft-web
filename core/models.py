@@ -108,6 +108,7 @@ class Student(TimeStampedModel):
     admission_no = models.CharField(max_length=30, blank=True)
     registration_no = models.CharField(max_length=30, blank=True)
     roll_no = models.PositiveIntegerField(null=True, blank=True)
+    photo = models.ImageField(upload_to="student_photos/", null=True, blank=True)
     full_name = models.CharField(max_length=120)
     father_name = models.CharField(max_length=120, blank=True)
     mother_name = models.CharField(max_length=120, blank=True)

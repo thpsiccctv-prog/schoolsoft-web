@@ -24,7 +24,7 @@
         </div>
     </div>
 
-    <form class="entry-form student-entry-form" method="post">
+    <form class="entry-form student-entry-form" method="post" enctype="multipart/form-data">
         {% csrf_token %}
 
         {% if form.non_field_errors %}
@@ -90,6 +90,11 @@
                             <label for="{{ form.current_section.id_for_label }}">{{ form.current_section.label }}</label>
                             {{ form.current_section }}
                             {% if form.current_section.errors %}<div class="error-text">{{ form.current_section.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.roll_no.id_for_label }}">{{ form.roll_no.label }}</label>
+                            {{ form.roll_no }}
+                            {% if form.roll_no.errors %}<div class="error-text">{{ form.roll_no.errors|striptags }}</div>{% endif %}
                         </div>
                         <div class="entry-field">
                             <label for="{{ form.date_of_birth.id_for_label }}">{{ form.date_of_birth.label }}</label>
@@ -337,10 +342,19 @@
             <aside class="student-entry-rail">
                 <section class="entry-card student-photo-card">
                     <div class="student-photo-box">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M4 16l4.4-4.4a2 2 0 0 1 2.8 0L16 16m-2-2 1.5-1.5a2 2 0 0 1 2.8 0L20 14M7 5h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z" />
-                        </svg>
-                        <span>No Photo</span>
+                        {% if student.photo %}
+                            <img src="{{ student.photo.url }}" alt="{{ student.full_name }}" class="student-photo-preview">
+                        {% else %}
+                            <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M4 16l4.4-4.4a2 2 0 0 1 2.8 0L16 16m-2-2 1.5-1.5a2 2 0 0 1 2.8 0L20 14M7 5h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z" />
+                            </svg>
+                            <span>No Photo</span>
+                        {% endif %}
+                    </div>
+                    <div class="entry-field">
+                        <label for="{{ form.photo.id_for_label }}">{{ form.photo.label }}</label>
+                        {{ form.photo }}
+                        {% if form.photo.errors %}<div class="error-text">{{ form.photo.errors|striptags }}</div>{% endif %}
                     </div>
                 </section>
 
@@ -404,6 +418,35 @@
         const sidInput = document.getElementById("{{ form.legacy_sid.id_for_label }}");
         const admissionInput = document.getElementById("{{ form.admission_no.id_for_label }}");
         const mobileInput = document.getElementById("{{ form.mobile_primary.id_for_label }}");
+
+        // Only show sections belonging to the selected class.
+        const classSelect = document.getElementById("{{ form.current_class.id_for_label }}");
+        const sectionSelect = document.getElementById("{{ form.current_section.id_for_label }}");
+
+        function filterSectionsByClass() {
+            if (!classSelect || !sectionSelect) return;
+            const classId = classSelect.value;
+            let selectedStillVisible = false;
+            Array.from(sectionSelect.options).forEach(function (opt) {
+                if (!opt.value) {
+                    opt.hidden = false;
+                    return;
+                }
+                const matches = !classId || opt.dataset.class === classId;
+                opt.hidden = !matches;
+                if (matches && opt.selected) {
+                    selectedStillVisible = true;
+                }
+            });
+            if (!selectedStillVisible) {
+                sectionSelect.value = "";
+            }
+        }
+
+        if (classSelect && sectionSelect) {
+            classSelect.addEventListener("change", filterSectionsByClass);
+            filterSectionsByClass();
+        }
 
         function hideWarning() {
             warningBanner.hidden = true;

@@ -1244,7 +1244,7 @@ def salary_payslip_pdf(request, pk):
 
 def student_create(request):
     if request.method == "POST":
-        form = StudentForm(request.POST)
+        form = StudentForm(request.POST, request.FILES)
         if form.is_valid():
             student = form.save()
             action = request.POST.get("action")
@@ -1266,7 +1266,7 @@ def student_create(request):
 def student_update(request, pk):
     student = get_object_or_404(Student, pk=pk)
     if request.method == "POST":
-        form = StudentForm(request.POST, instance=student)
+        form = StudentForm(request.POST, request.FILES, instance=student)
         if form.is_valid():
             form.save()
             return redirect("core:student_detail", pk=student.pk)
