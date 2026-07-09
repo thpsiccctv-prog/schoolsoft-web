@@ -23,7 +23,8 @@ class SectionSelect(forms.Select):
         option = super().create_option(name, value, label, selected, index, subindex, attrs)
         if value and hasattr(self, "_temp_map"):
             try:
-                class_id = self._temp_map.get(int(value))
+                # value could be a ModelChoiceIteratorValue, so convert to str first
+                class_id = self._temp_map.get(int(str(value)))
                 if class_id:
                     option["attrs"]["data-class"] = class_id
             except (ValueError, TypeError):
