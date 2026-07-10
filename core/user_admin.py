@@ -28,6 +28,7 @@ MODULES_UI = [
     ("school_profile", "School Profile"),
     ("accounts", "Accounts & Cash Book"),
     ("inventory", "Inventory (Uniform/Books)"),
+    ("family", "Family Ledger (Siblings)"),
 ]
 ALL_KEYS = [key for key, _ in MODULES_UI]
 
@@ -46,7 +47,7 @@ ROLE_PRESETS = {
     "admin": {"modules": ALL_KEYS, "view_only": False, "is_admin": True},
     "fee": {
         "modules": ["students", "fee_collection", "receipts", "dues",
-                    "collection", "fee_setup", "school_profile"],
+                    "collection", "fee_setup", "school_profile", "family"],
         "view_only": False, "is_admin": False,
     },
     "admission": {"modules": ["students", "school_profile"], "view_only": False, "is_admin": False},

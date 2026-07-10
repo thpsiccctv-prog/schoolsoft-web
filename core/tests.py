@@ -14,6 +14,7 @@ from .models import (
     ExamMark,
     ExamTerm,
     ExamTest,
+    Family,
     FeeHead,
     FeeReceipt,
     FeeReceiptLine,
@@ -1181,6 +1182,112 @@ class InventoryTests(AuthenticatedClientMixin, TestCase):
 
     def test_inventory_report_empty_does_not_crash(self):
         response = self.client.get(reverse("core:inventory_report"), {"q": "no-such-student-xyz"})
+
+        self.assertEqual(response.status_code, 200)
+
+
+class FamilyLedgerTests(AuthenticatedClientMixin, TestCase):
+    def test_create_family_and_add_student(self):
+        school_class = SchoolClass.objects.create(name="V", display_order=1)
+        student = Student.objects.create(full_name="Family Student One", current_class=school_class)
+
+        create_response = self.client.post(
+            reverse("core:family_create"),
+            {"name": "Verma Family", "primary_mobile": "9876543210", "secondary_mobile": "", "address": "", "notes": ""},
+        )
+        family = Family.objects.get(name="Verma Family")
+        self.assertRedirects(create_response, reverse("core:family_detail", args=[family.id]))
+
+        add_response = self.client.post(reverse("core:family_add_student", args=[family.id]), {"student_id": student.id})
+        self.assertRedirects(add_response, reverse("core:family_detail", args=[family.id]))
+
+        student.refresh_from_db()
+        self.assertEqual(student.family, family)
+
+        detail_response = self.client.get(reverse("core:family_detail", args=[family.id]))
+        self.assertContains(detail_response, "Family Student One")
+
+    def test_remove_student_from_family(self):
+        school_class = SchoolClass.objects.create(name="VI", display_order=1)
+        family = Family.objects.create(name="Singh Family", primary_mobile="9876543210")
+        student = Student.objects.create(full_name="Family Student Two", current_class=school_class, family=family)
+
+        response = self.client.post(reverse("core:family_remove_student", args=[family.id, student.id]))
+        self.assertRedirects(response, reverse("core:family_detail", args=[family.id]))
+
+        student.refresh_from_db()
+        self.assertIsNone(student.family)
+
+    def test_family_detail_shows_combined_due_and_whatsapp_link(self):
+        school_class = SchoolClass.objects.create(name="VII", display_order=1)
+        session = AcademicSession.objects.create(name="2025-26", starts_on="2025-04-01", ends_on="2026-03-31")
+        family = Family.objects.create(name="Yadav Family", primary_mobile="9876543210")
+        student_a = Student.objects.create(full_name="Sibling A", current_class=school_class, father_name="Ram Yadav", family=family)
+        student_b = Student.objects.create(full_name="Sibling B", current_class=school_class, father_name="Ram Yadav", family=family)
+        FeeReceipt.objects.create(
+            receipt_no="FAM-DUE-1", student=student_a, session=session,
+            received_amount=Decimal("0.00"), legacy_net_total=Decimal("100.00"), legacy_due_amount=Decimal("100.00"),
+        )
+        FeeReceipt.objects.create(
+            receipt_no="FAM-DUE-2", student=student_b, session=session,
+            received_amount=Decimal("0.00"), legacy_net_total=Decimal("50.00"), legacy_due_amount=Decimal("50.00"),
+        )
+
+        response = self.client.get(reverse("core:family_detail", args=[family.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Sibling A")
+        self.assertContains(response, "Sibling B")
+        self.assertContains(response, "wa.me/919876543210")
+
+    def test_suggestions_group_students_sharing_father_and_mobile(self):
+        school_class = SchoolClass.objects.create(name="VIII", display_order=1)
+        Student.objects.create(
+            full_name="Suggest Sibling A", current_class=school_class,
+            father_name="Suresh Kumar", mobile_primary="9999900000",
+        )
+        Student.objects.create(
+            full_name="Suggest Sibling B", current_class=school_class,
+            father_name="Suresh Kumar", mobile_primary="9999900000",
+        )
+        Student.objects.create(
+            full_name="Unrelated Student", current_class=school_class,
+            father_name="Someone Else", mobile_primary="9111100000",
+        )
+
+        response = self.client.get(reverse("core:family_suggestions"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Suggest Sibling A")
+        self.assertContains(response, "Suggest Sibling B")
+        self.assertNotContains(response, "Unrelated Student")
+
+    def test_create_family_from_suggestion(self):
+        school_class = SchoolClass.objects.create(name="IX", display_order=1)
+        student_a = Student.objects.create(
+            full_name="Suggest Create A", current_class=school_class,
+            father_name="Mahesh Prasad", mobile_primary="9888800000",
+        )
+        student_b = Student.objects.create(
+            full_name="Suggest Create B", current_class=school_class,
+            father_name="Mahesh Prasad", mobile_primary="9888800000",
+        )
+
+        response = self.client.post(
+            reverse("core:family_create_from_suggestion"),
+            {"name": "Mahesh Prasad", "mobile": "9888800000", "student_ids": [student_a.id, student_b.id]},
+        )
+
+        family = Family.objects.get(name="Mahesh Prasad")
+        self.assertRedirects(response, reverse("core:family_detail", args=[family.id]))
+
+        student_a.refresh_from_db()
+        student_b.refresh_from_db()
+        self.assertEqual(student_a.family, family)
+        self.assertEqual(student_b.family, family)
+
+    def test_family_list_does_not_crash_when_empty(self):
+        response = self.client.get(reverse("core:family_list"))
 
         self.assertEqual(response.status_code, 200)
 

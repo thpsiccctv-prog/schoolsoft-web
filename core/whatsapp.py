@@ -99,3 +99,17 @@ def general_message(father_name, custom_text, school_name=""):
         lines.append(f"{school_name} se suchna:")
     lines.append(custom_text)
     return "\n".join(lines)
+
+
+def family_due_message(family_name, members, total_due, school_name=""):
+    """members is an iterable of (student_name, class_label, due_amount)."""
+    lines = [f"Namaste {family_name} parivar,"]
+    if school_name:
+        lines.append(f"{school_name} se suchna:")
+    for student_name, class_label, due in members:
+        if due and due > 0:
+            label = f" ({class_label})" if class_label else ""
+            lines.append(f"- {student_name}{label}: Rs. {due} due")
+    lines.append(f"Total due: Rs. {total_due}. Kripya jald jama karayein.")
+    lines.append("Dhanyawad.")
+    return "\n".join(lines)

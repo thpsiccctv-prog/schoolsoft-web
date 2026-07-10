@@ -4,7 +4,7 @@ from django import forms
 from django.db.models import Count, Max
 from django.utils import timezone
 
-from .models import AcademicSession, AccountGroup, DisciplineRecord, FeeHead, FeeReceipt, House, InventoryIssue, InventoryItem, SalaryPayment, Section, Staff, Student, TransferCertificate, LedgerAccount, Voucher
+from .models import AcademicSession, AccountGroup, DisciplineRecord, Family, FeeHead, FeeReceipt, House, InventoryIssue, InventoryItem, SalaryPayment, Section, Staff, Student, TransferCertificate, LedgerAccount, Voucher
 
 
 class SectionSelect(forms.Select):
@@ -301,6 +301,20 @@ class InventoryIssueForm(forms.ModelForm):
         for field in self.fields.values():
             if not isinstance(field.widget, forms.CheckboxInput):
                 field.widget.attrs.setdefault("class", "form-control")
+
+
+class FamilyForm(forms.ModelForm):
+    class Meta:
+        model = Family
+        fields = ["name", "primary_mobile", "secondary_mobile", "address", "notes"]
+        widgets = {
+            "notes": forms.Textarea(attrs={"rows": 2}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            field.widget.attrs.setdefault("class", "form-control")
 
 
 class TransferCertificateForm(forms.ModelForm):

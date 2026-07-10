@@ -96,6 +96,28 @@ class SchoolProfile(TimeStampedModel):
         return self.name
 
 
+class Family(TimeStampedModel):
+    """Groups siblings under one household for a combined fee view and a
+    single WhatsApp reminder covering the whole family. Deliberately
+    separate from Student.guardian_name (a free-text admission-form field
+    for a legal guardian when parents aren't available) - this is purely an
+    office-side grouping mechanism, built/edited by staff, never auto-filled
+    from admission data."""
+
+    name = models.CharField(max_length=120, help_text="Usually the father's name - shown as the family label.")
+    primary_mobile = models.CharField(max_length=20, blank=True)
+    secondary_mobile = models.CharField(max_length=20, blank=True)
+    address = models.CharField(max_length=200, blank=True)
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["name"]
+        verbose_name_plural = "Families"
+
+    def __str__(self):
+        return self.name
+
+
 class Student(TimeStampedModel):
     class Gender(models.TextChoices):
         MALE = "M", "Male"
@@ -189,6 +211,13 @@ class Student(TimeStampedModel):
         House,
         on_delete=models.SET_NULL,
         related_name="students",
+        null=True,
+        blank=True,
+    )
+    family = models.ForeignKey(
+        Family,
+        on_delete=models.SET_NULL,
+        related_name="members",
         null=True,
         blank=True,
     )
@@ -1065,4 +1094,5 @@ class ModuleAccess(models.Model):
             ("access_school_profile", "SchoolSoft: School profile"),
             ("access_accounts", "SchoolSoft: Accounts and cash book"),
             ("access_inventory", "SchoolSoft: Inventory (uniform/books)"),
+            ("access_family", "SchoolSoft: Family Ledger (siblings)"),
         ]

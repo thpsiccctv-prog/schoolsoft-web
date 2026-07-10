@@ -12,12 +12,13 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 
-from .forms import DisciplineRecordForm, FeeReceiptEditForm, FeeReceiptEntryForm, FeeReceiptLineEntryForm, InventoryIssueForm, InventoryItemForm, SalaryPaymentForm, StudentForm, TransferCertificateForm
+from .forms import DisciplineRecordForm, FamilyForm, FeeReceiptEditForm, FeeReceiptEntryForm, FeeReceiptLineEntryForm, InventoryIssueForm, InventoryItemForm, SalaryPaymentForm, StudentForm, TransferCertificateForm
 from .models import (
     AcademicSession,
     DisciplineRecord,
     ExamMark,
     ExamTerm,
+    Family,
     FeeHead,
     FeeReceipt,
     FeeReceiptAuditLog,
@@ -38,6 +39,7 @@ from .models import (
     TransportRoute,
     Voucher,
 )
+from .whatsapp import build_wa_link, family_due_message
 from .pdf import (
     build_admission_form_pdf,
     build_character_certificate_pdf,
@@ -1225,6 +1227,146 @@ def inventory_issue_create(request, pk):
     else:
         form = InventoryIssueForm()
     return render(request, "core/inventory_issue_form.html", {"student": student, "form": form})
+
+
+def _class_label(student):
+    if student.current_class and student.current_section:
+        return f"{student.current_class}-{student.current_section.name}"
+    return str(student.current_class) if student.current_class else ""
+
+
+def _student_due_total(student):
+    return FeeReceipt.objects.filter(
+        student=student, is_cancelled=False, legacy_due_amount__gt=0
+    ).aggregate(total=Sum("legacy_due_amount"))["total"] or Decimal("0")
+
+
+def family_list(request):
+    query = request.GET.get("q", "").strip()
+    families = Family.objects.annotate(member_count=Count("members", distinct=True))
+    if query:
+        families = families.filter(Q(name__icontains=query) | Q(primary_mobile__icontains=query))
+    families = families.order_by("name")
+    return render(request, "core/family_list.html", {"families": families, "query": query})
+
+
+def family_create(request):
+    if request.method == "POST":
+        form = FamilyForm(request.POST)
+        if form.is_valid():
+            family = form.save()
+            messages.success(request, f"Family '{family.name}' created.")
+            return redirect("core:family_detail", pk=family.pk)
+    else:
+        form = FamilyForm()
+    return render(request, "core/family_form.html", {"form": form})
+
+
+def family_detail(request, pk):
+    family = get_object_or_404(Family, pk=pk)
+    members = family.members.select_related("current_class", "current_section").order_by("full_name")
+
+    member_dues = []
+    total_due = Decimal("0")
+    for member in members:
+        due = _student_due_total(member)
+        member_dues.append({"student": member, "due": due, "class_label": _class_label(member)})
+        total_due += due
+
+    query = request.GET.get("q", "").strip()
+    search_results = []
+    if query:
+        search_results = (
+            Student.objects.filter(
+                Q(full_name__icontains=query)
+                | Q(admission_no__icontains=query)
+                | Q(legacy_sid__icontains=query)
+            )
+            .exclude(family=family)
+            .select_related("current_class", "current_section")[:20]
+        )
+
+    school_profile = get_active_school_profile()
+    school_name = school_profile.name if school_profile else ""
+
+    members_tuples = [(md["student"].full_name, md["class_label"], md["due"]) for md in member_dues]
+    family_message = family_due_message(family.name, members_tuples, total_due, school_name)
+    family_wa_url = build_wa_link(family.primary_mobile, family_message)
+
+    return render(
+        request,
+        "core/family_detail.html",
+        {
+            "family": family,
+            "member_dues": member_dues,
+            "total_due": total_due,
+            "query": query,
+            "search_results": search_results,
+            "school_name": school_name,
+            "family_wa_url": family_wa_url,
+        },
+    )
+
+
+def family_add_student(request, pk):
+    family = get_object_or_404(Family, pk=pk)
+    if request.method == "POST":
+        student = get_object_or_404(Student, pk=request.POST.get("student_id"))
+        student.family = family
+        student.save(update_fields=["family"])
+        messages.success(request, f"{student.full_name} added to '{family.name}'.")
+    return redirect("core:family_detail", pk=family.pk)
+
+
+def family_remove_student(request, pk, student_id):
+    family = get_object_or_404(Family, pk=pk)
+    if request.method == "POST":
+        student = get_object_or_404(Student, pk=student_id, family=family)
+        student.family = None
+        student.save(update_fields=["family"])
+        messages.success(request, f"{student.full_name} removed from '{family.name}'.")
+    return redirect("core:family_detail", pk=family.pk)
+
+
+def family_suggestions(request):
+    unlinked = (
+        Student.objects.filter(family__isnull=True, is_active=True)
+        .exclude(father_name="")
+        .exclude(mobile_primary="")
+        .select_related("current_class", "current_section")
+    )
+
+    groups = {}
+    for student in unlinked:
+        key = (student.father_name.strip().lower(), student.mobile_primary.strip())
+        groups.setdefault(key, []).append(student)
+
+    suggestions = [
+        {
+            "father_name": students[0].father_name.strip(),
+            "mobile": key[1],
+            "students": students,
+        }
+        for key, students in groups.items()
+        if len(students) >= 2
+    ]
+    suggestions.sort(key=lambda g: g["father_name"])
+
+    return render(request, "core/family_suggestions.html", {"suggestions": suggestions})
+
+
+def family_create_from_suggestion(request):
+    if request.method == "POST":
+        name = request.POST.get("name", "").strip()
+        mobile = request.POST.get("mobile", "").strip()
+        student_ids = request.POST.getlist("student_ids")
+        if name and student_ids:
+            family = Family.objects.create(name=name, primary_mobile=mobile)
+            Student.objects.filter(id__in=student_ids, family__isnull=True).update(family=family)
+            messages.success(request, f"Family '{family.name}' created with {len(student_ids)} student(s) linked.")
+            return redirect("core:family_detail", pk=family.pk)
+        messages.error(request, "Select at least one student and provide a family name.")
+    return redirect("core:family_suggestions")
 
 
 def staff_list(request):

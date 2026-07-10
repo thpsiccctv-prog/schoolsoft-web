@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% load schoolsoft_extras %}
+
+{% block title %}{{ family.name }} | Family Ledger{% endblock %}
+
+{% block content %}
+<section class="section">
+    <div class="section-heading with-actions">
+        <div>
+            <h2>{{ family.name }}</h2>
+            <p>
+                {{ family.primary_mobile|default:"No mobile on file" }}{% if family.secondary_mobile %} / {{ family.secondary_mobile }}{% endif %}
+                {% if family.address %} | {{ family.address }}{% endif %}
+                | Total family due: &#8377; {{ total_due|indian_number }}
+            </p>
+        </div>
+        <div class="table-actions">
+            <a class="button secondary" href="{% url 'core:family_list' %}">Back</a>
+            {% if family_wa_url %}
+                <a class="button primary" href="{{ family_wa_url }}" target="_blank" rel="noopener" title="Open WhatsApp with a combined family due reminder pre-filled - review and press Send yourself">Send Family WhatsApp Reminder</a>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Student</th>
+                    <th>Class</th>
+                    <th class="amount">Due</th>
+                    <th>WhatsApp</th>
+                    {% if not is_readonly %}<th>Remove</th>{% endif %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in member_dues %}
+                    <tr>
+                        <td><a href="{% url 'core:student_detail' row.student.pk %}">{{ row.student.full_name }}</a></td>
+                        <td>{{ row.class_label|default:"-" }}</td>
+                        <td class="amount">&#8377; {{ row.due|indian_number }}</td>
+                        <td>
+                            {% if row.due > 0 %}
+                                {% wa_fee_link row.student.mobile_primary row.student.father_name row.student.full_name row.student.current_class row.student.current_section.name row.student.admission_no row.due school_name as wa_url %}
+                                {% if wa_url %}<a class="button secondary" href="{{ wa_url }}" target="_blank" rel="noopener">Remind</a>{% endif %}
+                            {% endif %}
+                        </td>
+                        {% if not is_readonly %}
+                        <td>
+                            <form method="post" action="{% url 'core:family_remove_student' family.pk row.student.pk %}" style="display:inline;" onsubmit="return confirm('Remove {{ row.student.full_name }} from this family?');">
+                                {% csrf_token %}
+                                <button type="submit" class="button secondary">Remove</button>
+                            </form>
+                        </td>
+                        {% endif %}
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="5" class="empty-state">No children linked to this family yet. Search below to add.</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if not is_readonly %}
+    <div class="premium-filterbar" style="margin-top: 1.5rem;">
+        <form class="student-filterbar" method="get">
+            <div class="filterbar-inputs">
+                <input type="search" name="q" value="{{ query }}" placeholder="Search a student to add to this family">
+                <button type="submit" class="button action-primary">Search</button>
+            </div>
+        </form>
+    </div>
+
+    {% if search_results %}
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Student</th>
+                    <th>Class</th>
+                    <th>Currently In</th>
+                    <th>Add</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for student in search_results %}
+                    <tr>
+                        <td>{{ student.full_name }}</td>
+                        <td>{{ student.current_class|default:"-" }}{% if student.current_section %}-{{ student.current_section.name }}{% endif %}</td>
+                        <td>{{ student.family.name|default:"No family" }}</td>
+                        <td>
+                            <form method="post" action="{% url 'core:family_add_student' family.pk %}">
+                                {% csrf_token %}
+                                <input type="hidden" name="student_id" value="{{ student.pk }}">
+                                <button type="submit" class="button secondary">Add</button>
+                            </form>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% elif query %}
+        <p class="text-muted">No students found matching "{{ query }}".</p>
+    {% endif %}
+    {% endif %}
+</section>
+{% endblock %}

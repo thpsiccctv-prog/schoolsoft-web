@@ -6,6 +6,7 @@ from .models import (
     ExamMark,
     ExamTerm,
     ExamTest,
+    Family,
     FeeHead,
     FeeReceipt,
     FeeReceiptAuditLog,
@@ -194,6 +195,12 @@ class InventoryIssueAdmin(admin.ModelAdmin):
     list_filter = ("item", "issue_date")
     search_fields = ("student__full_name", "student__admission_no", "student__legacy_sid")
     autocomplete_fields = ("student",)
+
+
+@admin.register(Family)
+class FamilyAdmin(admin.ModelAdmin):
+    list_display = ("name", "primary_mobile", "secondary_mobile")
+    search_fields = ("name", "primary_mobile", "secondary_mobile")
 
 
 @admin.register(Subject)

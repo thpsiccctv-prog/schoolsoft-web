@@ -68,6 +68,15 @@ urlpatterns = [
     path("students/<int:pk>/inventory/", module_required("inventory")(views.inventory_issue_list), name="inventory_issue_list"),
     path("students/<int:pk>/inventory/new/", module_required("inventory", write=True)(views.inventory_issue_create), name="inventory_issue_create"),
 
+    # Family Ledger (siblings)
+    path("families/", module_required("family")(views.family_list), name="family_list"),
+    path("families/new/", module_required("family", write=True)(views.family_create), name="family_create"),
+    path("families/suggestions/", module_required("family", write=True)(views.family_suggestions), name="family_suggestions"),
+    path("families/suggestions/create/", module_required("family", write=True)(views.family_create_from_suggestion), name="family_create_from_suggestion"),
+    path("families/<int:pk>/", module_required("family")(views.family_detail), name="family_detail"),
+    path("families/<int:pk>/add-student/", module_required("family", write=True)(views.family_add_student), name="family_add_student"),
+    path("families/<int:pk>/remove-student/<int:student_id>/", module_required("family", write=True)(views.family_remove_student), name="family_remove_student"),
+
     path("staff/", module_required("staff")(views.staff_list), name="staff_list"),
     path("staff/<int:pk>/", module_required("staff")(views.staff_detail), name="staff_detail"),
     path("staff/salary/", module_required("staff")(views.salary_payment_list), name="salary_payment_list"),

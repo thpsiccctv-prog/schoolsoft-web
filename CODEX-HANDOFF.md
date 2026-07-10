@@ -1496,20 +1496,96 @@ Not done / next session must:
    refresh) and spot-check all five features there, since the desktop build is the real
    source-of-truth environment, not the dev server.
 
+## 2026-07-10 Checkpoint - Family Ledger (last of the 5 Grand Plan ideas)
+
+Owner explicitly ruled out Hindi/Bilingual UI for this session ("filhal nahi chahiye") and picked
+**Family Ledger** - the last of the original 5 Grand Plan ideas. Two design decisions were
+confirmed with the owner up front (both matter for a real 1213-student production database):
+matching should be **suggest-then-manually-confirm, never auto-link**, and the family page should
+show **combined due + a combined WhatsApp reminder**, not just a plain list.
+
+What was built:
+- `core/models.py` - new `Family` model (`name`, `primary_mobile`, `secondary_mobile`, `address`,
+  `notes`) placed just before `Student` so `Student.family` (new FK, `SET_NULL`, `related_name=
+  "members"`) can reference it. Deliberately a separate concept from the existing
+  `Student.guardian_name` free-text field (that's an admission-form field for a legal guardian
+  when parents aren't available; `Family` is a pure office-side grouping of siblings for fee
+  tracking). New `access_family` permission added to `ModuleAccess` - **needs a migration**.
+- `core/access.py` / `core/user_admin.py` - `"family": "access_family"` added to
+  `MODULE_PERMISSIONS` and `MODULES_UI` (normal assignable module, not admin-only). Added to the
+  **Fee Desk** role preset by default (`fee` in `ROLE_PRESETS`) since combined family dues is
+  fee-desk work - existing users with the Fee Desk role won't get it retroactively, only new/
+  re-saved assignments will, same as every other permission change this session.
+- `core/whatsapp.py` - new `family_due_message(family_name, members, total_due, school_name)`
+  where `members` is a list of `(student_name, class_label, due_amount)` tuples; lists only the
+  children who actually have a due balance, then a total line.
+- `core/views.py` - `family_list` (search by name/mobile), `family_create`, `family_detail`
+  (computes each member's due individually via `_student_due_total()`, sums for the family total,
+  builds the combined WhatsApp link server-side since the message needs a list of tuples - not
+  done via a template `simple_tag` like the per-student WhatsApp links), `family_add_student`,
+  `family_remove_student`, `family_suggestions`, `family_create_from_suggestion`.
+- **Matching logic** (`family_suggestions`): groups students with `family__isnull=True`,
+  `is_active=True`, non-blank `father_name` AND non-blank `mobile_primary`, keyed by
+  `(father_name.strip().lower(), mobile_primary.strip())` - only **exact** matches on both fields
+  count as a suggestion (deliberately not fuzzy - legacy data has spelling variants, like the
+  Category/Caste bug found earlier this session, so a loose match would risk grouping unrelated
+  families). Groups of 2+ are shown with every student pre-checked as a table the admin can
+  uncheck before saving - nothing is linked until the admin submits the form. This will likely
+  miss real siblings whose father's name was typed slightly differently between the two
+  admissions (common with legacy data) - those need manual linking via the search box on the
+  Family Detail page instead.
+- Templates (new): `family_list.html`, `family_form.html`, `family_detail.html` (member table
+  with per-child due + individual WhatsApp "Remind" link + "Remove" button, a "Send Family
+  WhatsApp Reminder" button when the family has a due total > 0, and an inline search-and-add box
+  to link more children), `family_suggestions.html` (one review form per suggested sibling group).
+- `templates/base.html` - "Family Ledger" nav link, gated by `access.family`.
+- `templates/core/student_detail.html` - new quick-action button: shows the family name and links
+  to the Family Detail page if linked, or "Add to Family" (goes to the Family list) if not.
+- `core/admin.py` - `FamilyAdmin` registered.
+- Tests: `FamilyLedgerTests` (6 tests) - create family + add student, remove student, combined due
+  + WhatsApp link appears on the detail page, suggestions correctly group matching students and
+  exclude non-matching ones, create-from-suggestion links the checked students, empty family list
+  doesn't crash.
+
+Not done / next session must:
+1. **Run migrations** - `manage.py makemigrations core` then `migrate`. Adds the `Family` model,
+   `Student.family` FK, and the `access_family` permission - nothing applied yet.
+2. Run `manage.py test core` - expect the 6 new `FamilyLedgerTests` on top of the prior 54 (60
+   total).
+3. Manually verify in browser: open "Family Ledger" > "Suggested Families" and confirm it finds
+   at least some real sibling groups in the live 1213-student data (exact father-name+mobile
+   matches only, so don't be surprised if it finds fewer than the true number of sibling sets);
+   create one family from a suggestion; open its detail page and confirm the combined due total
+   and the "Send Family WhatsApp Reminder" button/message look right; try the manual search-and-
+   add box to link an additional child; try removing a child and confirm they go back to
+   "unlinked" (not deleted).
+4. No fuzzy/typo-tolerant matching was built (see "Matching logic" above) - if the owner later
+   finds too many real sibling sets are being missed by the suggestions page, a second pass using
+   a similarity match on father_name (e.g. difflib) could be added, but that raises the false-
+   positive risk and would need its own confirmation UI.
+5. This is the last of the original 5 Grand Plan ideas (WhatsApp Alerts, ID Card Generator was
+   built earlier, Inventory, Family Ledger, and Hindi UI is the only one still not started/wanted
+   yet). `collectstatic` + `build-desktop.bat` still pending for this checkpoint specifically.
+
 Ideas from the Grand Plan NOT yet started (still on the table for a future session):
-1. **Hindi/Bilingual UI** - large scope (every template, ~50+ files use `{% trans %}` /
-   `django.utils.translation`, plus locale files). NOT the same problem as the TC's Devanagari-
-   in-ReportLab issue (that was PDF-specific) - a web UI in Hindi is technically straightforward
-   for Django (`USE_I18N`, `LocaleMiddleware`, `.po` files), just very high volume of translation
-   work. Plan for multiple sessions if picked up.
-2. **Family Ledger** (group siblings) - `Student.father_name`/`mother_name` are free text today,
-   no `Guardian`/`Family` model exists. Would need a new model plus a one-time matching pass over
-   the existing 1213 students (father name + mobile number heuristic) that will need manual
-   review for typos/variants before it can be trusted - the messiest of the 5 ideas data-wise.
-3. **Paid WhatsApp Business API** (real automatic bulk send) - only worth revisiting if the free
-   `wa.me` approach above turns out to be too slow/manual in daily use; needs a business
-   verification + ongoing cost decision from the owner first.
-    just distribution tracking (see "Not done" item 4 above).
+1. **Hindi/Bilingual UI** - explicitly deferred by the owner this session ("filhal nahi chahiye").
+   Large scope (every template, ~50+ files use `{% trans %}` / `django.utils.translation`, plus
+   locale files). NOT the same problem as the TC's Devanagari-in-ReportLab issue (that was PDF-
+   specific) - a web UI in Hindi is technically straightforward for Django (`USE_I18N`,
+   `LocaleMiddleware`, `.po` files), just very high volume of translation work. Plan for multiple
+   sessions if picked up.
+2. **Paid WhatsApp Business API** (real automatic bulk send) - only worth revisiting if the free
+   `wa.me` approach turns out to be too slow/manual in daily use; needs a business verification +
+   ongoing cost decision from the owner first.
+3. **Inventory stock-in / purchasing** - only if the owner wants supplier-side stock levels, not
+   just distribution tracking (see the Inventory checkpoint's "Not done" item 4).
+4. **Fuzzy sibling matching** - only if the exact-match Family suggestions above turn out to miss
+   too many real sibling sets due to father-name spelling variants (see item 4 above).
+
+Still outstanding from earlier in the project (not part of the Grand Plan, not touched this
+session): Render free Postgres DB expiry decision (paid plan vs. monthly recreate, due ~Aug 1
+2026), custom domain CNAME setup (`english-medium.thpsic.com`), rotating the exposed Render DB
+credential.
 
 ## ✅ Feature Sprint & Bugfixes (July 9, 2026)
 
