@@ -890,10 +890,133 @@ body {
     padding: 12px 10px;
 }
 
+/* ============================= Accounting compatibility ============================= */
+
+/* Accounting pages predate the current component names. Keep their legacy
+   classes visually consistent with the rest of the application. */
+.page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    margin-bottom: 18px;
+}
+
+.header-content h1 {
+    margin: 0;
+    font-size: 30px;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+}
+
+.header-actions,
+.card-actions,
+.search-form {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.card {
+    overflow: hidden;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    box-shadow: var(--shadow-soft);
+}
+
+.card-header {
+    padding: 18px 22px;
+    border-bottom: 1px solid var(--line);
+    background: linear-gradient(135deg, #ffffff 0%, var(--panel-soft) 100%);
+}
+
+.card-title {
+    margin: 0;
+    font-size: 22px;
+    letter-spacing: -0.01em;
+}
+
+.card-body {
+    padding: 22px;
+}
+
+.filter-bar {
+    padding: 14px;
+    border-bottom: 1px solid var(--line);
+    background: var(--panel-soft);
+}
+
+.search-form input:not([type="checkbox"]),
+.search-form select {
+    min-height: 44px;
+    padding: 0 12px;
+    border: 1px solid var(--line-strong);
+    border-radius: 8px;
+    background: #ffffff;
+    color: var(--text);
+    font: inherit;
+}
+
+.search-form input[type="search"] {
+    min-width: 240px;
+}
+
+.search-form select {
+    min-width: 180px;
+}
+
+.search-form input:not([type="checkbox"]):focus,
+.search-form select:focus {
+    border-color: var(--accent);
+    outline: 3px solid rgba(15, 118, 110, 0.13);
+}
+
+.form-group {
+    margin-bottom: 14px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 6px;
+    font-weight: 650;
+}
+
+.form-group input:not([type="checkbox"]),
+.form-group select,
+.form-group textarea {
+    width: 100%;
+    min-height: 44px;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #ffffff;
+    color: var(--text);
+    font: inherit;
+}
+
+.form-group small {
+    display: block;
+    margin-top: 5px;
+    color: var(--muted);
+}
+
+.card-actions {
+    margin-top: 20px;
+    padding-top: 18px;
+    border-top: 1px solid var(--line);
+}
+
+.table-responsive {
+    overflow-x: auto;
+}
+
 /* ============================= Buttons ============================= */
 
 button,
-.button {
+.button,
+.btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -907,23 +1030,98 @@ button,
     font-weight: 700;
     text-decoration: none;
     cursor: pointer;
+    white-space: nowrap;
+    transition: background-color 0.15s ease, border-color 0.15s ease,
+        color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
 }
 
 button:hover,
-.button:hover {
+.button:hover,
+.btn:hover {
     background: var(--accent-dark);
     border-color: var(--accent-dark);
+    color: #ffffff;
+    box-shadow: 0 7px 16px rgba(15, 118, 110, 0.18);
+    transform: translateY(-1px);
 }
 
-.button.secondary {
+.button.secondary,
+.btn-secondary {
     border-color: var(--line);
     background: #ffffff;
     color: var(--accent-dark);
 }
 
-.button.secondary:hover {
+.button.secondary:hover,
+.btn-secondary:hover {
     background: var(--accent-soft);
     border-color: var(--accent);
+    color: var(--accent-dark);
+    box-shadow: 0 7px 16px rgba(15, 118, 110, 0.11);
+}
+
+.btn-danger {
+    border-color: #b42318;
+    background: #b42318;
+}
+
+.btn-danger:hover {
+    border-color: #8f1c13;
+    background: #8f1c13;
+    box-shadow: 0 7px 16px rgba(180, 35, 24, 0.18);
+}
+
+.btn-warning {
+    border-color: var(--amber);
+    background: var(--amber);
+}
+
+.btn-warning:hover {
+    border-color: #b45309;
+    background: #b45309;
+    box-shadow: 0 7px 16px rgba(217, 119, 6, 0.18);
+}
+
+.btn-small {
+    min-height: 34px;
+    padding: 0 12px;
+    border-radius: 7px;
+    font-size: 13px;
+}
+
+button:focus-visible,
+.button:focus-visible,
+.btn:focus-visible {
+    outline: 3px solid rgba(15, 118, 110, 0.24);
+    outline-offset: 2px;
+}
+
+button:active,
+.button:active,
+.btn:active {
+    transform: translateY(0);
+    box-shadow: none;
+}
+
+@media (max-width: 720px) {
+    .page-header {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .header-actions .btn,
+    .card-actions .btn {
+        flex: 1 1 auto;
+    }
+
+    .search-form > * {
+        width: 100%;
+    }
+
+    .search-form input[type="search"],
+    .search-form select {
+        min-width: 0;
+    }
 }
 
 .action-row {

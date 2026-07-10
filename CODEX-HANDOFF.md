@@ -1058,22 +1058,23 @@ TEST STATUS:
 ## 2026-07-08 Checkpoint - Legacy Data Import & Cash Book T-Shape UI Redesign
 
 Completed today:
-1. **Legacy Data Import**: 
-   - `sync_recent_staff.py` and `sync_recent_vouchers.py` successfully imported Staff and Salary payments from old CSV exports into Django models.
-   - Handled UniqueConstraint conflicts on Salaries by merging multiple legacy voucher rows (e.g., April and May salaries) into a single `SalaryPayment` slip per staff per month, combining their net pay and remarks.
-2. **Cash Book Balance Fix**:
-   - Fixed `FeeReceipt` sum calculation in cash book view from `total_amount` to `received_amount`.
-   - Set the correct `opening_balance_date` in the local SQLite DB for the `Cash in Hand` ledger so past balances carry over correctly. The resulting negative balances accurately reflect the legacy software's credit balance.
-3. **Cash Book T-Shape Redesign**:
-   - Redesigned the Cash Book UI to completely mimic the legacy software's Double-Entry "T-Shape" Ledger format.
-   - Replaced single `target_date` with `from_date` and `to_date` range filtering.
-   - Grouped transactions by day, displaying Receipts on the Left and Payments on the Right.
-   - Displayed Opening Balance and Closing Balance to mathematically balance (tally) each day's totals.
-   - Fixed print UI in landscape mode using `<colgroup>` and strict `word-break: break-word` to ensure long remarks (like salary details) fit cleanly without breaking the split layout.
+1. **Legacy Data Import**
+   - `sync_recent_staff.py` and `sync_recent_vouchers.py` imported staff records and salary payments from the legacy CSV exports into Django models.
+   - Resolved `UniqueConstraint` conflicts on salaries by merging multiple legacy voucher rows into a single `SalaryPayment` slip per staff per month, while preserving the combined net pay and remarks.
+2. **Cash Book Balance Fix**
+   - Updated the cash book view to sum `FeeReceipt.received_amount` instead of `total_amount`.
+   - Corrected the `opening_balance_date` in the local SQLite DB for the `Cash in Hand` ledger so prior balances carry forward properly.
+   - Negative balances now match the legacy software's credit-balance behavior.
+3. **Cash Book T-Shape Redesign**
+   - Reworked the Cash Book UI to match the legacy software's Double-Entry "T-Shape" ledger layout.
+   - Replaced the single `target_date` filter with `from_date` and `to_date` range filtering.
+   - Grouped transactions by day, with Receipts on the left and Payments on the right.
+   - Added Opening Balance and Closing Balance rows so each day tallies cleanly.
+   - Improved print output for landscape mode using `<colgroup>` and strict `word-break: break-word` handling so long remarks stay readable without breaking the split layout.
 
-TEST STATUS:
-- Verified all visual elements with the user, confirming pixel-perfect match to their legacy expectations.
-- Ready for Final Deployment/Sync to online server.
+Verification status:
+- Visually reviewed with the user and confirmed against the legacy expectation set.
+- Ready for final deployment or sync to the online server.
 
 ## 2026-07-08 Checkpoint - End of Day Sync & Pending Action Items
 
