@@ -1614,3 +1614,22 @@ Following the implementation of the House System, Discipline Records, ID Cards, 
 
 ## 🏁 Phase Wrap-up (July 10, 2026)
 The owner has officially decided **not** to proceed with the Hindi/Bilingual UI feature. With this decision, the current development phase (which successfully delivered the 4 major modules: ID Cards, WhatsApp Alerts, Inventory/House/Discipline, and Family Ledger) is now officially wrapped up and complete. The system is fully deployed to both the Desktop EXE and the live online website.
+
+## ✅ Dashboard UI/UX Fintech Overhaul (July 10, 2026)
+A new phase was initiated to refine the Dashboard UX, making it feel more like a premium fintech application. 
+
+**Stage 1 Implemented & Verified:**
+- **Permission-aware KPIs and Tiles**: The dashboard now rigorously checks user permissions. Queries for unauthorized modules (like dues or expense for a restricted user) are skipped entirely for privacy and performance.
+- **Responsive Empty States**: Sidebar groups automatically hide if empty. The quick access tiles reflow seamlessly.
+- **Read-Only Compatibility**: A backward-compatible migration (`0022_readonly_group_marker_only.py`) was applied to fix the Read Only group's broad-permission bugs.
+- **Visual Polish (Checkpoint 2)**:
+  - **Honest Zeroes**: A small grey caption ("Abhi tak koi collection nahi") replaces stark red/green `₹0` values.
+  - **Color Semantics**: Green is exclusively used for incoming money, red/amber for attention, and slate for all other informational tiles.
+  - **Tight Currency Formatting**: `font-variant-numeric: tabular-nums` applied for perfect alignment.
+  - **Gold Accent**: Added the school's signature gold branding as a thin accent line under the hero header.
+  - **Accessibility**: Focused on keyboard accessibility, reduced-motion, and short hover animations (150ms).
+- **Testing & Deployment**: 66/66 tests passed. A new `SchoolSoft.exe` was successfully built.
+
+**Pending (Stage 2):**
+- Adding a "Previous collection day" trend delta (e.g., "Pichhle collection day se ₹3,200 zyada") below the main KPI metrics.
+- Handling cancelled receipts and stale history edge cases for the delta calculation.
