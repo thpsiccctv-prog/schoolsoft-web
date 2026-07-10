@@ -2,8 +2,13 @@ from decimal import Decimal
 import re
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group, Permission
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
+
+from .access import READONLY_GROUP
 
 from .forms import VoucherForm
 from .whatsapp import build_wa_link, fee_due_message, normalize_indian_mobile
@@ -67,6 +72,23 @@ class DashboardTests(AuthenticatedClientMixin, TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Dashboard")
+
+    def test_superuser_sees_all_kpis_and_tiles(self):
+        response = self.client.get(reverse("core:dashboard"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertSetEqual(
+            {kpi["label"] for kpi in response.context["dashboard_kpis"]},
+            {"Today's Collection", "Today's Expense", "Total Dues", "Active Students"},
+        )
+        self.assertSetEqual(
+            {tile["label"] for tile in response.context["tiles"]},
+            {
+                "Fee Collection", "Students", "Receipts", "Dues", "Marks",
+                "Collection", "Fee Setup", "Staff", "Transport", "School Profile",
+            },
+        )
+        self.assertContains(response, "New Fee Receipt")
 
     def test_student_list_loads(self):
         response = self.client.get(reverse("core:student_list"))
@@ -157,6 +179,86 @@ class DashboardTests(AuthenticatedClientMixin, TestCase):
 
         self.assertEqual(all_rows_response.status_code, 200)
         self.assertContains(all_rows_response, "Zero Fee")
+
+
+def _grant_module_permissions(user, *module_codenames):
+    perms = Permission.objects.filter(content_type__app_label="core", codename__in=module_codenames)
+    user.user_permissions.set(list(perms))
+
+
+class DashboardPermissionTests(TestCase):
+    def test_restricted_user_only_sees_permitted_modules(self):
+        user = get_user_model().objects.create_user(username="student_desk_user", password="pw12345")
+        _grant_module_permissions(user, "access_dashboard", "access_students")
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("core:dashboard"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Academics")
+        self.assertNotContains(response, "Finance")
+        self.assertNotContains(response, "Operations")
+        self.assertNotContains(response, "Administration")
+        self.assertEqual(
+            [kpi["label"] for kpi in response.context["dashboard_kpis"]],
+            ["Active Students"],
+        )
+        self.assertEqual([tile["label"] for tile in response.context["tiles"]], ["Students"])
+
+    def test_restricted_dashboard_skips_unauthorized_finance_queries(self):
+        user = get_user_model().objects.create_user(username="query_guard_user", password="pw12345")
+        _grant_module_permissions(user, "access_dashboard", "access_students")
+        self.client.force_login(user)
+
+        with CaptureQueriesContext(connection) as queries:
+            response = self.client.get(reverse("core:dashboard"))
+
+        sql = "\n".join(query["sql"].lower() for query in queries.captured_queries)
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("core_feereceipt", sql)
+        self.assertNotIn("core_voucher", sql)
+
+    def test_readonly_user_does_not_see_write_only_fee_collection_actions(self):
+        user = get_user_model().objects.create_user(username="viewer_user", password="pw12345")
+        _grant_module_permissions(user, "access_dashboard", "access_fee_collection", "access_students")
+        readonly_group, _ = Group.objects.get_or_create(name=READONLY_GROUP)
+        user.groups.add(readonly_group)
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("core:dashboard"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "New Fee Receipt")
+        self.assertNotContains(response, "Daily counter receipt desk")
+        self.assertNotContains(response, reverse("core:receipt_create"))
+        self.assertEqual(
+            [kpi["label"] for kpi in response.context["dashboard_kpis"]],
+            ["Today's Collection", "Active Students"],
+        )
+        self.assertEqual([tile["label"] for tile in response.context["tiles"]], ["Students"])
+
+    def test_readonly_accounts_user_keeps_reports_but_not_write_links(self):
+        user = get_user_model().objects.create_user(username="accounts_viewer", password="pw12345")
+        _grant_module_permissions(user, "access_dashboard", "access_accounts")
+        readonly_group, _ = Group.objects.get_or_create(name=READONLY_GROUP)
+        user.groups.add(readonly_group)
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("core:dashboard"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, reverse("core:expense_create"))
+        self.assertNotContains(response, reverse("core:receipt_other_create"))
+        self.assertContains(response, reverse("core:voucher_list"))
+        self.assertContains(response, reverse("core:cash_book"))
+
+    def test_user_with_no_module_access_is_blocked(self):
+        user = get_user_model().objects.create_user(username="no_access_user", password="pw12345")
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("core:dashboard"))
+
+        self.assertEqual(response.status_code, 403)
 
 
 class FeeReceiptTests(AuthenticatedClientMixin, TestCase):

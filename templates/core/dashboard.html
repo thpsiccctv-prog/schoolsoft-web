@@ -17,123 +17,80 @@
             <p class="dash-subtitle">Today&apos;s work, fee desk and school records.</p>
         </div>
         <div class="dash-header-actions">
+            {% if can_new_receipt %}
             <a class="dash-action-btn dash-action-primary" href="{% url 'core:receipt_create' %}">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14"/></svg>
                 New Fee Receipt
             </a>
+            {% endif %}
+            {% if can_due_report %}
             <a class="dash-action-btn dash-action-outline" href="{% url 'core:due_report' %}">Due Report</a>
+            {% endif %}
         </div>
     </div>
 
     <!-- ─── KPI STRIP ─── -->
-    <div class="dash-kpi-strip">
-        {% for label, value, tone in dashboard_kpis %}
-        <article class="dash-kpi dash-kpi-{{ tone }}">
+    <div class="dash-kpi-strip dash-kpi-count-{{ dashboard_kpis|length }}" aria-label="Today's overview">
+        {% for kpi in dashboard_kpis %}
+        <article class="dash-kpi dash-kpi-{{ kpi.tone }}{% if kpi.empty_caption and not kpi.value %} dash-kpi-empty{% endif %}" aria-label="{{ kpi.label }}">
             <div class="dash-kpi-icon">
-                {% if tone == "success" %}
+                {% if kpi.icon == "collection" %}
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
-                {% elif tone == "info" %}
+                {% elif kpi.icon == "expense" %}
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M8 7h8M8 11h8M8 15h5"/></svg>
-                {% elif tone == "danger" %}
+                {% elif kpi.icon == "dues" %}
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
                 {% else %}
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10 12 5 2 10l10 5 10-5v6"/><path d="M6 12v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5"/></svg>
                 {% endif %}
             </div>
             <div class="dash-kpi-body">
-                <span class="dash-kpi-label">{{ label }}</span>
-                <strong class="dash-kpi-value">{% if tone == "success" or tone == "danger" %}&#8377;&nbsp;{% endif %}{{ value|indian_number }}</strong>
+                <span class="dash-kpi-label">{{ kpi.label }}</span>
+                <strong class="dash-kpi-value{% if kpi.currency %} dash-money{% endif %}">{% if kpi.currency %}&#8377;{% endif %}{{ kpi.value|indian_number }}</strong>
+                {% if kpi.empty_caption and not kpi.value %}
+                <span class="dash-kpi-context">{{ kpi.empty_caption }}</span>
+                {% endif %}
             </div>
         </article>
         {% endfor %}
     </div>
 
     <!-- ─── QUICK ACCESS TILES ─── -->
+    {% if tiles %}
     <div class="dash-section-label">Quick Access</div>
     <div class="dash-tiles">
-        <a class="dash-tile" href="{% url 'core:receipt_create' %}">
-            <span class="dash-tile-icon dash-tile-green">
+        {% for tile in tiles %}
+        <a class="dash-tile" href="{{ tile.url }}">
+            <span class="dash-tile-icon dash-tile-{{ tile.color }}">
+                {% if tile.icon == "receipt" %}
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M8 7h8M8 11h8M8 15h5"/></svg>
-            </span>
-            <span class="dash-tile-label">Fee Collection</span>
-            <span class="dash-tile-sub">Daily counter receipt desk</span>
-        </a>
-
-        <a class="dash-tile" href="{% url 'core:student_list' %}">
-            <span class="dash-tile-icon dash-tile-teal">
+                {% elif tile.icon == "students" %}
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10 12 5 2 10l10 5 10-5v6"/><path d="M6 12v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5"/></svg>
-            </span>
-            <span class="dash-tile-count">{{ student_active|indian_number }}</span>
-            <span class="dash-tile-label">Students</span>
-            <span class="dash-tile-sub">{{ student_total|indian_number }} total</span>
-        </a>
-
-        <a class="dash-tile" href="{% url 'core:receipt_list' %}">
-            <span class="dash-tile-icon dash-tile-blue">
+                {% elif tile.icon == "book" %}
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h14v16H5z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>
-            </span>
-            <span class="dash-tile-count">{{ stats.3.1|indian_number }}</span>
-            <span class="dash-tile-label">Receipts</span>
-            <span class="dash-tile-sub">Register and PDFs</span>
-        </a>
-
-        <a class="dash-tile" href="{% url 'core:due_report' %}">
-            <span class="dash-tile-icon dash-tile-amber">
+                {% elif tile.icon == "clock" %}
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
-            </span>
-            <span class="dash-tile-label">Dues</span>
-            <span class="dash-tile-sub">Pending fee report</span>
-        </a>
-
-        <a class="dash-tile" href="{% url 'core:marks_report' %}">
-            <span class="dash-tile-icon dash-tile-purple">
+                {% elif tile.icon == "cap" %}
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 3 7l9 5 9-5-9-5Z"/><path d="M12 22V12"/><path d="M7 9.5v5.2c0 1 2.2 2.3 5 2.3s5-1.3 5-2.3V9.5"/></svg>
-            </span>
-            <span class="dash-tile-label">Marks</span>
-            <span class="dash-tile-sub">Results and marksheets</span>
-        </a>
-
-        <a class="dash-tile" href="{% url 'core:collection_report' %}">
-            <span class="dash-tile-icon dash-tile-green">
+                {% elif tile.icon == "chart" %}
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg>
-            </span>
-            <span class="dash-tile-label">Collection</span>
-            <span class="dash-tile-sub">Daily collection report</span>
-        </a>
-
-        <a class="dash-tile" href="{% url 'core:fee_structure_report' %}">
-            <span class="dash-tile-icon dash-tile-blue">
+                {% elif tile.icon == "grid" %}
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
-            </span>
-            <span class="dash-tile-count">{{ stats.2.1|indian_number }}</span>
-            <span class="dash-tile-label">Fee Setup</span>
-            <span class="dash-tile-sub">Heads and structure</span>
-        </a>
-
-        <a class="dash-tile" href="{% url 'core:staff_list' %}">
-            <span class="dash-tile-icon dash-tile-teal">
+                {% elif tile.icon == "people" %}
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="4"/><path d="M2 21c0-3.9 3.1-7 7-7s7 3.1 7 7"/><path d="M16 3.5c1.8.6 3 2.3 3 4.5 0 1.5-.6 2.8-1.5 3.7"/><path d="M17.5 14.5c2.7.8 4.5 3.4 4.5 6.5"/></svg>
-            </span>
-            <span class="dash-tile-label">Staff</span>
-            <span class="dash-tile-sub">Teacher records</span>
-        </a>
-
-        <a class="dash-tile" href="{% url 'core:transport_list' %}">
-            <span class="dash-tile-icon dash-tile-amber">
+                {% elif tile.icon == "bus" %}
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v11H4z"/><path d="M4 11h16"/><circle cx="8" cy="18.5" r="1.8"/><circle cx="16" cy="18.5" r="1.8"/><path d="M2 8h2M20 8h2"/></svg>
-            </span>
-            <span class="dash-tile-label">Transport</span>
-            <span class="dash-tile-sub">Routes and buses</span>
-        </a>
-
-        <a class="dash-tile" href="{% url 'core:school_profile_detail' %}">
-            <span class="dash-tile-icon dash-tile-purple">
+                {% elif tile.icon == "building" %}
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-4h6v4"/><path d="M9 10h.01M15 10h.01M9 14h.01M15 14h.01"/></svg>
+                {% endif %}
             </span>
-            <span class="dash-tile-label">School Profile</span>
-            <span class="dash-tile-sub">Identity and settings</span>
+            {% if tile.count is not None %}<span class="dash-tile-count">{{ tile.count|indian_number }}</span>{% endif %}
+            <span class="dash-tile-label">{{ tile.label }}</span>
+            <span class="dash-tile-sub">{% if tile.sub_value is not None %}{{ tile.sub_value|indian_number }} {% endif %}{{ tile.sub }}</span>
         </a>
+        {% endfor %}
     </div>
+    {% endif %}
 
 </section>
 {% endblock %}

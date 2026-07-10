@@ -12,6 +12,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 
+from .access import user_can_access, user_is_readonly
 from .forms import DisciplineRecordForm, FamilyForm, FeeReceiptEditForm, FeeReceiptEntryForm, FeeReceiptLineEntryForm, InventoryIssueForm, InventoryItemForm, SalaryPaymentForm, StudentForm, TransferCertificateForm
 from .models import (
     AcademicSession,
@@ -67,55 +68,141 @@ def apply_receipt_student_snapshot(receipt):
 
 
 def dashboard(request):
-    audit_dir = settings.BASE_DIR.parent / "migration_audit"
-    school7_tables = audit_dir / "school7_mdb" / "tables_summary.csv"
-    school7_columns = audit_dir / "school7_mdb" / "columns_summary.csv"
-    active_session = AcademicSession.objects.filter(is_active=True).order_by("-starts_on", "name").first()
+    user = request.user
     today = timezone.localdate()
-    today_receipts = FeeReceipt.objects.filter(receipt_date=today, is_cancelled=False)
-    today_totals = today_receipts.aggregate(received=Sum("received_amount"))
-    total_dues = FeeReceipt.objects.filter(is_cancelled=False, session=active_session, student__is_active=True).aggregate(due=Sum("legacy_due_amount")) if active_session else {"due": Decimal("0.00")}
-    total_students = Student.objects.count()
-    active_students = Student.objects.filter(is_active=True).count()
-    active_session_receipts = FeeReceipt.objects.filter(session=active_session, is_cancelled=False).count() if active_session else 0
+    active_session = AcademicSession.objects.filter(is_active=True).order_by("-starts_on", "name").first()
+    readonly = user_is_readonly(user)
 
-    from .models import Voucher
-    today_expenses = Voucher.objects.filter(
-        voucher_date=today, 
-        is_cancelled=False, 
-        voucher_type=Voucher.VoucherType.CASH_PAYMENT
-    ).aggregate(expense=Sum("amount"))["expense"] or Decimal("0.00")
+    # Each KPI/tile's underlying query only runs if the user can actually see
+    # it - this avoids both a misleading dashboard (cards linking to a 403)
+    # and unnecessary work/exposure of numbers the user isn't permitted to view.
+    kpis = []
+    if user_can_access(user, "fee_collection"):
+        today_received = FeeReceipt.objects.filter(receipt_date=today, is_cancelled=False).aggregate(
+            total=Sum("received_amount")
+        )["total"] or Decimal("0.00")
+        kpis.append({
+            "label": "Today's Collection",
+            "value": today_received,
+            "tone": "success",
+            "icon": "collection",
+            "currency": True,
+            "empty_caption": "Abhi tak koi collection nahi",
+        })
+
+    if user_can_access(user, "accounts"):
+        today_expenses = Voucher.objects.filter(
+            voucher_date=today,
+            is_cancelled=False,
+            voucher_type=Voucher.VoucherType.CASH_PAYMENT,
+        ).aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+        kpis.append({
+            "label": "Today's Expense",
+            "value": today_expenses,
+            "tone": "outflow",
+            "icon": "expense",
+            "currency": True,
+        })
+
+    if user_can_access(user, "dues"):
+        total_dues = Decimal("0.00")
+        if active_session:
+            total_dues = FeeReceipt.objects.filter(
+                is_cancelled=False, session=active_session, student__is_active=True
+            ).aggregate(total=Sum("legacy_due_amount"))["total"] or Decimal("0.00")
+        kpis.append({
+            "label": "Total Dues",
+            "value": total_dues,
+            "tone": "attention",
+            "icon": "dues",
+            "currency": True,
+        })
+
+    student_total = 0
+    active_students = 0
+    if user_can_access(user, "students"):
+        student_counts = Student.objects.aggregate(
+            total=Count("pk"),
+            active=Count("pk", filter=Q(is_active=True)),
+        )
+        student_total = student_counts["total"]
+        active_students = student_counts["active"]
+        kpis.append({
+            "label": "Active Students",
+            "value": active_students,
+            "tone": "neutral",
+            "icon": "students",
+            "currency": False,
+        })
+
+    tiles = []
+    if user_can_access(user, "fee_collection") and not readonly:
+        tiles.append({
+            "url": reverse("core:receipt_create"), "color": "positive",
+            "label": "Fee Collection", "sub": "Daily counter receipt desk",
+            "icon": "receipt",
+        })
+    if user_can_access(user, "students"):
+        tiles.append({
+            "url": reverse("core:student_list"), "color": "neutral",
+            "label": "Students", "sub": "total", "sub_value": student_total,
+            "count": active_students, "icon": "students",
+        })
+    if user_can_access(user, "receipts"):
+        receipt_count = FeeReceipt.objects.filter(session=active_session, is_cancelled=False).count() if active_session else 0
+        tiles.append({
+            "url": reverse("core:receipt_list"), "color": "neutral",
+            "label": "Receipts", "sub": "Register and PDFs",
+            "count": receipt_count, "icon": "book",
+        })
+    if user_can_access(user, "dues"):
+        tiles.append({
+            "url": reverse("core:due_report"), "color": "attention",
+            "label": "Dues", "sub": "Pending fee report", "icon": "clock",
+        })
+    if user_can_access(user, "marks"):
+        tiles.append({
+            "url": reverse("core:marks_report"), "color": "neutral",
+            "label": "Marks", "sub": "Results and marksheets", "icon": "cap",
+        })
+    if user_can_access(user, "collection"):
+        tiles.append({
+            "url": reverse("core:collection_report"), "color": "positive",
+            "label": "Collection", "sub": "Daily collection report", "icon": "chart",
+        })
+    if user_can_access(user, "fee_setup"):
+        tiles.append({
+            "url": reverse("core:fee_structure_report"), "color": "neutral",
+            "label": "Fee Setup", "sub": "Heads and structure",
+            "count": FeeHead.objects.count(), "icon": "grid",
+        })
+    if user_can_access(user, "staff"):
+        tiles.append({
+            "url": reverse("core:staff_list"), "color": "neutral",
+            "label": "Staff", "sub": "Teacher records", "icon": "people",
+        })
+    if user_can_access(user, "transport"):
+        tiles.append({
+            "url": reverse("core:transport_list"), "color": "neutral",
+            "label": "Transport", "sub": "Routes and buses", "icon": "bus",
+        })
+    if user_can_access(user, "school_profile"):
+        tiles.append({
+            "url": reverse("core:school_profile_detail"), "color": "neutral",
+            "label": "School Profile", "sub": "Identity and settings", "icon": "building",
+        })
+
+    for tile in tiles:
+        tile.setdefault("count", None)
+        tile.setdefault("sub_value", None)
 
     context = {
         "today": today,
         "active_session": active_session,
-        "dashboard_kpis": [
-            ("Today's Collection", today_totals["received"] or Decimal("0.00"), "success"),
-            ("Today's Expense", today_expenses, "danger"),
-            ("Total Dues", total_dues["due"] or Decimal("0.00"), "danger"),
-            ("Active Students", active_students, "neutral"),
-        ],
-        "stats": [
-            ("Students", total_students),
-            ("Classes", SchoolClass.objects.count()),
-            ("Fee heads", FeeHead.objects.count()),
-            ("Receipts", active_session_receipts),
-            ("Sessions", AcademicSession.objects.count()),
-        ],
-        "student_total": total_students,
-        "student_active": active_students,
-        "audit_files": [
-            ("SCHOOL7 tables", school7_tables),
-            ("SCHOOL7 columns", school7_columns),
-            ("Phase 1 notes", audit_dir / "phase1_schoolsoft_audit.md"),
-        ],
-        "next_actions": [
-            "Create active academic session",
-            "Import class master from CLASS",
-            "Import students from ADDMISSION",
-            "Map legacy fee columns to FeeHead",
-            "Generate first test fee receipt PDF",
-        ],
+        "dashboard_kpis": kpis,
+        "tiles": tiles,
+        "can_new_receipt": user_can_access(user, "fee_collection") and not readonly,
+        "can_due_report": user_can_access(user, "dues"),
     }
     return render(request, "core/dashboard.html", context)
 
