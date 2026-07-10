@@ -1,3 +1,4 @@
+from datetime import timedelta
 from decimal import Decimal
 import re
 
@@ -7,6 +8,7 @@ from django.db import connection
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
+from django.utils import timezone
 
 from .access import READONLY_GROUP
 
@@ -259,6 +261,95 @@ class DashboardPermissionTests(TestCase):
         response = self.client.get(reverse("core:dashboard"))
 
         self.assertEqual(response.status_code, 403)
+
+
+class PreviousCollectionDayTests(AuthenticatedClientMixin, TestCase):
+    """Stage 2: safe 'previous collection day' context under Today's Collection.
+    No zyada/kam delta - see dashboard() in views.py for why."""
+
+    def setUp(self):
+        super().setUp()
+        self.session = AcademicSession.objects.create(name="2025-26")
+        self.school_class = SchoolClass.objects.create(name="V", display_order=1)
+        self.student = Student.objects.create(full_name="Prev Day Student", current_class=self.school_class)
+        self.today = timezone.localdate()
+
+    def _receipt(self, receipt_no, days_ago, amount, is_cancelled=False):
+        return FeeReceipt.objects.create(
+            receipt_no=receipt_no,
+            student=self.student,
+            session=self.session,
+            receipt_date=self.today - timedelta(days=days_ago),
+            received_amount=Decimal(amount),
+            legacy_net_total=Decimal(amount),
+            is_cancelled=is_cancelled,
+        )
+
+    def _today_kpi(self, response):
+        for kpi in response.context["dashboard_kpis"]:
+            if kpi["label"] == "Today's Collection":
+                return kpi
+        return None
+
+    def test_no_history_hides_context(self):
+        response = self.client.get(reverse("core:dashboard"))
+
+        kpi = self._today_kpi(response)
+        self.assertIsNotNone(kpi)
+        self.assertIsNone(kpi["prev_date"])
+        self.assertNotContains(response, "Pichhla collection day")
+        self.assertNotContains(response, "din pehle hui thi")
+
+    def test_cancelled_receipts_are_not_treated_as_collection_days(self):
+        self._receipt("CANC-1", days_ago=2, amount="500.00", is_cancelled=True)
+
+        response = self.client.get(reverse("core:dashboard"))
+
+        kpi = self._today_kpi(response)
+        self.assertIsNone(kpi["prev_date"])
+
+    def test_zero_amount_receipts_do_not_count_as_a_collection_day(self):
+        self._receipt("ZERO-1", days_ago=1, amount="0.00")
+
+        response = self.client.get(reverse("core:dashboard"))
+
+        kpi = self._today_kpi(response)
+        self.assertIsNone(kpi["prev_date"])
+
+    def test_most_recent_valid_day_is_picked_and_summed(self):
+        self._receipt("OLD-1", days_ago=10, amount="1000.00")
+        self._receipt("RECENT-1", days_ago=3, amount="300.00")
+        self._receipt("RECENT-2", days_ago=3, amount="200.00")
+        # A same-day zero-amount receipt shouldn't change the total.
+        self._receipt("RECENT-ZERO", days_ago=3, amount="0.00")
+
+        response = self.client.get(reverse("core:dashboard"))
+
+        kpi = self._today_kpi(response)
+        self.assertEqual(kpi["prev_date"], self.today - timedelta(days=3))
+        self.assertEqual(kpi["prev_total"], Decimal("500.00"))
+        self.assertContains(response, "Pichhla collection day")
+
+    def test_13_days_ago_shows_date_and_amount(self):
+        self._receipt("D13", days_ago=13, amount="750.00")
+
+        response = self.client.get(reverse("core:dashboard"))
+
+        kpi = self._today_kpi(response)
+        self.assertEqual(kpi["prev_days_ago"], 13)
+        self.assertEqual(kpi["prev_total"], Decimal("750.00"))
+        self.assertContains(response, "Pichhla collection day")
+
+    def test_14_days_ago_shows_days_ago_only_no_amount(self):
+        self._receipt("D14", days_ago=14, amount="750.00")
+
+        response = self.client.get(reverse("core:dashboard"))
+
+        kpi = self._today_kpi(response)
+        self.assertEqual(kpi["prev_days_ago"], 14)
+        self.assertIsNone(kpi["prev_total"])
+        self.assertContains(response, "14 din pehle hui thi")
+        self.assertNotContains(response, "750")
 
 
 class FeeReceiptTests(AuthenticatedClientMixin, TestCase):

@@ -81,6 +81,28 @@ def dashboard(request):
         today_received = FeeReceipt.objects.filter(receipt_date=today, is_cancelled=False).aggregate(
             total=Sum("received_amount")
         )["total"] or Decimal("0.00")
+
+        # Previous-collection-day context (Stage 2): find the most recent earlier
+        # date that actually had money collected (not just "yesterday" - Sundays/
+        # holidays have zero receipts, so this naturally skips them without
+        # needing a Holiday/working-day calendar model). Deliberately no
+        # zyada/kam delta yet - comparing a partial "today so far" total against
+        # a previous complete day would be misleading most mornings.
+        prev_date = (
+            FeeReceipt.objects.filter(receipt_date__lt=today, is_cancelled=False, received_amount__gt=0)
+            .order_by("-receipt_date")
+            .values_list("receipt_date", flat=True)
+            .first()
+        )
+        prev_total = None
+        prev_days_ago = None
+        if prev_date:
+            prev_days_ago = (today - prev_date).days
+            if prev_days_ago <= 13:
+                prev_total = FeeReceipt.objects.filter(
+                    receipt_date=prev_date, is_cancelled=False
+                ).aggregate(total=Sum("received_amount"))["total"] or Decimal("0.00")
+
         kpis.append({
             "label": "Today's Collection",
             "value": today_received,
@@ -88,6 +110,9 @@ def dashboard(request):
             "icon": "collection",
             "currency": True,
             "empty_caption": "Abhi tak koi collection nahi",
+            "prev_date": prev_date,
+            "prev_total": prev_total,
+            "prev_days_ago": prev_days_ago,
         })
 
     if user_can_access(user, "accounts"):

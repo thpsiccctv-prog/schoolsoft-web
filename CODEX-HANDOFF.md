@@ -1630,6 +1630,38 @@ A new phase was initiated to refine the Dashboard UX, making it feel more like a
   - **Accessibility**: Focused on keyboard accessibility, reduced-motion, and short hover animations (150ms).
 - **Testing & Deployment**: 66/66 tests passed. A new `SchoolSoft.exe` was successfully built.
 
-**Pending (Stage 2):**
-- Adding a "Previous collection day" trend delta (e.g., "Pichhle collection day se ₹3,200 zyada") below the main KPI metrics.
-- Handling cancelled receipts and stale history edge cases for the delta calculation.
+**Stage 2 Implemented & Verified (same day):**
+Deliberately built as a *neutral context line*, NOT a zyada/kam delta - comparing a partial
+"today so far" total against a previous complete day would be misleading most mornings (e.g. at
+9am, before the first receipt of the day is cut, "down 100%" would show every single day). The
+owner explicitly specified this safer version:
+- `core/views.py` `dashboard()`: under the "Today's Collection" KPI (only computed when the user
+  has `fee_collection` access), finds the most recent earlier date with
+  `receipt_date__lt=today, is_cancelled=False, received_amount__gt=0` - this naturally skips
+  Sundays/holidays (zero receipts get cut then) without needing a Holiday/working-day calendar
+  model. The `received_amount__gt=0` filter only decides *which date counts as a collection day*;
+  the total for that date sums ALL non-cancelled receipts on it (same `received_amount` metric as
+  the main KPI), so a same-day zero-amount receipt doesn't skew anything.
+  - No prior date found at all -> nothing shown.
+  - 1-13 days ago -> `Pichhla collection day (08 Jul): ₹12,800`.
+  - 14+ days ago -> `Pichhli collection 18 din pehle hui thi` (no amount shown - deliberately
+    avoids implying the number is still "current").
+  - No delta/percentage anywhere - see rationale above.
+- `templates/core/dashboard.html`: renders `kpi.prev_date` / `kpi.prev_total` /
+  `kpi.prev_days_ago` as an extra `.dash-kpi-context` line under Today's Collection, stacking
+  under the existing "Abhi tak koi collection nahi" honest-zero caption when both apply.
+- Tests: `PreviousCollectionDayTests` (6 tests) - no history hides the context, cancelled receipts
+  don't count as a collection day, zero-amount-only days don't count, the most recent valid day
+  is picked and correctly summed (including a same-day zero-amount receipt), the 13-day boundary
+  shows date+amount, the 14-day boundary shows days-ago text with no amount leaked anywhere in
+  the response.
+
+Not done / next session must:
+1. Run `manage.py test core` to confirm `PreviousCollectionDayTests` (6 new tests) pass alongside
+   the existing suite.
+2. No migration needed for this checkpoint - view/template only.
+3. `collectstatic` + `build-desktop.bat` + full EXE close/reopen still needed to ship Stage 2 to
+   desktop (Stage 1's EXE does NOT include this).
+4. If the owner later wants an actual zyada/kam delta, it needs a fair same-time-cutoff
+   comparison (e.g. previous day's total *as of the same clock time*) or waiting until the school
+   day is officially over - do not add a naive full-day-vs-partial-day delta.
