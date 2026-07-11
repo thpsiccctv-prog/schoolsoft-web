@@ -29,6 +29,22 @@
                 <h3>Contact</h3>
                 <dl class="detail-list">
                     <div>
+                        <dt>UDISE Code</dt>
+                        <dd>{{ profile.udise_code|default:"-" }}</dd>
+                    </div>
+                    <div>
+                        <dt>Recognition Order</dt>
+                        <dd>{{ profile.recognition_no|default:"-" }}</dd>
+                    </div>
+                    <div>
+                        <dt>Recognized Up To</dt>
+                        <dd>{{ profile.recognized_upto|default:"-" }}</dd>
+                    </div>
+                    <div>
+                        <dt>Medium</dt>
+                        <dd>{{ profile.medium|default:"-" }}</dd>
+                    </div>
+                    <div>
                         <dt>Phone</dt>
                         <dd>{{ profile.phone|default:"-" }}</dd>
                     </div>
