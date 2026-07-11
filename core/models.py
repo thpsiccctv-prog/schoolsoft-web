@@ -241,6 +241,21 @@ class Student(TimeStampedModel):
             models.Index(fields=["legacy_sid"]),
         ]
 
+    @staticmethod
+    def scholar_register_number(identifier):
+        try:
+            number = int(str(identifier).strip())
+        except (TypeError, ValueError):
+            return ""
+        return str(((number - 1) // 100) + 1) if number > 0 else ""
+
+    def save(self, *args, **kwargs):
+        identifier = self.admission_no if str(self.admission_no).strip().isdigit() else self.legacy_sid
+        calculated_register = self.scholar_register_number(identifier)
+        if calculated_register:
+            self.scholar_register_no = calculated_register
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return self.full_name
 

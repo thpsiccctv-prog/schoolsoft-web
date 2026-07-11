@@ -124,6 +124,8 @@ class StudentForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["scholar_register_no"].disabled = True
+        self.fields["scholar_register_no"].help_text = "Automatic from Admission No. (100 students per register)."
         if not self.instance.pk:
             if "admission_date" not in self.initial:
                 self.fields["admission_date"].initial = timezone.localdate()

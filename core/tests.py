@@ -98,6 +98,30 @@ class DashboardTests(AuthenticatedClientMixin, TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Students")
 
+    def test_scholar_register_number_is_automatic_in_hundreds(self):
+        cases = [("1", "1"), ("100", "1"), ("101", "2"), ("2201", "23"), ("2300", "23"), ("2301", "24")]
+        for index, (admission_no, expected) in enumerate(cases, start=1):
+            student = Student.objects.create(
+                full_name=f"Register Boundary {admission_no}",
+                admission_no=admission_no,
+                legacy_sid=9000 + index,
+                scholar_register_no="999",
+            )
+            self.assertEqual(student.scholar_register_no, expected)
+
+    def test_student_edit_heading_does_not_duplicate_class(self):
+        school_class = SchoolClass.objects.create(name="III", display_order=3)
+        section = Section.objects.create(school_class=school_class, name="A")
+        student = Student.objects.create(
+            full_name="Heading Student", current_class=school_class, current_section=section
+        )
+
+        response = self.client.get(reverse("core:student_update", args=[student.pk]))
+
+        self.assertContains(response, "Heading Student")
+        self.assertContains(response, "III-A")
+        self.assertNotContains(response, "III-III - A")
+
     def test_student_detail_loads_from_list(self):
         school_class = SchoolClass.objects.create(name="I", display_order=1)
         student = Student.objects.create(

@@ -9,7 +9,7 @@
             <span class="entry-kicker">{% if is_edit %}Student Record{% else %}Admission Desk{% endif %}</span>
             <h1>{% if is_edit %}Edit Student{% else %}Student Admission Entry{% endif %}</h1>
             {% if is_edit %}
-                <p>{{ student.full_name }}{% if student.current_class %} | {{ student.current_class }}{% if student.current_section %}-{{ student.current_section }}{% endif %}{% endif %}</p>
+                <p>{{ student.full_name }}{% if student.current_class %} | {{ student.current_class }}{% if student.current_section %}-{{ student.current_section.name }}{% endif %}{% endif %}</p>
             {% else %}
                 <p>New admission details</p>
             {% endif %}
@@ -58,6 +58,7 @@
                         <div class="entry-field">
                             <label for="{{ form.scholar_register_no.id_for_label }}">{{ form.scholar_register_no.label }}</label>
                             {{ form.scholar_register_no }}
+                            {% if form.scholar_register_no.help_text %}<small>{{ form.scholar_register_no.help_text }}</small>{% endif %}
                             {% if form.scholar_register_no.errors %}<div class="error-text">{{ form.scholar_register_no.errors|striptags }}</div>{% endif %}
                         </div>
                         <div class="entry-field">
