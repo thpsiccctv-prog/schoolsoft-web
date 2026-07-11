@@ -19,6 +19,8 @@ build-range/
 dist-range/
 build-scholar-final/
 dist-scholar-final/
+build-register-hybrid/
+dist-register-hybrid/
 *.egg-info/
 *.log
 debug-scripts/
