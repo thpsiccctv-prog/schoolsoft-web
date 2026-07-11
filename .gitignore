@@ -11,6 +11,8 @@ build-latest/
 dist-latest/
 build-final/
 dist-final/
+build-official/
+dist-official/
 *.egg-info/
 *.log
 debug-scripts/
