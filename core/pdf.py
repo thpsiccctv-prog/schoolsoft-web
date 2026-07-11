@@ -570,10 +570,10 @@ def build_transfer_certificate_pdf(tc, school_profile=None):
         "TcSmall", parent=styles["Normal"], fontSize=8, leading=10, alignment=1
     )
     field_style = ParagraphStyle(
-        "TcField", parent=styles["Normal"], fontName="Helvetica", fontSize=8, leading=10
+        "TcField", parent=styles["Normal"], fontName="Helvetica", fontSize=8.6, leading=10.5
     )
     value_style = ParagraphStyle(
-        "TcValue", parent=styles["Normal"], fontSize=8, leading=10, fontName="Helvetica-Bold"
+        "TcValue", parent=styles["Normal"], fontSize=8.6, leading=10.5, fontName="Helvetica-Bold"
     )
 
     school_name = school_profile.name if school_profile else "SCHOOLSOFT"
@@ -603,7 +603,7 @@ def build_transfer_certificate_pdf(tc, school_profile=None):
     top_meta = [
         [f"Book No.: {tc.book_no}", f"S.R. No.: {student.scholar_register_no or tc.sr_no}", f"Admission No.: {student.admission_no}"],
         [f"TC No.: {tc.tc_number}", f"PEN: {getattr(student, 'pen_number', '')}", f"Medium: {getattr(school_profile, 'medium', '') or 'English'}"],
-        [f"UDISE: {getattr(school_profile, 'udise_code', '')}", f"Recognition: {getattr(school_profile, 'recognition_no', '') or 'Not entered'}", f"Recognized up to: {getattr(school_profile, 'recognized_upto', '') or 'Not entered'}"]
+        [f"UDISE Code: {getattr(school_profile, 'udise_code', '') or '____________'}", f"Recognition Order No.: {getattr(school_profile, 'recognition_no', '') or '____________'}", f"Recognized up to: {getattr(school_profile, 'recognized_upto', '') or '____________'}"]
     ]
     meta_t = Table(top_meta, colWidths=[63*mm, 63*mm, 63*mm])
     meta_t.setStyle(TableStyle([
@@ -621,22 +621,30 @@ def build_transfer_certificate_pdf(tc, school_profile=None):
     class_label = tc.last_class_studied.name if tc.last_class_studied else (student.current_class.name if student.current_class else "")
     if tc.last_section: class_label = f"{class_label}-{tc.last_section}" if class_label else tc.last_section
 
-    promoted_class = tc.promoted_to_class if getattr(tc, 'qualified_for_promotion', False) else "N/A"
+    promoted_class = (tc.promoted_to_class or "").strip()
+    promotion_value = "No"
+    if tc.qualified_for_promotion:
+        promotion_value = f"Yes, promoted to Class {promoted_class}" if promoted_class else "Yes"
+
+    category_bits = []
+    for category_value in [student.category, student.caste]:
+        if category_value and category_value.casefold() not in {item.casefold() for item in category_bits}:
+            category_bits.append(category_value)
 
     fields = [
         ("1. Name of the Pupil", student.full_name),
         ("2. Mother's Name", student.mother_name or ""),
         ("3. Father's/Guardian's Name", student.father_name or ""),
         ("4. Nationality", getattr(student, 'nationality', 'Indian')),
-        ("5. Whether belongs to SC/ST/OBC", getattr(student, 'category', '')),
-        ("6. Date of first admission in the School with class", f"{student.admission_date.strftime('%d-%m-%Y') if student.admission_date else ''} - Class {student.current_class.name if student.current_class else ''}"),
+        ("5. Category / Community", " / ".join(category_bits)),
+        ("6. Date of first admission in the School", student.admission_date.strftime('%d-%m-%Y') if student.admission_date else ""),
         ("7. Date of Birth", student.date_of_birth.strftime('%d-%m-%Y') if student.date_of_birth else ""),
         ("   (in words)", date_to_words(student.date_of_birth)),
         ("8. Class in which the pupil last studied", class_label),
         ("9. School/Board Annual Exam last taken with result", tc.annual_exam_result or ""),
         ("10. Whether failed, if so once/twice", "Yes" if getattr(tc, 'whether_failed', False) else "No"),
         ("11. Subjects Studied", getattr(tc, 'subjects_offered', '')),
-        ("12. Whether qualified for promotion", f"Yes - {promoted_class}" if getattr(tc, 'qualified_for_promotion', False) else "No"),
+        ("12. Whether qualified for promotion", promotion_value),
         ("13. Month upto which school dues paid", tc.fees_paid_upto or ""),
         ("14. Any fee concession availed of", getattr(tc, 'fee_concession_nature', '') or "No"),
         ("15. Total No. of working days", str(tc.total_working_days or '')),
@@ -657,8 +665,8 @@ def build_transfer_certificate_pdf(tc, school_profile=None):
     t = Table(table_data, colWidths=[105*mm, 84*mm])
     t.setStyle(TableStyle([
         ("VALIGN", (0,0), (-1,-1), "TOP"),
-        ("BOTTOMPADDING", (0,0), (-1,-1), 2),
-        ("TOPPADDING", (0,0), (-1,-1), 2),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 2.4),
+        ("TOPPADDING", (0,0), (-1,-1), 2.4),
         ("GRID", (0,0), (-1,-1), 0.3, colors.HexColor("#9aa5b1")),
         ("BACKGROUND", (0,0), (0,-1), colors.HexColor("#f7f8f8")),
     ]))
