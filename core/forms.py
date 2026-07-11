@@ -113,7 +113,7 @@ class StudentForm(forms.ModelForm):
             "current_section": SectionSelect(),
         }
         labels = {
-            "scholar_register_no": "Scholar Register No.",
+            "scholar_register_no": "Scholar Register Book No.",
             "pen_number": "PEN Number",
             "apaar_id": "APAAR ID",
             "caste": "Caste",
@@ -325,7 +325,6 @@ class TransferCertificateForm(forms.ModelForm):
     class Meta:
         model = TransferCertificate
         fields = [
-            "book_no",
             "issue_date",
             "application_date",
             "date_of_leaving",

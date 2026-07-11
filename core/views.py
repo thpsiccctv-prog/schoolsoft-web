@@ -1089,7 +1089,8 @@ def tc_detail(request, pk):
         if form.is_valid():
             tc_obj = form.save(commit=False)
             tc_obj.student = student
-            tc_obj.sr_no = student.scholar_register_no
+            tc_obj.book_no = student.scholar_register_no
+            tc_obj.sr_no = student.admission_no or str(student.legacy_sid or "")
             if not tc_obj.tc_number:
                 tc_obj.tc_number = next_tc_number()
             if not tc_obj.last_class_studied_id and student.current_class_id:

@@ -601,7 +601,7 @@ def build_transfer_certificate_pdf(tc, school_profile=None):
     student = tc.student
 
     top_meta = [
-        [f"Book No.: {tc.book_no}", f"S.R. No.: {student.scholar_register_no or tc.sr_no}", f"Admission No.: {student.admission_no}"],
+        [f"Book No.: {student.scholar_register_no or tc.book_no}", f"S.R. No.: {tc.sr_no or student.admission_no or student.legacy_sid or ''}", f"Admission No.: {student.admission_no}"],
         [f"TC No.: {tc.tc_number}", f"PEN: {getattr(student, 'pen_number', '')}", f"Medium: {getattr(school_profile, 'medium', '') or 'English'}"],
         [f"UDISE Code: {getattr(school_profile, 'udise_code', '') or '____________'}", f"Recognition Order No.: {getattr(school_profile, 'recognition_no', '') or '____________'}", f"Recognized up to: {getattr(school_profile, 'recognized_upto', '') or '____________'}"]
     ]

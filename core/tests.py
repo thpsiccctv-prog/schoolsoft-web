@@ -643,7 +643,8 @@ class Month2DocumentTests(AuthenticatedClientMixin, TestCase):
 
         tc = TransferCertificate.objects.get(student=student)
         self.assertTrue(tc.tc_number.startswith("TC-"))
-        self.assertEqual(tc.sr_no, student.scholar_register_no)
+        self.assertEqual(tc.book_no, student.scholar_register_no)
+        self.assertEqual(tc.sr_no, student.admission_no or str(student.legacy_sid or ""))
 
         pdf_response = self.client.get(reverse("core:tc_pdf", args=[student.id]))
         self.assertEqual(pdf_response.status_code, 200)
