@@ -552,10 +552,10 @@ def build_transfer_certificate_pdf(tc, school_profile=None):
     document = SimpleDocTemplate(
         buffer,
         pagesize=A4,
-        rightMargin=14 * mm,
-        leftMargin=14 * mm,
-        topMargin=12 * mm,
-        bottomMargin=12 * mm,
+        rightMargin=11 * mm,
+        leftMargin=11 * mm,
+        topMargin=9 * mm,
+        bottomMargin=9 * mm,
         title=f"Transfer Certificate - {tc.tc_number}",
     )
     styles = getSampleStyleSheet()
@@ -567,27 +567,33 @@ def build_transfer_certificate_pdf(tc, school_profile=None):
         "TcTitle", parent=styles["Title"], fontSize=16, leading=20, alignment=1, textColor=brand_color, fontName="Helvetica-Bold", spaceAfter=2*mm
     )
     small_style = ParagraphStyle(
-        "TcSmall", parent=styles["Normal"], fontSize=9, leading=12, alignment=1
+        "TcSmall", parent=styles["Normal"], fontSize=8, leading=10, alignment=1
     )
     field_style = ParagraphStyle(
-        "TcField", parent=styles["Normal"], fontName="Helvetica", fontSize=9, leading=14
+        "TcField", parent=styles["Normal"], fontName="Helvetica", fontSize=8, leading=10
     )
     value_style = ParagraphStyle(
-        "TcValue", parent=styles["Normal"], fontSize=9, leading=14, fontName="Helvetica-Bold"
+        "TcValue", parent=styles["Normal"], fontSize=8, leading=10, fontName="Helvetica-Bold"
     )
 
     school_name = school_profile.name if school_profile else "SCHOOLSOFT"
-    story.append(Paragraph(school_name.upper(), title_style))
+    logo_path = os.path.join(settings.BASE_DIR, "static", "core", "school_logo.png")
+    school_heading = [Paragraph(school_name.upper(), title_style)]
     if school_profile and school_profile.address_line1:
         addr = f"{school_profile.address_line1}, {school_profile.address_line2}".strip(", ")
-        story.append(Paragraph(addr, small_style))
+        school_heading.append(Paragraph(addr, small_style))
     
     contact_parts = []
     if school_profile and school_profile.phone: contact_parts.append(f"Ph: {school_profile.phone}")
     if school_profile and school_profile.email: contact_parts.append(f"Email: {school_profile.email}")
     if school_profile and getattr(school_profile, 'udise_code', None): contact_parts.append(f"UDISE: {school_profile.udise_code}")
     if contact_parts:
-        story.append(Paragraph(" | ".join(contact_parts), small_style))
+        school_heading.append(Paragraph(" | ".join(contact_parts), small_style))
+    logo = Image(logo_path, 20 * mm, 20 * mm) if os.path.exists(logo_path) else ""
+    header = Table([[logo, school_heading, ""]], colWidths=[25 * mm, 139 * mm, 25 * mm])
+    header.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("ALIGN", (1, 0), (1, 0), "CENTER")]))
+    story.append(header)
+    story.append(Table([[""]], colWidths=[189 * mm], rowHeights=[1 * mm], style=TableStyle([("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#b58a2a"))])))
     
     story.append(Spacer(1, 4 * mm))
     story.append(Paragraph("TRANSFER CERTIFICATE", title_style))
@@ -595,17 +601,19 @@ def build_transfer_certificate_pdf(tc, school_profile=None):
     student = tc.student
 
     top_meta = [
-        [f"Book No.: {tc.book_no}", f"S.R. No.: {tc.sr_no}", f"Admission No.: {student.admission_no}"],
-        [f"TC No.: {tc.tc_number}", f"PEN: {getattr(student, 'pen_number', '')}", f"Affiliation No.: _________"]
+        [f"Book No.: {tc.book_no}", f"S.R. No.: {student.scholar_register_no or tc.sr_no}", f"Admission No.: {student.admission_no}"],
+        [f"TC No.: {tc.tc_number}", f"PEN: {getattr(student, 'pen_number', '')}", f"Medium: {getattr(school_profile, 'medium', '') or 'English'}"],
+        [f"UDISE: {getattr(school_profile, 'udise_code', '')}", f"Recognition: {getattr(school_profile, 'recognition_no', '') or 'Not entered'}", f"Recognized up to: {getattr(school_profile, 'recognized_upto', '') or 'Not entered'}"]
     ]
-    meta_t = Table(top_meta, colWidths=[60*mm, 60*mm, 60*mm])
+    meta_t = Table(top_meta, colWidths=[63*mm, 63*mm, 63*mm])
     meta_t.setStyle(TableStyle([
         ("FONTNAME", (0,0), (-1,-1), "Helvetica"),
         ("FONTSIZE", (0,0), (-1,-1), 8),
         ("ALIGN", (0,0), (0,-1), "LEFT"),
         ("ALIGN", (1,0), (1,-1), "CENTER"),
         ("ALIGN", (2,0), (2,-1), "RIGHT"),
-        ("BOTTOMPADDING", (0,0), (-1,-1), 6),
+        ("GRID", (0,0), (-1,-1), 0.35, colors.HexColor("#9aa5b1")),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 3), ("TOPPADDING", (0,0), (-1,-1), 3),
     ]))
     story.append(meta_t)
     story.append(Spacer(1, 2*mm))
@@ -625,7 +633,7 @@ def build_transfer_certificate_pdf(tc, school_profile=None):
         ("7. Date of Birth", student.date_of_birth.strftime('%d-%m-%Y') if student.date_of_birth else ""),
         ("   (in words)", date_to_words(student.date_of_birth)),
         ("8. Class in which the pupil last studied", class_label),
-        ("9. School/Board Annual Exam last taken", ""),
+        ("9. School/Board Annual Exam last taken with result", tc.annual_exam_result or ""),
         ("10. Whether failed, if so once/twice", "Yes" if getattr(tc, 'whether_failed', False) else "No"),
         ("11. Subjects Studied", getattr(tc, 'subjects_offered', '')),
         ("12. Whether qualified for promotion", f"Yes - {promoted_class}" if getattr(tc, 'qualified_for_promotion', False) else "No"),
@@ -634,9 +642,9 @@ def build_transfer_certificate_pdf(tc, school_profile=None):
         ("15. Total No. of working days", str(tc.total_working_days or '')),
         ("16. Total working days present", str(tc.days_present or '')),
         ("17. Whether NCC Cadet/Scout", getattr(tc, 'ncc_scout', '') or "No"),
-        ("18. Games played or extra-curricular activities", ""),
-        ("19. General conduct", tc.get_conduct_display()),
-        ("20. Date of application for certificate", ""),
+        ("18. Games played or extra-curricular activities", tc.extracurricular_activities or ""),
+        ("19. General progress / Conduct", f"{tc.get_general_progress_display()} / {tc.get_conduct_display()}"),
+        ("20. Date of application for certificate", tc.application_date.strftime('%d-%m-%Y') if tc.application_date else ""),
         ("21. Date of issue of certificate", tc.issue_date.strftime('%d-%m-%Y') if tc.issue_date else ""),
         ("22. Reasons for leaving the school", tc.reason_for_leaving or ""),
         ("23. Any other remarks", tc.remarks or "")
@@ -646,19 +654,22 @@ def build_transfer_certificate_pdf(tc, school_profile=None):
     for label, val in fields:
         table_data.append([Paragraph(label, field_style), Paragraph(val, value_style)])
         
-    t = Table(table_data, colWidths=[110*mm, 70*mm])
+    t = Table(table_data, colWidths=[105*mm, 84*mm])
     t.setStyle(TableStyle([
         ("VALIGN", (0,0), (-1,-1), "TOP"),
-        ("BOTTOMPADDING", (0,0), (-1,-1), 3),
-        ("TOPPADDING", (0,0), (-1,-1), 3),
-        ("LINEBELOW", (1,0), (1,-1), 0.5, colors.HexColor("#cbd5e1")),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 2),
+        ("TOPPADDING", (0,0), (-1,-1), 2),
+        ("GRID", (0,0), (-1,-1), 0.3, colors.HexColor("#9aa5b1")),
+        ("BACKGROUND", (0,0), (0,-1), colors.HexColor("#f7f8f8")),
     ]))
     story.append(t)
     
-    story.append(Spacer(1, 15*mm))
+    story.append(Spacer(1, 2*mm))
+    story.append(Paragraph("CERTIFIED that the above entries have been verified with the Admission/Scholar Register and school records and are correct.", small_style))
+    story.append(Spacer(1, 8*mm))
     
     sig_data = [
-        ["Signature of Class Teacher", "Checked by", "Principal\n(Seal)"]
+        ["Prepared by\n(Name & Designation)", "Checked by\n(Name & Designation)", "Head Teacher / Principal\n(Signature with official seal)"]
     ]
     sig_t = Table(sig_data, colWidths=[60*mm, 60*mm, 60*mm])
     sig_t.setStyle(TableStyle([
@@ -670,6 +681,196 @@ def build_transfer_certificate_pdf(tc, school_profile=None):
         ("VALIGN", (0,0), (-1,-1), "BOTTOM"),
     ]))
     story.append(sig_t)
+    story.append(Spacer(1, 3*mm))
+    counter = Table([
+        ["COUNTERSIGN / OFFICE VERIFICATION (only where required by the competent authority)"],
+        ["Verified with original Scholar Register. Signature: ______________  Name/Designation: ______________  Date: ________  Office Seal"],
+    ], colWidths=[189*mm])
+    counter.setStyle(TableStyle([("BOX", (0,0), (-1,-1), 0.6, colors.HexColor("#17202a")), ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#f3f6f5")), ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"), ("FONTSIZE", (0,0), (-1,-1), 7), ("ALIGN", (0,0), (-1,-1), "CENTER"), ("TOPPADDING", (0,0), (-1,-1), 3), ("BOTTOMPADDING", (0,0), (-1,-1), 3)]))
+    story.append(counter)
+
+    document.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+# The physical office-only "Scholar's Register" ledger has one row per class
+# (Nursery through VIII) with admission/promotion/removal dates for THAT
+# class. The system only ever stored a student's CURRENT class - there is no
+# year-by-year class history model - so only the row matching the student's
+# current class (or, if they've left, the class on their Transfer
+# Certificate) can be filled from real data. Every other row is left blank
+# and ruled, exactly as office staff already fill it by hand. This was a
+# deliberate scope decision, not an oversight - see CODEX-HANDOFF.md.
+_SCHOLAR_REGISTER_CLASS_ROWS = ["NUR", "LKG", "UKG", "I", "II", "III", "IV", "V", "VI", "VII", "VIII"]
+
+
+def build_scholar_register_pdf(student, school_profile=None):
+    buffer = BytesIO()
+    document = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=10 * mm,
+        leftMargin=10 * mm,
+        topMargin=9 * mm,
+        bottomMargin=9 * mm,
+        title=f"Scholar Register - {student.full_name}",
+    )
+    styles = getSampleStyleSheet()
+    story = []
+
+    brand_color = colors.HexColor("#0f766e")
+    title_style = ParagraphStyle(
+        "SrTitle", parent=styles["Title"], fontSize=14, leading=17, alignment=1,
+        textColor=brand_color, fontName="Helvetica-Bold", spaceAfter=1 * mm,
+    )
+    subtitle_style = ParagraphStyle("SrSubtitle", parent=styles["Normal"], fontSize=9, leading=11, alignment=1)
+    small_style = ParagraphStyle("SrSmall", parent=styles["Normal"], fontSize=8, leading=10, alignment=1)
+    field_style = ParagraphStyle("SrField", parent=styles["Normal"], fontName="Helvetica", fontSize=7.5, leading=9)
+    value_style = ParagraphStyle("SrValue", parent=styles["Normal"], fontSize=8.5, leading=10, fontName="Helvetica-Bold")
+    note_style = ParagraphStyle("SrNote", parent=styles["Normal"], fontSize=7, leading=9)
+
+    school_name = school_profile.name if school_profile else "SCHOOLSOFT"
+    logo_path = os.path.join(settings.BASE_DIR, "static", "core", "school_logo.png")
+    school_heading = [Paragraph(school_name.upper(), title_style)]
+    if school_profile and school_profile.address_line1:
+        addr = f"{school_profile.address_line1}, {school_profile.address_line2}".strip(", ")
+        school_heading.append(Paragraph(addr, small_style))
+    contact_parts = []
+    if school_profile and school_profile.phone:
+        contact_parts.append(f"Ph: {school_profile.phone}")
+    if school_profile and school_profile.email:
+        contact_parts.append(f"Email: {school_profile.email}")
+    if contact_parts:
+        school_heading.append(Paragraph(" | ".join(contact_parts), small_style))
+    logo = Image(logo_path, 20 * mm, 20 * mm) if os.path.exists(logo_path) else ""
+    header = Table([[logo, school_heading, ""]], colWidths=[25 * mm, 139 * mm, 25 * mm])
+    header.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("ALIGN", (1, 0), (1, 0), "CENTER")]))
+    story.append(header)
+    story.append(Table([[""]], colWidths=[189 * mm], rowHeights=[1 * mm], style=TableStyle([("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#b58a2a"))])))
+    story.append(Spacer(1, 3 * mm))
+    story.append(Paragraph("SCHOLAR'S REGISTER &amp; TRANSFER CERTIFICATE FORM", title_style))
+    story.append(Paragraph("(Chhatra Patravali tatha Sthanantaran Pramaan-Patra) - Office Copy, Not for Student", subtitle_style))
+    story.append(Spacer(1, 3 * mm))
+
+    tc = getattr(student, "transfer_certificate", None)
+
+    top_meta = [[
+        f"Admission File No.: {student.admission_no or ''}",
+        f"Transfer Certificate No.: {tc.tc_number if tc else ''}",
+        f"Register No.: {student.scholar_register_no or ''}",
+    ]]
+    meta_t = Table(top_meta, colWidths=[63 * mm, 63 * mm, 63 * mm])
+    meta_t.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (-1, -1), "Helvetica"),
+        ("FONTSIZE", (0, 0), (-1, -1), 8),
+        ("ALIGN", (0, 0), (0, -1), "LEFT"),
+        ("ALIGN", (1, 0), (1, -1), "CENTER"),
+        ("ALIGN", (2, 0), (2, -1), "RIGHT"),
+        ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#9aa5b1")),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3), ("TOPPADDING", (0, 0), (-1, -1), 3),
+    ]))
+    story.append(meta_t)
+    story.append(Spacer(1, 2 * mm))
+
+    caste_religion = " / ".join(part for part in [student.religion, student.caste] if part) or ""
+    address = student.address_permanent or student.address_local or ""
+
+    info_rows = [
+        [Paragraph("Name of the Scholar", field_style), Paragraph(student.full_name, value_style),
+         Paragraph("Nationality", field_style), Paragraph(student.nationality or "Indian", value_style)],
+        [Paragraph("Religion / Caste", field_style), Paragraph(caste_religion, value_style),
+         Paragraph("Category", field_style), Paragraph(student.category or "", value_style)],
+        [Paragraph("Father's Name", field_style), Paragraph(student.father_name or "", value_style),
+         Paragraph("Mother's Name", field_style), Paragraph(student.mother_name or "", value_style)],
+        [Paragraph("Date of Birth", field_style), Paragraph(student.date_of_birth.strftime("%d-%m-%Y") if student.date_of_birth else "", value_style),
+         Paragraph("Date of Birth (in words)", field_style), Paragraph(date_to_words(student.date_of_birth), value_style)],
+        [Paragraph("First Admission Date", field_style), Paragraph(student.admission_date.strftime("%d-%m-%Y") if student.admission_date else "", value_style),
+         Paragraph("Current Class", field_style), Paragraph(student.current_class.name if student.current_class else "", value_style)],
+        [Paragraph("Aadhaar Number", field_style), Paragraph(student.aadhaar_no or "", value_style),
+         Paragraph("Last Institution Attended", field_style), Paragraph(student.previous_school_name or "", value_style)],
+        [Paragraph("Address", field_style), Paragraph(address, value_style), "", ""],
+    ]
+    info_t = Table(info_rows, colWidths=[32 * mm, 62 * mm, 32 * mm, 63 * mm])
+    info_t.setStyle(TableStyle([
+        ("SPAN", (1, 6), (3, 6)),
+        ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#9aa5b1")),
+        ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f7f8f8")),
+        ("BACKGROUND", (2, 0), (2, -1), colors.HexColor("#f7f8f8")),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+    ]))
+    story.append(info_t)
+    story.append(Spacer(1, 4 * mm))
+
+    tc_class_name = None
+    if tc:
+        tc_class_name = tc.last_class_studied.name if tc.last_class_studied else (
+            student.current_class.name if student.current_class else None
+        )
+
+    grid_header = ["Class", "Date of\nAdmission", "Date of\nPromotion", "Date of\nRemoval", "Cause of Removal", "Year", "Conduct", "Work", "Sign."]
+    grid_data = [grid_header]
+    for cls in _SCHOLAR_REGISTER_CLASS_ROWS:
+        row = [cls, "", "", "", "", "", "", "", ""]
+        if tc_class_name and cls.upper() == tc_class_name.strip().upper():
+            removal_date = tc.struck_off_date or tc.date_of_leaving
+            row[3] = removal_date.strftime("%d-%m-%Y") if removal_date else ""
+            row[4] = (tc.reason_for_leaving or "")[:28]
+            row[5] = tc.issue_date.strftime("%Y") if tc.issue_date else ""
+            row[6] = tc.get_conduct_display()
+        grid_data.append(row)
+
+    grid_t = Table(
+        grid_data,
+        colWidths=[13 * mm, 21 * mm, 21 * mm, 21 * mm, 38 * mm, 13 * mm, 20 * mm, 20 * mm, 15 * mm],
+        repeatRows=1,
+    )
+    grid_t.setStyle(TableStyle([
+        ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#9aa4b2")),
+        ("BACKGROUND", (0, 0), (-1, 0), brand_color),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 7),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+    ]))
+    story.append(grid_t)
+    story.append(Spacer(1, 3 * mm))
+
+    story.append(Paragraph(
+        "Class-wise admission and promotion history is not tracked in this system, so those cells are intentionally "
+        "blank and must be completed from the physical register. If the student has left, only verified removal "
+        "details from the Transfer Certificate are printed.",
+        note_style,
+    ))
+    story.append(Paragraph(
+        "Note: 1. If the student has studied classes VI to VIII, this should be mentioned in the Work column. "
+        "2. For a student leaving any class from IX to X, attendance/lectures should be entered on the back of "
+        "this form.",
+        note_style,
+    ))
+    story.append(Spacer(1, 8 * mm))
+
+    cert_t = Table(
+        [
+            ["I - Certified that the entries as records details of the student have been daily checked from the admission form and that they are complete."],
+            ["Head of Institute: ______________________"],
+            ["II - Certified that the above student's Register has been posted up to the last of the student's leaving as required by the Department Rules & T.C. Issued."],
+            ["Prepared by: ______________________          Date: ____________          Head of Institute: ______________________"],
+        ],
+        colWidths=[189 * mm],
+    )
+    cert_t.setStyle(TableStyle([
+        ("FONTSIZE", (0, 0), (-1, -1), 8),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("ALIGN", (0, 1), (0, 1), "RIGHT"),
+        ("ALIGN", (0, 3), (0, 3), "RIGHT"),
+    ]))
+    story.append(cert_t)
 
     document.build(story)
     buffer.seek(0)

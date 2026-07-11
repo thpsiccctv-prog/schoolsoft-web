@@ -1665,3 +1665,84 @@ Not done / next session must:
 4. If the owner later wants an actual zyada/kam delta, it needs a fair same-time-cutoff
    comparison (e.g. previous day's total *as of the same clock time*) or waiting until the school
    day is officially over - do not add a naive full-day-vs-partial-day delta.
+
+## ✅ Scholar's Register vs Transfer Certificate (July 10, 2026)
+
+The owner uploaded 3 real reference PDFs (legacy VB TC, a physical "Scholar's Register &
+Transfer Certificate Form" for student Aashruti Pal, and a current SchoolSoft-generated TC) along
+with a Codex-authored plan proposing a second PDF output built from existing data ("single source
+of truth, no new storage needed").
+
+**Gap found before building anything:** that premise was false. The physical Scholar's Register
+has ONE ROW PER CLASS LEVEL (Nursery through VIII) with a separate admission/promotion/removal
+date per class - i.e. it's the student's entire class-by-class history at this school. Verified
+via grep of `core/models.py` that no such history exists anywhere: `Student` only stores the
+single CURRENT class; `previous_school_name`/`previous_passing_year`/`previous_roll_no` describe
+the student's PRIOR school, not year-by-year progression through THIS one. Building the full grid
+would have meant either (a) a new per-class-history model with a backfill for 1213+ live students
+from paper records - a real data-entry project, not a coding task, or (b) faking rows, which would
+be actively misleading on an official document used for BSA/court audits.
+
+Flagged this to the owner directly instead of quietly shipping an incomplete/misleading grid.
+Owner's decision: **"Sirf form/header digitize karo"** - digitize the form/header only. Fill just
+the row for the student's current class (or, if a TC exists, the TC's exit class) from data the
+system already has; leave every other class row blank/ruled exactly as staff already fill it by
+hand. No new history model, no backfill project.
+
+**Implemented:**
+- `core/models.py`: `Student.scholar_register_no` (new `CharField`, blank-ok, help text explains
+  it's the office's permanent Scholar's Register page number, assigned at admission, written by
+  hand in the physical register). **Migration NOT yet created/run for this field** - see below.
+- `core/forms.py`: `StudentForm` now includes `scholar_register_no` (field + label).
+- `templates/core/student_form.html`: new "Scholar Register No." input in the Identity &
+  Enrollment card, right after Legacy SID.
+- `core/pdf.py`: new `build_scholar_register_pdf(student, school_profile=None)`, inserted between
+  `build_transfer_certificate_pdf` and `build_discipline_summary_pdf`. Reuses the TC's exact header
+  pattern (logo + school name/address/contact, then a 1mm gold `#b58a2a` accent bar) so the two
+  documents look like a matched pair. Title: "SCHOLAR'S REGISTER & TRANSFER CERTIFICATE FORM".
+  Layout: 3-column top meta (Admission File No. / TC No. from `tc.tc_number` if a TC exists /
+  Register No. from `student.scholar_register_no`), a student-info table (name, nationality,
+  religion/caste, category, parents' names, DOB numeric + `date_to_words()`, Aadhaar, last
+  institution, address), then the NUR-VIII class grid
+  (`_SCHOLAR_REGISTER_CLASS_ROWS = ["NUR","LKG","UKG","I","II","III","IV","V","VI","VII","VIII"]`)
+  with only two rows ever populated: the row matching `student.current_class.name` gets
+  `student.admission_date` in the Date of Admission column; the row matching
+  `tc.last_class_studied.name` (if a TC exists) gets Removal date/Cause/Year/Conduct from the TC.
+  Every other row is intentionally left blank for manual entry - a `Paragraph` on the PDF itself
+  says so explicitly, plus the standard legacy-form footnotes and a two-part certification block.
+  `getattr(student, "transfer_certificate", None)` is used to detect the TC gracefully (reverse
+  OneToOne raises `RelatedObjectDoesNotExist`, a subclass of `AttributeError`, so this correctly
+  returns `None` for students who haven't left).
+- `core/views.py`: new `scholar_register_pdf(request, pk)` view, uses
+  `Student.objects.select_related("current_class", "current_section", "transfer_certificate",
+  "transfer_certificate__last_class_studied")` (note: `select_related`, NOT `prefetch_related` -
+  the reverse side of a OneToOneField still returns a single related object, so
+  `prefetch_related` is the wrong tool here). Works for active students (no TC yet) and departed
+  students (TC exists) alike - unlike the TC route, this one is available for ANY student.
+- `core/urls.py`: `students/<int:pk>/scholar-register/pdf/` (gated on the `students` module, same
+  as `tc_pdf`), name `scholar_register_pdf`.
+- `templates/core/student_detail.html`: new "Scholar Register" quick-action button next to
+  "Transfer Cert." (opens in a new tab, titled "Office copy - Scholar's Register page. Not for the
+  student."), and a new "Scholar Register No." row in the Student Details info card.
+- `core/tests.py`: 3 new tests inside `Month2DocumentTests`, right after `test_tc_create_and_pdf`
+  (added `from datetime import date` to the imports, which weren't previously imported):
+  - `test_scholar_register_pdf_active_student_without_tc` - active student, no TC yet, still
+    returns a 200 PDF (this is the core behavioral difference from the TC route).
+  - `test_scholar_register_pdf_with_transfer_certificate` - student with a real `TransferCertificate`
+    (verifies the exit-class-row path doesn't crash).
+  - `test_scholar_register_pdf_handles_blank_optional_fields` - a bare-minimum `Student` with no
+    DOB, no admission_date, no current_class, no address, no Aadhaar - confirms nothing crashes
+    when every optional field is blank (common for older/legacy records).
+
+Not done / next session must:
+1. Run `manage.py makemigrations core` then `manage.py migrate` - `Student.scholar_register_no` is
+   a new field and has NOT been migrated yet.
+2. Run `manage.py test core` to confirm the 3 new tests pass alongside the full suite (last known
+   count before this checkpoint: 72).
+3. Manually open the Scholar Register PDF for one active student and one departed-with-TC student
+   to eyeball the layout against the 3 reference PDFs the owner uploaded.
+4. `collectstatic` + `build-desktop.bat` + full EXE close/reopen to ship this to desktop.
+5. If the owner ever wants the full NUR-VIII grid actually populated (not just the current/exit
+   row), that requires a real per-class-history data model plus a manual backfill project from the
+   paper registers for all 1213+ students - explicitly out of scope for this checkpoint, do not
+   attempt it without a fresh explicit decision from the owner.

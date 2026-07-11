@@ -80,6 +80,12 @@
             </svg>
             Transfer Cert.
         </a>
+        <a class="action-btn action-secondary" href="{% url 'core:scholar_register_pdf' student.pk %}" target="_blank" title="Office copy - Scholar's Register page. Not for the student.">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm3 1a1 1 0 000 2h6a1 1 0 100-2H7zm0 4a1 1 0 000 2h6a1 1 0 100-2H7zm0 4a1 1 0 100 2h3a1 1 0 100-2H7z" clip-rule="evenodd" />
+            </svg>
+            Scholar Register
+        </a>
         <a class="action-btn action-secondary" href="{% url 'core:admission_form_pdf' student.pk %}">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                 <path fill-rule="evenodd" d="M5 4v3H4a2 2 0 00-2 2v3a2 2 0 002 2h1v2a2 2 0 002 2h6a2 2 0 002-2v-2h1a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a2 2 0 00-2-2H7a2 2 0 00-2 2zm8 0H7v3h6V4zm0 8H7v4h6v-4z" clip-rule="evenodd" />
@@ -158,6 +164,10 @@
                 <div class="info-item">
                     <span class="info-label">Admission Date</span>
                     <span class="info-value">{{ student.admission_date|date:"d M Y"|default:"-" }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Scholar Register No.</span>
+                    <span class="info-value">{{ student.scholar_register_no|default:"-" }}</span>
                 </div>
             </div>
         </div>

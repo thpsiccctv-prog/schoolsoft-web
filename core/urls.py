@@ -54,6 +54,7 @@ urlpatterns = [
     path("students/<int:pk>/id-card/pdf/", module_required("students")(views.id_card_pdf), name="id_card_pdf"),
     path("students/<int:pk>/tc/", module_required("students", write=True)(views.tc_detail), name="tc_detail"),
     path("students/<int:pk>/tc/pdf/", module_required("students")(views.tc_pdf), name="tc_pdf"),
+    path("students/<int:pk>/scholar-register/pdf/", module_required("students")(views.scholar_register_pdf), name="scholar_register_pdf"),
     path("students/<int:pk>/marksheet/", module_required("marks")(views.marksheet_select), name="marksheet_select"),
     path("students/<int:pk>/marksheet/<int:term_id>/pdf/", module_required("marks")(views.marksheet_pdf), name="marksheet_pdf"),
     path("students/<int:pk>/discipline/", admin_only_required("Discipline Records")(views.discipline_list), name="discipline_list"),

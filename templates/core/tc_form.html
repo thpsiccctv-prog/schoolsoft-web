@@ -18,9 +18,9 @@
     </div>
 
     {% if tc %}
-        <p class="hint">TC already issued: <strong>{{ tc.tc_number }}</strong> on {{ tc.issue_date }}. Editing below will update the same record.</p>
+        <p class="hint">TC already issued: <strong>{{ tc.tc_number }}</strong> on {{ tc.issue_date }}. Editing below will update the same record. Verify every entry against the Admission/Scholar Register before printing.</p>
     {% else %}
-        <p class="hint">No TC issued yet for this student. Fill in the details below to generate one.</p>
+        <p class="hint">No TC issued yet. Fill every applicable detail from the Admission/Scholar Register; do not guess or leave a material entry unverified.</p>
     {% endif %}
 
     <form class="entry-form" method="post">
@@ -29,7 +29,7 @@
             <div class="form-errors">{{ form.non_field_errors }}</div>
         {% endif %}
         <section class="form-panel">
-            <h3>TC Details</h3>
+            <h3>Official TC Details</h3>
             <div class="form-grid">
                 {% for field in form %}
                     <label>

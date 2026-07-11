@@ -53,6 +53,7 @@ class StudentForm(forms.ModelForm):
         fields = [
             "registration_no",
             "admission_no",
+            "scholar_register_no",
             "pen_number",
             "apaar_id",
             "legacy_sid",
@@ -112,6 +113,7 @@ class StudentForm(forms.ModelForm):
             "current_section": SectionSelect(),
         }
         labels = {
+            "scholar_register_no": "Scholar Register No.",
             "pen_number": "PEN Number",
             "apaar_id": "APAAR ID",
             "caste": "Caste",
@@ -321,23 +323,34 @@ class TransferCertificateForm(forms.ModelForm):
     class Meta:
         model = TransferCertificate
         fields = [
+            "book_no",
             "issue_date",
+            "application_date",
             "date_of_leaving",
             "last_class_studied",
             "last_section",
             "reason_for_leaving",
+            "annual_exam_result",
+            "subjects_offered",
+            "whether_failed",
             "conduct",
             "general_progress",
             "total_working_days",
             "days_present",
             "fees_paid_upto",
+            "fee_concession_nature",
+            "ncc_scout",
+            "extracurricular_activities",
             "qualified_for_promotion",
             "promoted_to_class",
+            "struck_off_date",
             "remarks",
         ]
         widgets = {
             "issue_date": forms.DateInput(attrs={"type": "date"}),
+            "application_date": forms.DateInput(attrs={"type": "date"}),
             "date_of_leaving": forms.DateInput(attrs={"type": "date"}),
+            "struck_off_date": forms.DateInput(attrs={"type": "date"}),
             "reason_for_leaving": forms.TextInput(),
             "fees_paid_upto": forms.TextInput(),
             "promoted_to_class": forms.TextInput(),

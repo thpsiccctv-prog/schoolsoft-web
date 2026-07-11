@@ -72,6 +72,9 @@ class House(TimeStampedModel):
 class SchoolProfile(TimeStampedModel):
     legacy_comp_code = models.PositiveIntegerField(null=True, blank=True, unique=True)
     udise_code = models.CharField(max_length=50, blank=True)
+    recognition_no = models.CharField(max_length=100, blank=True, verbose_name="Recognition Order No.")
+    recognized_upto = models.CharField(max_length=50, blank=True, default="Class VIII")
+    medium = models.CharField(max_length=50, blank=True, default="English")
     name = models.CharField(max_length=120)
     address_line1 = models.CharField(max_length=120, blank=True)
     address_line2 = models.CharField(max_length=120, blank=True)
@@ -144,6 +147,12 @@ class Student(TimeStampedModel):
     legacy_sid = models.PositiveIntegerField(null=True, blank=True, unique=True)
     pen_number = models.CharField(max_length=50, blank=True)
     apaar_id = models.CharField(max_length=50, blank=True, verbose_name="APAAR ID")
+    scholar_register_no = models.CharField(
+        max_length=30,
+        blank=True,
+        verbose_name="Scholar Register No.",
+        help_text="Office's permanent Scholar's Register page number for this student (assigned at admission, written by hand in the physical register).",
+    )
     admission_no = models.CharField(max_length=30, blank=True)
     registration_no = models.CharField(max_length=30, blank=True)
     roll_no = models.PositiveIntegerField(null=True, blank=True)
@@ -426,10 +435,13 @@ class TransferCertificate(TimeStampedModel):
     )
     last_section = models.CharField(max_length=10, blank=True)
     reason_for_leaving = models.CharField(max_length=255, blank=True)
+    annual_exam_result = models.CharField(max_length=120, blank=True)
     subjects_offered = models.CharField(max_length=255, blank=True)
     whether_failed = models.BooleanField(default=False)
     fee_concession_nature = models.CharField(max_length=255, blank=True)
     ncc_scout = models.CharField(max_length=100, blank=True)
+    extracurricular_activities = models.CharField(max_length=255, blank=True)
+    application_date = models.DateField(null=True, blank=True)
     struck_off_date = models.DateField(null=True, blank=True)
     school_category = models.CharField(max_length=50, default="Independent")
     conduct = models.CharField(max_length=20, choices=Conduct.choices, default=Conduct.GOOD)

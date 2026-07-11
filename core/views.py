@@ -51,6 +51,7 @@ from .pdf import (
     build_id_card_pdf,
     build_marksheet_pdf,
     build_salary_payslip_pdf,
+    build_scholar_register_pdf,
     build_transfer_certificate_pdf,
 )
 
@@ -1088,6 +1089,7 @@ def tc_detail(request, pk):
         if form.is_valid():
             tc_obj = form.save(commit=False)
             tc_obj.student = student
+            tc_obj.sr_no = student.scholar_register_no
             if not tc_obj.tc_number:
                 tc_obj.tc_number = next_tc_number()
             if not tc_obj.last_class_studied_id and student.current_class_id:
@@ -1122,6 +1124,20 @@ def tc_pdf(request, pk):
     pdf_bytes = build_transfer_certificate_pdf(tc, get_active_school_profile())
     response = HttpResponse(pdf_bytes, content_type="application/pdf")
     response["Content-Disposition"] = f'attachment; filename="{tc.tc_number}.pdf"'
+    return response
+
+
+def scholar_register_pdf(request, pk):
+    # Unlike the TC (which only exists once a student has left), the Scholar
+    # Register is the office's permanent record from admission onward - so
+    # this is available for any student, active or left.
+    student = get_object_or_404(
+        Student.objects.select_related("current_class", "current_section", "transfer_certificate", "transfer_certificate__last_class_studied"),
+        pk=pk,
+    )
+    pdf_bytes = build_scholar_register_pdf(student, get_active_school_profile())
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
+    response["Content-Disposition"] = f'inline; filename="scholar-register-{student.admission_no or student.pk}.pdf"'
     return response
 
 

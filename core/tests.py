@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import date, timedelta
 from decimal import Decimal
 import re
 
@@ -619,10 +619,65 @@ class Month2DocumentTests(AuthenticatedClientMixin, TestCase):
 
         tc = TransferCertificate.objects.get(student=student)
         self.assertTrue(tc.tc_number.startswith("TC-"))
+        self.assertEqual(tc.sr_no, student.scholar_register_no)
 
         pdf_response = self.client.get(reverse("core:tc_pdf", args=[student.id]))
         self.assertEqual(pdf_response.status_code, 200)
         self.assertEqual(pdf_response["Content-Type"], "application/pdf")
+
+    def test_scholar_register_pdf_active_student_without_tc(self):
+        """An active student who has never left should still get a Scholar
+        Register PDF (it's the office's permanent record from admission,
+        not a leaving document like the TC)."""
+        school_class = SchoolClass.objects.create(name="III", display_order=1)
+        student = Student.objects.create(
+            full_name="Active Register Student",
+            current_class=school_class,
+            admission_date=date(2024, 6, 1),
+            scholar_register_no="2402",
+        )
+
+        response = self.client.get(reverse("core:scholar_register_pdf", args=[student.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+
+    def test_scholar_register_pdf_with_transfer_certificate(self):
+        """A student who has left should have their Scholar Register row
+        reflect the TC's exit class/date/reason/conduct."""
+        school_class = SchoolClass.objects.create(name="V", display_order=1)
+        student = Student.objects.create(
+            full_name="Left Register Student",
+            current_class=school_class,
+            admission_date=date(2023, 4, 10),
+            scholar_register_no="2199",
+        )
+        TransferCertificate.objects.create(
+            student=student,
+            tc_number="TC-TEST-0001",
+            issue_date=date(2026, 7, 1),
+            last_class_studied=school_class,
+            reason_for_leaving="Family relocation",
+            conduct=TransferCertificate.Conduct.GOOD,
+            general_progress=TransferCertificate.Conduct.GOOD,
+            qualified_for_promotion=True,
+            fees_paid_upto="June 2026",
+        )
+
+        response = self.client.get(reverse("core:scholar_register_pdf", args=[student.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+
+    def test_scholar_register_pdf_handles_blank_optional_fields(self):
+        """No crash when DOB, admission_date, current_class, address, or
+        Aadhaar are blank - common for older/legacy student records."""
+        student = Student.objects.create(full_name="Bare Minimum Student")
+
+        response = self.client.get(reverse("core:scholar_register_pdf", args=[student.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/pdf")
 
     def test_marksheet_pdf(self):
         session = AcademicSession.objects.create(name="2026-27")

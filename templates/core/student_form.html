@@ -56,6 +56,11 @@
                             {% if form.legacy_sid.errors %}<div class="error-text">{{ form.legacy_sid.errors|striptags }}</div>{% endif %}
                         </div>
                         <div class="entry-field">
+                            <label for="{{ form.scholar_register_no.id_for_label }}">{{ form.scholar_register_no.label }}</label>
+                            {{ form.scholar_register_no }}
+                            {% if form.scholar_register_no.errors %}<div class="error-text">{{ form.scholar_register_no.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
                             <label for="{{ form.admission_date.id_for_label }}">{{ form.admission_date.label }}</label>
                             {{ form.admission_date }}
                             {% if form.admission_date.errors %}<div class="error-text">{{ form.admission_date.errors|striptags }}</div>{% endif %}
