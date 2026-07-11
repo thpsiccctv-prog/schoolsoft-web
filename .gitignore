@@ -13,6 +13,8 @@ build-final/
 dist-final/
 build-official/
 dist-official/
+build-bookfix/
+dist-bookfix/
 *.egg-info/
 *.log
 debug-scripts/
