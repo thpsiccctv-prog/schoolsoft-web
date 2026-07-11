@@ -15,6 +15,8 @@ build-official/
 dist-official/
 build-bookfix/
 dist-bookfix/
+build-range/
+dist-range/
 *.egg-info/
 *.log
 debug-scripts/
