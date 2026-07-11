@@ -1746,3 +1746,88 @@ Not done / next session must:
    row), that requires a real per-class-history data model plus a manual backfill project from the
    paper registers for all 1213+ students - explicitly out of scope for this checkpoint, do not
    attempt it without a fresh explicit decision from the owner.
+
+## TC + Scholar Register Consolidated Checkpoint (July 11, 2026)
+
+This checkpoint **supersedes the stale "Not done" statements above**. The work was completed,
+tested, migrated, committed, pushed, and repeatedly packaged into desktop builds during owner
+verification.
+
+### Official school identity
+- Verified from the owner's UDISE+ screenshots and the 2018 District Basic Education Officer
+  recognition order: UDISE `09591200129`, recognition `170/2018 (16-07-2018)`, English medium,
+  recognized through Class VIII.
+- `SchoolProfile` gained `recognition_no`, `recognized_upto`, and `medium` in migration `0023`.
+- Migration `0025_thps_official_school_identity.py` fills the verified identity for THPS profiles.
+- School Profile UI now displays UDISE, recognition, recognized-up-to, and medium.
+
+### Student-facing Transfer Certificate
+- TC redesigned as a one-page A4 official record: logo, restrained teal/gold school identity,
+  UDISE/recognition/PEN metadata, ruled particulars, Scholar Register certification, prepared /
+  checked / Head Teacher signatures, and a countersign block explicitly marked "only where
+  required by the competent authority".
+- TC form exposes the official details that were previously stored but inaccessible, plus annual
+  exam result, application date, and extracurricular activities (`0023`).
+- Corrected misleading presentation: no fake affiliation number, no `Not entered`, no `Yes -`,
+  no assumption that current class was the first-admission class, and `Category / Community`
+  wording avoids falsely treating a caste value as SC/ST/OBC.
+- Important owner-confirmed numbering semantics:
+  - **Book No. = physical Scholar Register book number** (100 admission numbers per book).
+  - **S.R. No. = Admission/SID number**.
+  - Example Gyanendra: Book `23`, S.R. `2290`, Admission `2290`.
+- TC Book/S.R. are no longer manually entered. `tc_detail()` sets Book from the student's computed
+  register book and S.R. from Admission No. (Legacy SID fallback). Migration
+  `0027_align_tc_book_and_sr_numbers.py` repairs existing TCs. PDF uses the same semantics.
+
+### Scholar Register numbering and individual page
+- `Student.scholar_register_no` remains the legacy internal field name, but now means **Scholar
+  Register Book No.** in the UI. It is disabled/read-only in `StudentForm`.
+- Automatic rule in `Student.save()`: `(number - 1) // 100 + 1`, using numeric Admission No., then
+  Legacy SID fallback. Boundaries tested: 1/100 -> 1, 101 -> 2, 2201/2300 -> 23, 2301 -> 24.
+- Migration `0026_backfill_scholar_register_numbers.py` recalculates existing students.
+- The individual office-only Scholar Register PDF is available from each Student Detail page.
+  It is not the student-facing TC. It intentionally does not fabricate historical promotion
+  rows because the database has no year-by-year class-history model.
+- Fixed Edit Student heading duplication (`III-III - A` -> `III-A`).
+
+### Search decision
+- Student search intentionally remains broad: partial matches across names, parents, Admission
+  No., SID, and mobile. Searching `2290` may show an exact SID plus a mobile ending in 2290.
+- An exact-ID-priority change (`82fd463`) was made, then explicitly reverted by owner decision in
+  `c703a48`. Do not reintroduce exact-only behavior unless the owner changes this decision.
+
+### Current register-list range printing
+- Existing `Students -> Print Register` is still a **landscape student index/list**, not the full
+  physical Scholar Register book.
+- It now has Book No., From SID, and To SID controls. Book 23 auto-fills 2201-2300; From/To remain
+  manually editable (e.g. 2251-2275). Filtering boundary test passes.
+- Controls are hidden in browser Print Preview by `.no-print`; users must Cancel preview, load the
+  range on the page, verify total/range, then print.
+- Latest range-capable desktop package at checkpoint time:
+  `dist-range/SchoolSoft/SchoolSoft.exe` (build output is gitignored).
+
+### Verification and repository state
+- Full suite after TC/register/model work: **77/77 passed**. Later range-specific test also passed.
+- Migrations present and applied through `0027`.
+- Main commits (chronological): `325da89`, `6f4d53a`, `c5b288f`, `ce9bc13`, `27f1c31`,
+  `b8f1691`; current main at documentation time includes `650c87b`.
+- All implementation commits were pushed to GitHub main.
+
+### Known data issues, not automatic code fixes
+- Gyanendra's SchoolSoft DOB shown as `13-02-2017`; one earlier UDISE screenshot showed
+  `13-02-2019`. Verify against birth certificate and Admission/Scholar Register before issuing TC.
+- `RAJPOOT` is caste/community, not a reservation category. Category should be General/OBC/SC/ST
+  and caste should be stored separately. Do not auto-correct without source-document verification.
+- Empty TC rows (exam result, subjects, fees paid through, attendance, application/leaving reason)
+  are missing data, not layout defects; complete applicable entries before official issue.
+
+### Pending discussion: full physical Scholar Register book
+- Owner wants one print job per 100-number book, plus manual From/To override, a cover/label page,
+  an index, and individual numbered Scholar Register pages.
+- Current range print only produces the index/list. It does **not** yet produce cover + index +
+  100 individual pages.
+- Proposed correct output for Book 23: cover (school/UDISE/book/range), index including active and
+  inactive students, then SID 2201-2300 in order; missing SID slots should have blank numbered
+  pages if the owner confirms the physical-ledger interpretation.
+- Do not implement the full batch until the owner approves the plan below and confirms how missing
+  numbers and historical class rows must be handled.
