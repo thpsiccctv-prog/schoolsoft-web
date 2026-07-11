@@ -98,19 +98,6 @@ class DashboardTests(AuthenticatedClientMixin, TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Students")
 
-    def test_numeric_student_identifier_takes_priority_over_mobile_suffix(self):
-        exact = Student.objects.create(
-            full_name="Exact SID Student", legacy_sid=2290, admission_no="2290", is_active=True
-        )
-        Student.objects.create(
-            full_name="Mobile Suffix Student", legacy_sid=2248, mobile_primary="9915972290", is_active=True
-        )
-
-        response = self.client.get(reverse("core:student_list"), {"q": "2290"})
-
-        self.assertContains(response, exact.full_name)
-        self.assertNotContains(response, "Mobile Suffix Student")
-
     def test_student_detail_loads_from_list(self):
         school_class = SchoolClass.objects.create(name="I", display_order=1)
         student = Student.objects.create(

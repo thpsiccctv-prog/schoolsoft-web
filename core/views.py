@@ -252,26 +252,14 @@ def _get_filtered_students(request):
         students = students.filter(is_active=False)
 
     if query:
-        exact_identifier = Q(admission_no__iexact=query) | Q(pen_number__iexact=query) | Q(
-            scholar_register_no__iexact=query
+        students = students.filter(
+            Q(full_name__icontains=query)
+            | Q(father_name__icontains=query)
+            | Q(mother_name__icontains=query)
+            | Q(admission_no__icontains=query)
+            | Q(legacy_sid__icontains=query)
+            | Q(mobile_primary__icontains=query)
         )
-        if query.isdigit():
-            exact_identifier |= Q(legacy_sid=int(query))
-
-        exact_students = students.filter(exact_identifier)
-        if query.isdigit() and exact_students.exists():
-            students = exact_students
-        else:
-            students = students.filter(
-                Q(full_name__icontains=query)
-                | Q(father_name__icontains=query)
-                | Q(mother_name__icontains=query)
-                | Q(admission_no__icontains=query)
-                | Q(legacy_sid__icontains=query)
-                | Q(pen_number__icontains=query)
-                | Q(scholar_register_no__icontains=query)
-                | Q(mobile_primary__icontains=query)
-            )
 
     if class_id:
         students = students.filter(current_class_id=class_id)
