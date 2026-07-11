@@ -1914,3 +1914,40 @@ Not done / next session must:
    index with every row "Not Allotted", no individual pages after) - confirmed by
    `test_index_pdf_with_no_students_in_range_still_renders` for the index route; worth a quick
    manual look at the full-book route too since it's a slightly unusual empty-book document.
+
+### Verified and closed (July 11, 2026, later same day)
+- Fixed an encoding defect in `_scholar_register_index_flowables`: the index title used an em-dash
+  (`SCHOLAR'S REGISTER — INDEX`) and the "Not Allotted" text used curly quotes - both replaced with
+  plain ASCII (`SCHOLAR'S REGISTER - INDEX`, `'Not Allotted'`, plain `-` for missing-row cells) for
+  reliable rendering with ReportLab's base Helvetica font, consistent with the plain-ASCII
+  convention already used everywhere else in `pdf.py`.
+- Manually verified a 3-student sample range end to end: cover + index + one page per existing
+  student = correct page count (5 pages for 3 students + cover + index), Book No. label correct on
+  each individual page.
+- Full suite: **85/85 passed** (confirmed by counting `def test_` methods in `core/tests.py`: 85).
+- Committed and pushed to GitHub main.
+- Final desktop build: `dist-scholar-final/SchoolSoft/SchoolSoft.exe` (gitignored build output, not
+  in the repo - rebuild via `build-desktop.bat` if this folder isn't present in a fresh checkout).
+
+## Scholar Register Hybrid Legacy-Style Redesign (July 11, 2026)
+
+Owner compared the legacy physical/VB Scholar Register page with the clean SchoolSoft version and
+approved a hybrid: preserve the old official register structure while retaining modern readable
+typography and reliable A4 output.
+
+- `_scholar_register_page_flowables()` drives both individual and full-book student pages, so the
+  redesign applies identically everywhere.
+- Added bilingual English/Hindi identity labels using bundled offline Noto Devanagari fonts.
+- Restored old-register class grouping with merged cells: PRE-PRIMARY (NUR-UKG), PRIMARY (I-V),
+  and J.H. SCHOOL (VI-VIII).
+- Grid headings are bilingual and the form uses restrained black/grey rules; teal remains limited
+  to institutional headings.
+- Top identifiers explicitly read Admission/S.R. No., Transfer Certificate No., and Register Book
+  No., preserving the owner-confirmed numbering semantics.
+- Added a Parent occupation handwriting line. The database has no occupation field, so no value is
+  fabricated; Address remains system-filled.
+- Removed the internal technical database-history disclaimer from the official page. Class rows
+  remain blank unless verified TC removal data exists; historical promotion data is not fabricated.
+- Added compact official notes and retained certification/signature sections.
+- Visual QA: generated a one-page A4 sample; mixed-font labels and grouped rows fit the page.
+- Verification: individual + full-book targeted tests passed (8/8), then full suite passed 85/85.

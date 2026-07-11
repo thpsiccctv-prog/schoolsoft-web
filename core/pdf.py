@@ -728,9 +728,9 @@ def _scholar_register_page_flowables(student, school_profile=None):
     )
     subtitle_style = ParagraphStyle("SrSubtitle", parent=styles["Normal"], fontSize=9, leading=11, alignment=1)
     small_style = ParagraphStyle("SrSmall", parent=styles["Normal"], fontSize=8, leading=10, alignment=1)
-    field_style = ParagraphStyle("SrField", parent=styles["Normal"], fontName="Helvetica", fontSize=7.5, leading=9)
+    field_style = ParagraphStyle("SrField", parent=styles["Normal"], fontName="Helvetica", fontSize=7.2, leading=9)
     value_style = ParagraphStyle("SrValue", parent=styles["Normal"], fontSize=8.5, leading=10, fontName="Helvetica-Bold")
-    note_style = ParagraphStyle("SrNote", parent=styles["Normal"], fontSize=7, leading=9)
+    note_style = ParagraphStyle("SrNote", parent=styles["Normal"], fontName="NotoSansDevanagari", fontSize=6.8, leading=8.5)
 
     school_name = school_profile.name if school_profile else "SCHOOLSOFT"
     logo_path = os.path.join(settings.BASE_DIR, "static", "core", "school_logo.png")
@@ -752,15 +752,15 @@ def _scholar_register_page_flowables(student, school_profile=None):
     story.append(Table([[""]], colWidths=[189 * mm], rowHeights=[1 * mm], style=TableStyle([("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#b58a2a"))])))
     story.append(Spacer(1, 3 * mm))
     story.append(Paragraph("SCHOLAR'S REGISTER &amp; TRANSFER CERTIFICATE FORM", title_style))
-    story.append(Paragraph("(Chhatra Patravali tatha Sthanantaran Pramaan-Patra) - Office Copy, Not for Student", subtitle_style))
+    story.append(Paragraph("छात्र पंजिका तथा स्थानान्तरण प्रमाण-पत्र - कार्यालय प्रति", ParagraphStyle("SrHindiSubtitle", parent=subtitle_style, fontName="NotoSansDevanagari")))
     story.append(Spacer(1, 3 * mm))
 
     tc = getattr(student, "transfer_certificate", None)
 
     top_meta = [[
-        f"Admission File No.: {student.admission_no or ''}",
+        f"Admission / S.R. No.: {student.admission_no or student.legacy_sid or ''}",
         f"Transfer Certificate No.: {tc.tc_number if tc else ''}",
-        f"Book No.: {student.scholar_register_no or ''}",
+        f"Register Book No.: {student.scholar_register_no or ''}",
     ]]
     meta_t = Table(top_meta, colWidths=[63 * mm, 63 * mm, 63 * mm])
     meta_t.setStyle(TableStyle([
@@ -778,24 +778,27 @@ def _scholar_register_page_flowables(student, school_profile=None):
     caste_religion = " / ".join(part for part in [student.religion, student.caste] if part) or ""
     address = student.address_permanent or student.address_local or ""
 
+    def bilingual_label(english, hindi):
+        return Paragraph(f"{english}<br/><font name='NotoSansDevanagari'>{hindi}</font>", field_style)
+
     info_rows = [
-        [Paragraph("Name of the Scholar", field_style), Paragraph(student.full_name, value_style),
-         Paragraph("Nationality", field_style), Paragraph(student.nationality or "Indian", value_style)],
-        [Paragraph("Religion / Caste", field_style), Paragraph(caste_religion, value_style),
-         Paragraph("Category", field_style), Paragraph(student.category or "", value_style)],
-        [Paragraph("Father's Name", field_style), Paragraph(student.father_name or "", value_style),
-         Paragraph("Mother's Name", field_style), Paragraph(student.mother_name or "", value_style)],
-        [Paragraph("Date of Birth", field_style), Paragraph(student.date_of_birth.strftime("%d-%m-%Y") if student.date_of_birth else "", value_style),
-         Paragraph("Date of Birth (in words)", field_style), Paragraph(date_to_words(student.date_of_birth), value_style)],
-        [Paragraph("First Admission Date", field_style), Paragraph(student.admission_date.strftime("%d-%m-%Y") if student.admission_date else "", value_style),
-         Paragraph("Current Class", field_style), Paragraph(student.current_class.name if student.current_class else "", value_style)],
-        [Paragraph("Aadhaar Number", field_style), Paragraph(student.aadhaar_no or "", value_style),
-         Paragraph("Last Institution Attended", field_style), Paragraph(student.previous_school_name or "", value_style)],
-        [Paragraph("Address", field_style), Paragraph(address, value_style), "", ""],
+        [bilingual_label("Name of Scholar", "छात्र का नाम"), Paragraph(student.full_name, value_style),
+         bilingual_label("Nationality", "राष्ट्रीयता"), Paragraph(student.nationality or "Indian", value_style)],
+        [bilingual_label("Religion / Caste", "धर्म-जाती"), Paragraph(caste_religion, value_style),
+         bilingual_label("Category", "श्रेणी"), Paragraph(student.category or "", value_style)],
+        [bilingual_label("Father's Name", "पिता का नाम"), Paragraph(student.father_name or "", value_style),
+         bilingual_label("Mother's Name", "माता का नाम"), Paragraph(student.mother_name or "", value_style)],
+        [bilingual_label("Date of Birth", "जन्मतिथि"), Paragraph(student.date_of_birth.strftime("%d-%m-%Y") if student.date_of_birth else "", value_style),
+         bilingual_label("DOB in words", "शब्दों में"), Paragraph(date_to_words(student.date_of_birth), value_style)],
+        [bilingual_label("Admission Date", "प्रवेश तिथि"), Paragraph(student.admission_date.strftime("%d-%m-%Y") if student.admission_date else "", value_style),
+         bilingual_label("Current Class", "वर्तमान कक्षा"), Paragraph(student.current_class.name if student.current_class else "", value_style)],
+        [bilingual_label("Aadhaar Number", "आधार"), Paragraph(student.aadhaar_no or "", value_style),
+         bilingual_label("Last Institution", "पूर्व विद्यालय"), Paragraph(student.previous_school_name or "", value_style)],
+        [bilingual_label("Parent occupation", "व्यवसाय"), Paragraph("________________", value_style),
+         bilingual_label("Address", "पता"), Paragraph(address, value_style)],
     ]
     info_t = Table(info_rows, colWidths=[32 * mm, 62 * mm, 32 * mm, 63 * mm])
     info_t.setStyle(TableStyle([
-        ("SPAN", (1, 6), (3, 6)),
         ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#9aa5b1")),
         ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f7f8f8")),
         ("BACKGROUND", (2, 0), (2, -1), colors.HexColor("#f7f8f8")),
@@ -811,47 +814,63 @@ def _scholar_register_page_flowables(student, school_profile=None):
             student.current_class.name if student.current_class else None
         )
 
-    grid_header = ["Class", "Date of\nAdmission", "Date of\nPromotion", "Date of\nRemoval", "Cause of Removal", "Year", "Conduct", "Work", "Sign."]
+    grid_head_style = ParagraphStyle("SrGridHead", parent=field_style, fontSize=6, leading=7, alignment=1, fontName="Helvetica-Bold")
+    group_style = ParagraphStyle("SrGroup", parent=field_style, fontSize=5.4, leading=6, alignment=1, fontName="Helvetica-Bold")
+
+    def grid_heading(english, hindi=""):
+        hindi_line = f"<br/><font name='NotoSansDevanagari'>{hindi}</font>" if hindi else ""
+        return Paragraph(f"{english}{hindi_line}", grid_head_style)
+
+    grid_header = [
+        grid_heading("School"), grid_heading("Class", "कक्षा"), grid_heading("Admission", "प्रवेश"),
+        grid_heading("Promotion", "कक्षोन्नति"), grid_heading("Removal", "निष्कासन"),
+        grid_heading("Cause of Removal", "निष्कासन का कारण"), grid_heading("Year", "वर्ष"),
+        grid_heading("Conduct", "आचरण"), grid_heading("Work", "कार्य"), grid_heading("Sign.", "हस्ताक्षर"),
+    ]
     grid_data = [grid_header]
     for cls in _SCHOLAR_REGISTER_CLASS_ROWS:
-        row = [cls, "", "", "", "", "", "", "", ""]
+        group = ""
+        if cls == "NUR":
+            group = Paragraph("PRE-<br/>PRIMARY", group_style)
+        elif cls == "I":
+            group = Paragraph("PRIMARY", group_style)
+        elif cls == "VI":
+            group = Paragraph("J.H.<br/>SCHOOL", group_style)
+        row = [group, cls, "", "", "", "", "", "", "", ""]
         if tc_class_name and cls.upper() == tc_class_name.strip().upper():
             removal_date = tc.struck_off_date or tc.date_of_leaving
-            row[3] = removal_date.strftime("%d-%m-%Y") if removal_date else ""
-            row[4] = (tc.reason_for_leaving or "")[:28]
-            row[5] = tc.issue_date.strftime("%Y") if tc.issue_date else ""
-            row[6] = tc.get_conduct_display()
+            row[4] = removal_date.strftime("%d-%m-%Y") if removal_date else ""
+            row[5] = (tc.reason_for_leaving or "")[:28]
+            row[6] = tc.issue_date.strftime("%Y") if tc.issue_date else ""
+            row[7] = tc.get_conduct_display()
         grid_data.append(row)
 
     grid_t = Table(
         grid_data,
-        colWidths=[13 * mm, 21 * mm, 21 * mm, 21 * mm, 38 * mm, 13 * mm, 20 * mm, 20 * mm, 15 * mm],
+        colWidths=[14 * mm, 11 * mm, 20 * mm, 20 * mm, 20 * mm, 43 * mm, 12 * mm, 18 * mm, 17 * mm, 14 * mm],
         repeatRows=1,
     )
     grid_t.setStyle(TableStyle([
+        ("SPAN", (0, 1), (0, 3)),
+        ("SPAN", (0, 4), (0, 8)),
+        ("SPAN", (0, 9), (0, 11)),
         ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#9aa4b2")),
-        ("BACKGROUND", (0, 0), (-1, 0), brand_color),
-        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f1f5f4")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#17202a")),
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 0), (-1, -1), 7),
+        ("FONTNAME", (0, 1), (0, -1), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 6.3),
         ("ALIGN", (0, 0), (-1, -1), "CENTER"),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("TOPPADDING", (0, 0), (-1, -1), 5),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
     ]))
     story.append(grid_t)
     story.append(Spacer(1, 3 * mm))
 
     story.append(Paragraph(
-        "Class-wise admission and promotion history is not tracked in this system, so those cells are intentionally "
-        "blank and must be completed from the physical register. If the student has left, only verified removal "
-        "details from the Transfer Certificate are printed.",
-        note_style,
-    ))
-    story.append(Paragraph(
-        "Note: 1. If the student has studied classes VI to VIII, this should be mentioned in the Work column. "
-        "2. For a student leaving any class from IX to X, attendance/lectures should be entered on the back of "
-        "this form.",
+        "Note / टिप्पणी: 1. Classes VI to VIII का कार्य Work column में अंकित करें। "
+        "2. प्रत्येक entry को Admission Form एवं school record से सत्यापित करें।",
         note_style,
     ))
     story.append(Spacer(1, 8 * mm))
