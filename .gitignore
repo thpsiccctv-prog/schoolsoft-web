@@ -9,6 +9,8 @@ build/
 dist/
 build-latest/
 dist-latest/
+build-final/
+dist-final/
 *.egg-info/
 *.log
 debug-scripts/
