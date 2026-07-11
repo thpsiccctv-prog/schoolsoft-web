@@ -1,9 +1,11 @@
 from decimal import Decimal
+import math
 import os
 from io import BytesIO
 
 from django.conf import settings
 from django.utils import timezone
+from PIL import Image as PILImage
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
@@ -20,6 +22,252 @@ try:
     pdfmetrics.registerFontFamily('NotoSansDevanagari', normal='NotoSansDevanagari', bold='NotoSansDevanagari-Bold')
 except Exception:
     pass
+
+from reportlab.platypus.flowables import Flowable
+
+class StringFlowable(Flowable):
+    def __init__(self, text, font_name, font_size):
+        Flowable.__init__(self)
+        self.text = text
+        self.font_name = font_name
+        self.font_size = font_size
+        self.width = pdfmetrics.stringWidth(text, font_name, font_size)
+        self.height = font_size * 1.2
+    def draw(self):
+        self.canv.saveState()
+        self.canv.setFont(self.font_name, self.font_size)
+        self.canv.drawString(0, self.font_size * 0.25, self.text)
+        self.canv.restoreState()
+
+class VerticalTextFlowable(Flowable):
+    def __init__(self, text, font_name, font_size):
+        Flowable.__init__(self)
+        self.text = text
+        self.font_name = font_name
+        self.font_size = font_size
+        self.width = font_size * 1.2
+        self.height = pdfmetrics.stringWidth(text, font_name, font_size)
+    def draw(self):
+        self.canv.saveState()
+        self.canv.setFont(self.font_name, self.font_size)
+        self.canv.translate(self.width / 2.0 - self.font_size * 0.35, 0)
+        self.canv.rotate(90)
+        self.canv.drawString(0, 0, self.text)
+        self.canv.restoreState()
+
+
+# ReportLab draws each Devanagari character glyph in raw Unicode storage
+# order and does not perform OpenType shaping (no matra reordering, no
+# conjunct/ligature substitution). That makes real Hindi text - which relies
+# on both of those - render incorrectly as vector PDF text (this is a
+# long-documented ReportLab limitation for Indic/complex scripts, not a font
+# or encoding bug).
+#
+# First fix attempted: render via Pillow's ImageFont with layout_engine=RAQM.
+# Confirmed NOT viable - `PIL.features.check("raqm")` returned False on the
+# owner's machine (the Windows PyPI Pillow wheel does not bundle libraqm),
+# so that code silently fell back to Pillow's own unshaped BASIC layout,
+# which has the exact same matra-ordering bug as ReportLab's own rendering.
+#
+# Actual fix: a proper shaping pipeline built from two independent,
+# pip-installable-on-Windows libraries - `uharfbuzz` (HarfBuzz bindings) does
+# the SHAPING (turns the logical-order Unicode string into a sequence of
+# glyph IDs with correct positions/reordering/ligatures), and `freetype-py`
+# (FreeType bindings) RASTERIZES each of those specific glyph IDs from the
+# same font file into a bitmap. This shaping-engine + rasterizer split is
+# the standard architecture for correct complex-script text rendering and
+# does not depend on any particular Pillow build. Results are cached, since
+# the Scholar Register's Hindi labels are a small, fixed set reused on every
+# student page of a Full Register Book print.
+_devanagari_image_cache = {}
+
+
+def _render_devanagari_png(text, font_size_pt, bold=False, color=(23, 32, 42, 255)):
+    """Returns (png_bytes, width_pt, height_pt) for `text` shaped and
+    rendered via HarfBuzz + FreeType, or None if it failed for any reason
+    (libraries not installed, corrupt font, etc.) - callers must fall back
+    to the old vector-text rendering in that case rather than crashing PDF
+    generation."""
+    cache_key = (text, round(font_size_pt, 2), bold, color)
+    if cache_key in _devanagari_image_cache:
+        return _devanagari_image_cache[cache_key]
+
+    result = None
+    try:
+        import freetype
+        import uharfbuzz as hb
+
+        font_path = _bold_path if bold else _reg_path
+        scale = 3  # oversample for print-crisp output, then scale back down via the Image flowable's size
+        px_size = max(1.0, font_size_pt * scale)
+
+        with open(font_path, "rb") as fh:
+            font_bytes = fh.read()
+        hb_face = hb.Face(font_bytes)
+        hb_font = hb.Font(hb_face)
+        upem = hb_face.upem or 1000
+        hb_font.scale = (upem, upem)
+        try:
+            hb.ot_font_set_funcs(hb_font)
+        except Exception:
+            pass
+
+        buf = hb.Buffer()
+        buf.add_str(text)
+        buf.guess_segment_properties()
+        hb.shape(hb_font, buf)
+
+        unit_to_px = px_size / upem
+        ft_face = freetype.Face(font_path)
+        ft_face.set_pixel_sizes(0, max(1, int(round(px_size))))
+
+        pen_x = pen_y = 0.0
+        placements = []
+        min_x = min_y = float("inf")
+        max_x = max_y = float("-inf")
+        for info, pos in zip(buf.glyph_infos, buf.glyph_positions):
+            x_off = pos.x_offset * unit_to_px
+            y_off = pos.y_offset * unit_to_px
+            x_adv = pos.x_advance * unit_to_px
+            y_adv = pos.y_advance * unit_to_px
+
+            ft_face.load_glyph(info.codepoint, freetype.FT_LOAD_RENDER)
+            bitmap = ft_face.glyph.bitmap
+            if bitmap.width and bitmap.rows:
+                raw = bytes(bitmap.buffer)
+                if bitmap.pitch == bitmap.width:
+                    glyph_alpha = PILImage.frombytes("L", (bitmap.width, bitmap.rows), raw)
+                else:
+                    rows_data = bytearray()
+                    for r in range(bitmap.rows):
+                        start = r * bitmap.pitch
+                        rows_data.extend(raw[start:start + bitmap.width])
+                    glyph_alpha = PILImage.frombytes("L", (bitmap.width, bitmap.rows), bytes(rows_data))
+
+                gx = pen_x + x_off + ft_face.glyph.bitmap_left
+                gy = pen_y - y_off - ft_face.glyph.bitmap_top
+                placements.append((glyph_alpha, gx, gy))
+                min_x = min(min_x, gx)
+                min_y = min(min_y, gy)
+                max_x = max(max_x, gx + bitmap.width)
+                max_y = max(max_y, gy + bitmap.rows)
+
+            pen_x += x_adv
+            pen_y += y_adv
+
+        # A trailing space at the end of a Devanagari run (common at a
+        # Hindi->English transition, e.g. "...का कार्य " before "Work...")
+        # has no visible glyph, so the bounding box above - built only from
+        # glyphs that actually painted pixels - silently discards it. That
+        # trimmed the image's width and made the following Latin run's cell
+        # sit flush against it with no gap ("कार्यWork"). Extend the right
+        # edge to the final pen position so trailing whitespace still
+        # reserves its advance width in the rendered image.
+        if placements:
+            max_x = max(max_x, pen_x)
+
+        if placements:
+            pad = max(2, int(px_size // 6))
+            canvas_w = int(math.ceil(max_x - min_x)) + 2 * pad
+            canvas_h = int(math.ceil(max_y - min_y)) + 2 * pad
+            canvas = PILImage.new("RGBA", (canvas_w, canvas_h), (0, 0, 0, 0))
+            for glyph_alpha, gx, gy in placements:
+                px = int(round(gx - min_x)) + pad
+                py = int(round(gy - min_y)) + pad
+                color_tile = PILImage.new("RGBA", glyph_alpha.size, color)
+                canvas.paste(color_tile, (px, py), mask=glyph_alpha)
+
+            buf_out = BytesIO()
+            canvas.save(buf_out, format="PNG")
+            result = (buf_out.getvalue(), canvas_w / scale, canvas_h / scale)
+    except Exception:
+        result = None
+
+    _devanagari_image_cache[cache_key] = result
+    return result
+
+
+def _text_script_runs(text):
+    """Splits text into (is_devanagari, run_text) tuples, grouping
+    consecutive characters of the same class. A space attaches to whichever
+    run is already open rather than forcing a script switch, so a phrase
+    like "पूर्व विद्यालय" (Hindi with an internal space) or "VI to VIII"
+    (English with internal spaces) stays as ONE run. This is needed because
+    NotoSansDevanagari does not include Latin glyphs - ANY non-Devanagari
+    character (English letters, but also plain ASCII punctuation like "-"
+    or ":" that shows up inside labels such as "धर्म-जाती" or the mixed
+    English/Hindi note text) must be rendered with a normal Latin font or
+    it shows up as a missing-glyph box."""
+    runs = []
+    for ch in text:
+        if ch.isspace() and runs:
+            runs[-1][1] += ch
+            continue
+        is_deva = (not ch.isspace()) and (0x0900 <= ord(ch) <= 0x097F)
+        if runs and runs[-1][0] == is_deva:
+            runs[-1][1] += ch
+        else:
+            runs.append([is_deva, ch])
+    return [(is_deva, run_text) for is_deva, run_text in runs]
+
+
+def _devanagari_flowable(text, font_size_pt, bold=False, align=0):
+    """Flowable for text that may contain Devanagari, Latin, or both mixed
+    together. Devanagari runs are shaped/rasterized via HarfBuzz + FreeType
+    (_render_devanagari_png); everything else (English words, digits,
+    hyphens, colons, etc.) is rendered as a normal Helvetica Paragraph,
+    since the Devanagari font has no Latin glyphs to fall back on. Multiple
+    runs are laid out left-to-right in a borderless single-row Table so they
+    read as one continuous line. align: 0=left, 1=center, 2=right."""
+    latin_style = ParagraphStyle(
+        "DevanagariLatinRun", fontName="Helvetica-Bold" if bold else "Helvetica",
+        fontSize=font_size_pt, leading=font_size_pt * 1.25,
+    )
+    fallback_style = ParagraphStyle(
+        "DevanagariFallback", fontName="NotoSansDevanagari-Bold" if bold else "NotoSansDevanagari",
+        fontSize=font_size_pt, leading=font_size_pt * 1.25,
+    )
+
+    pieces = []
+    widths = []
+    for is_deva, run_text in _text_script_runs(text):
+        if not run_text.strip():
+            continue
+        if not is_deva:
+            sf = StringFlowable(run_text, latin_style.fontName, font_size_pt)
+            pieces.append(sf)
+            widths.append(sf.width + 2) # small buffer
+            continue
+        rendered = _render_devanagari_png(run_text, font_size_pt, bold=bold)
+        if rendered is None:
+            sf = StringFlowable(run_text, fallback_style.fontName, font_size_pt)
+            pieces.append(sf)
+            widths.append(sf.width + 2)
+        else:
+            png_bytes, w_pt, h_pt = rendered
+            pieces.append(Image(BytesIO(png_bytes), width=w_pt, height=h_pt))
+            widths.append(w_pt)
+
+    h_align = {0: "LEFT", 1: "CENTER", 2: "RIGHT"}.get(align, "LEFT")
+    if not pieces:
+        return Paragraph("", latin_style)
+    if len(pieces) == 1:
+        single = pieces[0]
+        if isinstance(single, Image):
+            single.hAlign = h_align
+        return single
+
+    row_t = Table([pieces], colWidths=widths)
+    row_t.setStyle(TableStyle([
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+        ("VALIGN", (0, 0), (-1, -1), "BOTTOM"),
+        ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+    ]))
+    row_t.hAlign = h_align
+    return row_t
 
 
 def build_fee_receipt_pdf(receipt, school_profile=None):
@@ -723,14 +971,13 @@ def _scholar_register_page_flowables(student, school_profile=None):
 
     brand_color = colors.HexColor("#0f766e")
     title_style = ParagraphStyle(
-        "SrTitle", parent=styles["Title"], fontSize=14, leading=17, alignment=1,
+        "SrTitle", parent=styles["Title"], fontSize=16, leading=19, alignment=1,
         textColor=brand_color, fontName="Helvetica-Bold", spaceAfter=1 * mm,
     )
-    subtitle_style = ParagraphStyle("SrSubtitle", parent=styles["Normal"], fontSize=9, leading=11, alignment=1)
-    small_style = ParagraphStyle("SrSmall", parent=styles["Normal"], fontSize=8, leading=10, alignment=1)
-    field_style = ParagraphStyle("SrField", parent=styles["Normal"], fontName="Helvetica", fontSize=7.2, leading=9)
-    value_style = ParagraphStyle("SrValue", parent=styles["Normal"], fontSize=8.5, leading=10, fontName="Helvetica-Bold")
-    note_style = ParagraphStyle("SrNote", parent=styles["Normal"], fontName="NotoSansDevanagari", fontSize=6.8, leading=8.5)
+    subtitle_style = ParagraphStyle("SrSubtitle", parent=styles["Normal"], fontSize=10, leading=12, alignment=1)
+    small_style = ParagraphStyle("SrSmall", parent=styles["Normal"], fontSize=9, leading=11, alignment=1)
+    field_style = ParagraphStyle("SrField", parent=styles["Normal"], fontName="Helvetica", fontSize=8, leading=10)
+    value_style = ParagraphStyle("SrValue", parent=styles["Normal"], fontSize=9.5, leading=11.5, fontName="Helvetica-Bold")
 
     school_name = school_profile.name if school_profile else "SCHOOLSOFT"
     logo_path = os.path.join(settings.BASE_DIR, "static", "core", "school_logo.png")
@@ -745,15 +992,15 @@ def _scholar_register_page_flowables(student, school_profile=None):
         contact_parts.append(f"Email: {school_profile.email}")
     if contact_parts:
         school_heading.append(Paragraph(" | ".join(contact_parts), small_style))
-    logo = Image(logo_path, 20 * mm, 20 * mm) if os.path.exists(logo_path) else ""
+    logo = Image(logo_path, 22 * mm, 22 * mm) if os.path.exists(logo_path) else ""
     header = Table([[logo, school_heading, ""]], colWidths=[25 * mm, 139 * mm, 25 * mm])
     header.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("ALIGN", (1, 0), (1, 0), "CENTER")]))
     story.append(header)
-    story.append(Table([[""]], colWidths=[189 * mm], rowHeights=[1 * mm], style=TableStyle([("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#b58a2a"))])))
-    story.append(Spacer(1, 3 * mm))
+    story.append(Table([[""]], colWidths=[189 * mm], rowHeights=[1.2 * mm], style=TableStyle([("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#b58a2a"))])))
+    story.append(Spacer(1, 4 * mm))
     story.append(Paragraph("SCHOLAR'S REGISTER &amp; TRANSFER CERTIFICATE FORM", title_style))
-    story.append(Paragraph("छात्र पंजिका तथा स्थानान्तरण प्रमाण-पत्र - कार्यालय प्रति", ParagraphStyle("SrHindiSubtitle", parent=subtitle_style, fontName="NotoSansDevanagari")))
-    story.append(Spacer(1, 3 * mm))
+    story.append(_devanagari_flowable("छात्र पंजिका तथा स्थानान्तरण प्रमाण-पत्र - कार्यालय प्रति", 10, align=1))
+    story.append(Spacer(1, 4 * mm))
 
     tc = getattr(student, "transfer_certificate", None)
 
@@ -765,21 +1012,24 @@ def _scholar_register_page_flowables(student, school_profile=None):
     meta_t = Table(top_meta, colWidths=[63 * mm, 63 * mm, 63 * mm])
     meta_t.setStyle(TableStyle([
         ("FONTNAME", (0, 0), (-1, -1), "Helvetica"),
-        ("FONTSIZE", (0, 0), (-1, -1), 8),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
         ("ALIGN", (0, 0), (0, -1), "LEFT"),
         ("ALIGN", (1, 0), (1, -1), "CENTER"),
         ("ALIGN", (2, 0), (2, -1), "RIGHT"),
         ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#9aa5b1")),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 3), ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4), ("TOPPADDING", (0, 0), (-1, -1), 4),
     ]))
     story.append(meta_t)
-    story.append(Spacer(1, 2 * mm))
+    story.append(Spacer(1, 3 * mm))
 
     caste_religion = " / ".join(part for part in [student.religion, student.caste] if part) or ""
     address = student.address_permanent or student.address_local or ""
 
     def bilingual_label(english, hindi):
-        return Paragraph(f"{english}<br/><font name='NotoSansDevanagari'>{hindi}</font>", field_style)
+        if not hindi:
+            return Paragraph(english, field_style)
+        hindi_flowable = _devanagari_flowable(hindi, field_style.fontSize - 0.5)
+        return [Paragraph(english, field_style), Spacer(1, 0.4 * mm), hindi_flowable]
 
     info_rows = [
         [bilingual_label("Name of Scholar", "छात्र का नाम"), Paragraph(student.full_name, value_style),
@@ -803,10 +1053,10 @@ def _scholar_register_page_flowables(student, school_profile=None):
         ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f7f8f8")),
         ("BACKGROUND", (2, 0), (2, -1), colors.HexColor("#f7f8f8")),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
     ]))
     story.append(info_t)
-    story.append(Spacer(1, 4 * mm))
+    story.append(Spacer(1, 5 * mm))
 
     tc_class_name = None
     if tc:
@@ -814,12 +1064,14 @@ def _scholar_register_page_flowables(student, school_profile=None):
             student.current_class.name if student.current_class else None
         )
 
-    grid_head_style = ParagraphStyle("SrGridHead", parent=field_style, fontSize=6, leading=7, alignment=1, fontName="Helvetica-Bold")
-    group_style = ParagraphStyle("SrGroup", parent=field_style, fontSize=5.4, leading=6, alignment=1, fontName="Helvetica-Bold")
+    grid_head_style = ParagraphStyle("SrGridHead", parent=field_style, fontSize=6.8, leading=8, alignment=1, fontName="Helvetica-Bold")
+    group_style = ParagraphStyle("SrGroup", parent=field_style, fontSize=6.2, leading=7, alignment=1, fontName="Helvetica-Bold")
 
     def grid_heading(english, hindi=""):
-        hindi_line = f"<br/><font name='NotoSansDevanagari'>{hindi}</font>" if hindi else ""
-        return Paragraph(f"{english}{hindi_line}", grid_head_style)
+        if not hindi:
+            return Paragraph(english, grid_head_style)
+        hindi_flowable = _devanagari_flowable(hindi, grid_head_style.fontSize - 0.3, align=1)
+        return [Paragraph(english, grid_head_style), Spacer(1, 0.3 * mm), hindi_flowable]
 
     grid_header = [
         grid_heading("School"), grid_heading("Class", "कक्षा"), grid_heading("Admission", "प्रवेश"),
@@ -831,11 +1083,11 @@ def _scholar_register_page_flowables(student, school_profile=None):
     for cls in _SCHOLAR_REGISTER_CLASS_ROWS:
         group = ""
         if cls == "NUR":
-            group = Paragraph("PRE-<br/>PRIMARY", group_style)
+            group = VerticalTextFlowable("Pre-Primary", group_style.fontName, group_style.fontSize)
         elif cls == "I":
-            group = Paragraph("PRIMARY", group_style)
+            group = VerticalTextFlowable("Primary", group_style.fontName, group_style.fontSize)
         elif cls == "VI":
-            group = Paragraph("J.H.<br/>SCHOOL", group_style)
+            group = VerticalTextFlowable("J.H. School", group_style.fontName, group_style.fontSize)
         row = [group, cls, "", "", "", "", "", "", "", ""]
         if tc_class_name and cls.upper() == tc_class_name.strip().upper():
             removal_date = tc.struck_off_date or tc.date_of_leaving
@@ -859,41 +1111,62 @@ def _scholar_register_page_flowables(student, school_profile=None):
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#17202a")),
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
         ("FONTNAME", (0, 1), (0, -1), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 0), (-1, -1), 6.3),
+        ("FONTSIZE", (0, 0), (-1, -1), 7.2),
         ("ALIGN", (0, 0), (-1, -1), "CENTER"),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("TOPPADDING", (0, 0), (-1, -1), 4),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("TOPPADDING", (0, 0), (-1, -1), 4.5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4.5),
     ]))
     story.append(grid_t)
+    story.append(Spacer(1, 4 * mm))
+
+    # Rendered as three separate single-line images (heading, then 1., then 2.)
+    # - not one wrapped Paragraph - so each mixed English/Hindi sentence gets
+    # correct Devanagari shaping via _devanagari_flowable, and each line stays
+    # comfortably under the page width. Matches the legacy form's layout:
+    # "Note / टिप्पणी :" on its own line, then the numbered instructions below.
+    story.append(_devanagari_flowable("Note / टिप्पणी :", 7.5, bold=True))
+    story.append(Spacer(1, 0.8 * mm))
+    story.append(_devanagari_flowable("1. Classes Nursery to VIII का कार्य Work column में अंकित करें।", 7.5))
+    story.append(Spacer(1, 0.8 * mm))
+    story.append(_devanagari_flowable("2. प्रत्येक entry को Admission Form एवं school record से सत्यापित करें।", 7.5))
     story.append(Spacer(1, 3 * mm))
 
-    story.append(Paragraph(
-        "Note / टिप्पणी: 1. Classes VI to VIII का कार्य Work column में अंकित करें। "
-        "2. प्रत्येक entry को Admission Form एवं school record से सत्यापित करें।",
-        note_style,
-    ))
-    story.append(Spacer(1, 8 * mm))
-
+    cert_style = ParagraphStyle("CertText", parent=field_style, fontSize=9, leading=11)
     cert_t = Table(
         [
-            ["I - Certified that the entries as records details of the student have been daily checked from the admission form and that they are complete."],
+            [Paragraph("I - Certified that the entries as records details of the student have been daily checked from the admission form and that they are complete.", cert_style)],
             ["Head of Institute: ______________________"],
-            ["II - Certified that the above student's Register has been posted up to the last of the student's leaving as required by the Department Rules & T.C. Issued."],
+            [Paragraph("II - Certified that the above student's Register has been posted up to the last of the student's leaving as required by the Department Rules & T.C. Issued.", cert_style)],
             ["Prepared by: ______________________          Date: ____________          Head of Institute: ______________________"],
         ],
         colWidths=[189 * mm],
     )
     cert_t.setStyle(TableStyle([
-        ("FONTSIZE", (0, 0), (-1, -1), 8),
-        ("TOPPADDING", (0, 0), (-1, -1), 4),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
         ("ALIGN", (0, 1), (0, 1), "RIGHT"),
         ("ALIGN", (0, 3), (0, 3), "RIGHT"),
     ]))
     story.append(cert_t)
 
     return story
+
+
+def _draw_scholar_register_border(canvas, doc):
+    """Thin outer black border, drawn just inside the page edge on every
+    page of the document - matches the traditional bound-ledger look of the
+    physical Scholar's Register (see the reference photos in
+    CODEX-HANDOFF.md). Applied to the individual page, the full book, and
+    the index so the whole document family looks consistent."""
+    canvas.saveState()
+    canvas.setStrokeColor(colors.HexColor("#17202a"))
+    canvas.setLineWidth(0.9)
+    margin = 5 * mm
+    page_width, page_height = A4
+    canvas.rect(margin, margin, page_width - 2 * margin, page_height - 2 * margin)
+    canvas.restoreState()
 
 
 def build_scholar_register_pdf(student, school_profile=None):
@@ -908,7 +1181,7 @@ def build_scholar_register_pdf(student, school_profile=None):
         title=f"Scholar Register - {student.full_name}",
     )
     story = _scholar_register_page_flowables(student, school_profile)
-    document.build(story)
+    document.build(story, onFirstPage=_draw_scholar_register_border, onLaterPages=_draw_scholar_register_border)
     buffer.seek(0)
     return buffer.getvalue()
 
@@ -1075,7 +1348,7 @@ def build_scholar_register_book_pdf(entries, book_no, from_no, to_no, school_pro
         story.append(PageBreak())
         story.extend(_scholar_register_page_flowables(student, school_profile))
 
-    document.build(story)
+    document.build(story, onFirstPage=_draw_scholar_register_border, onLaterPages=_draw_scholar_register_border)
     buffer.seek(0)
     return buffer.getvalue()
 
@@ -1094,7 +1367,7 @@ def build_scholar_register_index_pdf(entries, book_no, from_no, to_no, school_pr
         title=f"Scholar Register Index {book_no or f'{from_no}-{to_no}'}",
     )
     story = _scholar_register_index_flowables(entries, book_no, from_no, to_no, school_profile, standalone=True)
-    document.build(story)
+    document.build(story, onFirstPage=_draw_scholar_register_border, onLaterPages=_draw_scholar_register_border)
     buffer.seek(0)
     return buffer.getvalue()
 

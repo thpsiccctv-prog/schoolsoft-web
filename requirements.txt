@@ -2,6 +2,7 @@
 charset-normalizer==3.4.7
 Django==6.0.6
 dj-database-url==2.3.0
+freetype-py
 gunicorn==23.0.0
 pillow==12.3.0
 psycopg2-binary==2.9.10
@@ -9,4 +10,11 @@ python-dotenv==1.2.2
 reportlab==5.0.0
 sqlparse==0.5.5
 tzdata==2026.2
+uharfbuzz
 whitenoise==6.8.2
+
+# freetype-py and uharfbuzz are intentionally unpinned (new additions for
+# correct Devanagari text shaping in the Scholar Register PDF - see
+# CODEX-HANDOFF.md "Devanagari shaping via HarfBuzz + FreeType" checkpoint).
+# Pin exact versions once confirmed working, if strict reproducibility is
+# wanted later.

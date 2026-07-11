@@ -1929,6 +1929,242 @@ Not done / next session must:
 - Final desktop build: `dist-scholar-final/SchoolSoft/SchoolSoft.exe` (gitignored build output, not
   in the repo - rebuild via `build-desktop.bat` if this folder isn't present in a fresh checkout).
 
+### Hybrid bilingual redesign + visual polish pass (July 11, 2026, later same day)
+A separate session rebuilt `_scholar_register_page_flowables` as a hybrid of the old physical
+register's look and the new system's cleanliness: bilingual (English + Hindi/Devanagari) field
+labels via a `bilingual_label()` helper, PRE-PRIMARY/PRIMARY/J.H. SCHOOL row grouping in the class
+grid (`SPAN` on the leading "School" column), "Admission / S.R. No." + "Register Book No." +
+"Transfer Certificate No." identifiers matching the legacy form's numbering, a "Parent occupation"
+handwritten blank line, and the certification/signature block. The old English-only
+`_SCHOLAR_REGISTER_CLASS_ROWS`-based layout from the July 11 morning checkpoint above was replaced
+by this version - `build_scholar_register_pdf`, `build_scholar_register_book_pdf`, and
+`build_scholar_register_index_pdf` all still call the same shared `_scholar_register_page_flowables`
+so individual and full-book pages stay identical, as before.
+
+Owner reviewed a rendered sample against the original 3 reference PDFs and rated it ~8.5/10,
+asking for 3 specific polish items before final print - implemented directly in `core/pdf.py`:
+1. **Size**: all `_scholar_register_page_flowables` font sizes bumped ~12-15% (title 14->16,
+   subtitle 9->10, field labels 7.2->8, values 8.5->9.5, grid header 6->6.8, grid body 6.3->7.2,
+   certification block 8->9, etc.), logo 20mm->22mm, brand accent bar 1mm->1.2mm.
+2. **Page balance**: increased padding on the info table, class grid, and certification table
+   (roughly +50-100% more TOP/BOTTOMPADDING), and increased the spacers between sections
+   (particularly before the certification block, 8mm->12mm) so the page fills out with less
+   trailing white space at the bottom - this was the actual mechanism (bigger text + more padding
+   consumes more vertical space), not a page-height/margin change.
+3. **Outer border**: new `_draw_scholar_register_border(canvas, doc)` - draws a thin
+   (0.9pt) black rectangle 5mm inside the page edge on every page, via `SimpleDocTemplate.build(...,
+   onFirstPage=..., onLaterPages=...)` (the same canvas-callback pattern already used elsewhere in
+   `pdf.py` for receipt watermarks and due-report footers). Wired into all three Scholar Register
+   PDF builders so the individual page, the full book (cover + index + every student page), and the
+   Index-Only PDF all get the same official bound-ledger framing.
+
+Verified: `manage.py test core` -> **85/85 passed** after this polish pass (confirms the
+font-size/spacing/border changes didn't break anything - purely visual, no logic touched).
+
+### Two real bugs found on owner review, fixed same day
+Owner rendered a real sample after the polish pass above and reported two problems, with a
+screenshot: (1) the individual page now spilled onto a second page, and (2) "Devanagari mein sab
+galat likha hai" - the Hindi text was fundamentally wrong, not just a typo.
+
+1. **Page overflow (my own regression)**: the padding/spacer increases in the polish pass above
+   were too aggressive - e.g. the grid's TOPPADDING/BOTTOMPADDING went from 4 to 6.5, which across
+   12 rows alone added ~60mm; combined with the info table and certification block padding
+   increases and the enlarged pre-certification spacer (8mm -> 12mm), total added height was
+   120mm+, pushing a page that previously fit with room to spare into a second page. Fixed by
+   dialing back to more modest deltas from the ORIGINAL (pre-polish) values while keeping the
+   font-size increase: info table padding 3->4 (was going to 5), grid padding 4->4.5 (was going to
+   6.5), certification block padding 4->5 (was going to 8), pre-certification spacer 8mm->7mm (was
+   going to 12mm).
+2. **Devanagari rendering - a real, deeper bug, not a typo**: diagnosed and confirmed the font
+   files (`NotoSansDevanagari-Regular/Bold.ttf`) are present and correctly registered - this is
+   NOT a missing-font issue. The actual cause: ReportLab draws each Devanagari character glyph in
+   raw Unicode storage order and does not perform OpenType shaping. Devanagari needs this for two
+   reasons ReportLab can't do: (a) matras like "ि" are stored after their consonant in Unicode but
+   must display before it, and (b) conjunct consonants (जुड़े हुए अक्षर, e.g. in जन्मतिथि, प्रवेश,
+   कक्षोन्नति) require ligature glyph substitution via the font's GSUB table. This is a
+   long-documented ReportLab limitation for Indic/complex scripts, unrelated to the earlier
+   em-dash/curly-quote encoding fix (that was a plain-ASCII vs non-ASCII glyph availability issue
+   in Helvetica - a completely different class of bug).
+   - **Fix**: `core/pdf.py` gained `_render_devanagari_png(text, font_size_pt, bold=False)` and
+     `_devanagari_flowable(text, font_size_pt, bold=False, align=0)`. These render Devanagari text
+     to a small transparent PNG via Pillow's `ImageFont.truetype(..., layout_engine=Layout.RAQM)`
+     (Pillow performs correct complex-script shaping when built with libraqm - checked via
+     `PIL.features.check("raqm")` first; the project's pinned `Pillow==12.3.0` wheel is expected to
+     have it). The PNG is embedded as a ReportLab `Image` flowable instead of vector text, so
+     matras and conjuncts render correctly regardless of ReportLab's own shaping limitations.
+     Results are cached in `_devanagari_image_cache` (keyed on text/size/bold/color) since the
+     Scholar Register's Hindi labels are a small, fixed set reused on every page of a Full
+     Register Book print - this avoids re-rendering the same ~15-20 label images per student.
+   - If PNG rendering fails for any reason (Pillow without raqm, corrupt font, etc.),
+     `_devanagari_flowable` falls back to the OLD vector-text `Paragraph` rendering rather than
+     crashing PDF generation - degraded Hindi rendering is an acceptable failure mode, a 500 error
+     generating a student's Scholar Register PDF is not.
+   - Every Devanagari usage in `_scholar_register_page_flowables` was converted: `bilingual_label()`
+     (returns `[Paragraph(english), Spacer, hindi_image]` - ReportLab table cells natively support a
+     list of flowables stacked vertically, no nested-table hack needed), `grid_heading()` (same
+     pattern for the class-grid header row), the Hindi subtitle line (single centered Image), and
+     the mixed English/Hindi note paragraph (split into its existing two numbered sentences and
+     rendered as two separate single-line images - Pillow+raqm shapes mixed-script runs correctly
+     in one call, splitting was only needed to keep each line under the page width without needing
+     to implement manual line-wrapping for a raster image).
+   - **Known limitation, disclosed to the owner**: this session's sandbox cannot render or visually
+     inspect a PDF, so this fix has NOT been visually verified by Claude - only reasoned through
+     technically (font files present, Pillow version checked, reportlab API usage checked). The
+     owner needs to re-render a sample and confirm matras/conjuncts now look correct before this is
+     considered closed.
+
+Not done / next session must:
+1. Visually re-render a sample (single student + a small book) and confirm: (a) the page fits on
+   one A4 sheet again, (b) Devanagari text (labels, subtitle, note lines) now displays correctly -
+   matras before their consonant, conjuncts properly ligated, not the previous broken rendering.
+2. Run `manage.py test core` - the existing Scholar Register PDF tests (`Month2DocumentTests`,
+   `ScholarRegisterBookTests`) exercise this code path already (every PDF generation now goes
+   through `_devanagari_flowable`), so a crash here would show up as a test failure, but they only
+   assert HTTP 200 + content-type, not visual correctness - visual check above is still required.
+3. `collectstatic` + `build-desktop.bat` + full EXE rebuild once the owner confirms both fixes look
+   right - this checkpoint has NOT been built into an EXE yet.
+4. If Pillow's Windows wheel on the owner's machine turns out NOT to have raqm compiled in, the
+   fallback path will silently return to the old broken-looking vector text - watch for this
+   specifically when reviewing the render (if Hindi still looks wrong, check `PIL.features.check("raqm")`
+   in a `python manage.py shell` on the owner's machine before assuming the fix itself is wrong).
+
+### Devanagari shaping via HarfBuzz + FreeType (July 11, 2026, later same day)
+**Confirmed the Pillow+raqm fix above did NOT work.** Owner rendered a real book page and reported
+"पूर्व विद्यालय" showing as "पूर्व वदि्यालय" - the "ि" matra visibly attached to the wrong
+consonant (द instead of व), the same class of bug as before the Pillow fix. Diagnosed via a direct
+check on the owner's machine: `python -c "from PIL import features; print(features.check('raqm'))"`
+returned **False**. Pillow==12.2.0 installed (project pins 12.3.0 in requirements.txt - a version
+drift worth investigating separately) does not have libraqm compiled in on this Windows install,
+so the earlier fix's `ImageFont.truetype(..., layout_engine=Layout.RAQM)` was silently falling back
+to Pillow's own `Layout.BASIC`, which has no complex-script shaping either - functionally
+identical to ReportLab's own broken rendering, just now baked into a static image.
+
+**Real fix implemented**: replaced the Pillow-based renderer with a proper shaping pipeline that
+does not depend on any particular Pillow build:
+- `uharfbuzz` (HarfBuzz Python bindings) performs the SHAPING step - turns the logical-order
+  Devanagari Unicode string into a sequence of glyph IDs with correct reordering (matras) and
+  ligature substitution (conjuncts), each with a computed advance/offset.
+- `freetype-py` (FreeType Python bindings) performs the RASTERIZING step - loads the SAME font
+  file and renders each of those specific glyph IDs (via `Face.load_glyph(glyph_id, ...)`, not by
+  Unicode character) into an 8-bit grayscale bitmap.
+- `core/pdf.py` `_render_devanagari_png()` was rewritten to: shape with `hb.Buffer` +
+  `hb.shape()`, walk `buf.glyph_infos`/`buf.glyph_positions`, rasterize each glyph with FreeType,
+  and composite all glyph bitmaps (as alpha masks over a solid color) onto one transparent PNG
+  canvas at 3x oversampling for print crispness. Both libraries are imported lazily inside the
+  function (not at module level) so the rest of the app doesn't break if they're missing before
+  `pip install`; any failure anywhere in the pipeline falls back to `None`, and
+  `_devanagari_flowable()` (unchanged) falls back to the old vector-text `Paragraph` rendering in
+  that case, same defensive contract as before.
+- `requirements.txt`: added `freetype-py` and `uharfbuzz`, intentionally left UNPINNED (new
+  additions, exact version numbers not verified against what's actually installable - pin later
+  once confirmed working).
+- This is the standard, well-established architecture for correct complex-script PDF text
+  rendering (shaping engine + separate rasterizer) - the same fundamental approach real tools like
+  browsers and word processors use, just assembled from lower-level pieces here since neither
+  ReportLab nor the available Pillow build does it out of the box.
+
+**Still not verified**: Claude's sandbox cannot execute Python or render a PDF this entire session,
+so this HarfBuzz/FreeType code has been reasoned through carefully (API usage matches both
+libraries' standard reference patterns) but not run even once. This is a bigger, more novel piece
+of code than the Pillow attempt - treat the next verification round as the real test.
+
+Not done / next session must:
+1. `pip install -r requirements.txt` (or `pip install freetype-py uharfbuzz` directly) inside the
+   venv - these are new dependencies, nothing will work until they're installed.
+2. Re-render the same sample that showed "वदि्यालय" and confirm it now reads "विद्यालय" correctly,
+   plus spot-check a word with a real conjunct (e.g. "जन्मतिथि", "प्रवेश", "वर्तमान") for proper
+   ligature formation, not just matra position.
+3. Run `manage.py test core` - if `uharfbuzz`/`freetype-py` fail to import or the shaping pipeline
+   throws for some unexpected reason, the fallback path means PDFs should still generate (just with
+   the old rendering) rather than the test suite failing outright - but confirm this.
+4. `collectstatic` + `build-desktop.bat` + full EXE rebuild - watch specifically for whether
+   PyInstaller correctly bundles `uharfbuzz`'s and `freetype-py`'s compiled extensions/DLLs; this
+   project has a history of PyInstaller packaging surprises (see "Desktop EXE" section) and this is
+   a new, untested risk point for that build.
+
+### Verified working, one real follow-up bug found and fixed (July 11, 2026, same day)
+Owner installed the new dependencies and ran the full suite: **85/85 passed**. Rendered a real
+sample and confirmed the HarfBuzz+FreeType shaping itself is correct - matras and conjuncts
+(including "विद्यालय", "जन्मतिथि", "प्रवेश", "वर्तमान") now display properly.
+
+A second, real bug surfaced from that same render: English words in the mixed English/Hindi
+"Note / टिप्पणी" lines at the bottom of the page showed as missing-glyph boxes ("tofu"). Root
+cause: `NotoSansDevanagari.ttf` has no Latin glyphs, and `_render_devanagari_png()` was being
+called on the ENTIRE mixed-script note string, so HarfBuzz/FreeType had no glyph to draw for the
+English letters.
+
+**Fix, applied inside `_devanagari_flowable()` itself (not just the note-line call sites), so
+every caller benefits automatically**: new `_text_script_runs(text)` splits text into
+`(is_devanagari, run_text)` tuples by grouping consecutive same-class characters (Devanagari
+Unicode block `U+0900-U+097F` vs everything else), with whitespace attaching to whichever run is
+already open so a phrase like "पूर्व विद्यालय" or "VI to VIII" doesn't get needlessly fragmented
+at every space. `_devanagari_flowable()` now renders each Devanagari run through the HarfBuzz+
+FreeType pipeline as before, and each non-Devanagari run (English words, but also plain ASCII
+punctuation like the hyphen in "धर्म-जाती" or the colon in the note text - anything NotoSansDevanagari
+doesn't have a glyph for) through a normal Helvetica `Paragraph`. Multiple runs are assembled into
+a borderless single-row `Table` (auto-sized columns, `VALIGN=BOTTOM`, zero padding) so they read as
+one continuous line. Single-run text (the common case - most labels are pure Devanagari) still
+returns a plain `Image` or `Paragraph` with no extra table wrapper, unchanged from before.
+Call sites (`bilingual_label`, `grid_heading`, the subtitle line, both note lines) needed NO
+changes - the fix is entirely internal to `_devanagari_flowable`.
+
+Not done / next session must:
+1. Re-render the same sample and confirm the "Note / टिप्पणी" lines now show English words in
+   Helvetica (not boxes) while the Hindi portions keep their correct HarfBuzz-shaped rendering,
+   sitting on the same line.
+2. Also spot-check "Religion / Caste" (धर्म-जाती, contains a hyphen) now renders correctly rather
+   than showing a box where the hyphen should be - this exact bug existed there too before this fix,
+   just not yet reported/noticed.
+3. Run `manage.py test core` again to confirm 85/85 still passes after this change.
+4. Once visually confirmed: `collectstatic` + `build-desktop.bat` + full EXE rebuild - the
+   Devanagari work as a whole has still not been shipped to an EXE build yet.
+
+### Layout polish round 2 - vertical group labels, note gaps, cert wrapping (July 11, 2026, same day)
+A separate session (Codex) made 3 more fixes after visual review, verified by Claude against the
+actual code afterward (not just trusted from the relayed summary):
+- **Note-line gaps**: `_devanagari_flowable`'s mixed-run `Table` used `colWidths=[None]*len(pieces)`,
+  which let ReportLab stretch it to the frame's full width and left large gaps between short runs.
+  Fixed with a new `StringFlowable` (a `Flowable` subclass drawing exact-width text via
+  `pdfmetrics.stringWidth`, used for the non-Devanagari runs instead of `Paragraph`) and explicit
+  per-piece `colWidths`, so the row packs tightly with no stretch.
+- **"II - Certified..." cut off at the page edge**: was a raw string in a table cell (no wrapping).
+  Now wrapped in `Paragraph(..., cert_style)` so it wraps within the fixed 189mm column width.
+- **Vertical "Pre-Primary / Primary / J.H. School" group labels**: new `VerticalTextFlowable`
+  (`Flowable` subclass with width/height swapped and a `canvas.rotate(90)` in `draw()`) replaces the
+  old stacked `<br/>`-Paragraph, matching the reference physical register's rotated side-labels.
+- Both new flowable classes have no explicit `setFillColor` call (rely on the canvas's default
+  black) - low risk given `saveState/restoreState` wrapping, but worth a glance if any group label
+  or Latin run ever appears in the wrong color.
+- Reduced `cert_t` padding (5->3) and the note-to-cert spacer (7mm->3mm) to compensate for the
+  height the new `Paragraph`-based wrapping added, after it pushed the page to 2 pages again.
+- Verified: 85/85 tests still pass. NOT yet visually re-confirmed by the owner at the time of this
+  entry - the vertical-text centering and final page-fit still need a real render/screenshot check.
+
+### Owner visual review confirmed round 2 mostly works, one more real bug found (July 11, 2026)
+Owner rendered the layout-polish-round-2 build: single A4 page confirmed, vertical group labels
+render correctly, matras/conjuncts still correct. One remaining bug reported: words glued together
+with no space at a Hindi->English transition inside the mixed note lines - "का कार्यWork" instead
+of "का कार्य Work", "प्रत्येकentry" instead of "प्रत्येक entry". English->Hindi transitions were
+fine (space preserved); only Devanagari->Latin transitions lost the space.
+
+**Root cause**: `_render_devanagari_png`'s canvas bounding box was computed only from glyphs that
+actually painted a visible bitmap. A trailing space at the end of a Devanagari run (e.g. "कार्य ")
+advances the pen but paints nothing, so that advance was silently dropped from the image's width -
+the rendered PNG was trimmed flush to the last visible glyph, and with zero cell padding in
+`_devanagari_flowable`'s row table, the next (Latin) run's cell sat directly against it.
+
+**Fix**: after the glyph-placement loop, extend `max_x` to `max(max_x, pen_x)` (the final pen
+position, which includes any trailing space's advance) before computing the canvas width - one
+line, in `core/pdf.py` `_render_devanagari_png`. Fixes this for every mixed-script string, not just
+the two note lines (anywhere a Devanagari run is followed by Latin text with a space between them).
+
+Not done / next session must:
+1. Re-render and confirm "का कार्य Work" and "प्रत्येक entry" (and the rest of both note lines) now
+   show a normal space at every script transition.
+2. Run `manage.py test core` to reconfirm 85/85 after this change.
+3. `collectstatic` + `build-desktop.bat` + full EXE rebuild once the owner confirms - the entire
+   Devanagari/layout-polish body of work is still un-shipped to an EXE.
+
 ## Scholar Register Hybrid Legacy-Style Redesign (July 11, 2026)
 
 Owner compared the legacy physical/VB Scholar Register page with the clean SchoolSoft version and
@@ -1951,3 +2187,42 @@ typography and reliable A4 output.
 - Added compact official notes and retained certification/signature sections.
 - Visual QA: generated a one-page A4 sample; mixed-font labels and grouped rows fit the page.
 - Verification: individual + full-book targeted tests passed (8/8), then full suite passed 85/85.
+
+## Scholar Register - Note text fixes + EXE rebuild shipped (July 11, 2026)
+
+Owner did a final visual review of the trailing-space fix (previous checkpoint) via screenshot and
+confirmed it rendered correctly ("wah"). Two small content/layout fixes followed, then the whole
+Devanagari/layout-polish body of work was finally shipped to a rebuilt EXE.
+
+1. **"Work" column note was factually wrong.** Note said "Classes VI to VIII का कार्य Work column
+   में अंकित करें" (only Junior High). Owner confirmed via `AskUserQuestion` that the real rule is
+   Nursery to VIII (all classes) - text corrected in `core/pdf.py` `_scholar_register_page_flowables`
+   to "Classes Nursery to VIII...". This is a content/business-rule fix, not a rendering bug.
+2. **Note heading layout**: owner wanted "Note / टिप्पणी :" on its own bold line, with "1." and "2."
+   each on their own line below it (matching the legacy form), instead of the heading being glued to
+   the start of line 1. Changed from two `_devanagari_flowable()` calls to three (heading rendered
+   bold via `bold=True`, then "1. ..." then "2. ..."), each separated by a `0.8mm` Spacer. Confirmed
+   correct via owner screenshot: bold "Note / टिप्पणी :" heading line, then two numbered lines below,
+   full page still fits on one A4 page with the outer border intact.
+3. **Shipped**: `manage.py test core` reconfirmed 85/85 (`Ran 85 tests in 107.682s OK`), then
+   `collectstatic` (0 new/changed static files - expected, PDF logic only) and `build-desktop.bat`
+   completed with no errors (`BUILD OK: dist\SchoolSoft\SchoolSoft.exe`). Verified independently
+   (not just trusting the relayed log) via `Glob` on `dist/SchoolSoft/**` from this session -
+   `SchoolSoft.exe` and its `_internal` payload (Django, PIL, sqlite dbs, migrations, etc.) are
+   genuinely present on disk.
+
+**Status**: the entire Scholar Register hybrid redesign + HarfBuzz/FreeType Devanagari shaping body
+of work (spanning the "Hybrid bilingual redesign", "Devanagari shaping via HarfBuzz + FreeType",
+"Layout polish round 2", trailing-space fix, and this checkpoint) is now fully implemented, tested,
+and shipped in `dist\SchoolSoft\SchoolSoft.exe`. No further action needed unless the owner finds a
+new issue on real-world use of the rebuilt EXE.
+
+Not done / next session should be aware of:
+- `requirements.txt` still has `freetype-py` and `uharfbuzz` unpinned intentionally (see earlier
+  checkpoint) - pin exact versions later if strict reproducibility becomes a concern.
+- Pillow version drift (12.2.0 installed vs 12.3.0 pinned in requirements.txt) noted earlier in this
+  project was never resolved - low priority, only matters if a Pillow-version-sensitive bug appears.
+- Previously-deferred, still-untouched items remain deferred: Hindi/Bilingual UI (superseded by this
+  actual Devanagari PDF work, not the general UI), paid WhatsApp API, Inventory stock-in, Family
+  Ledger fuzzy matching, Render DB expiry (~Aug 1 2026), custom domain, exposed DB credential
+  rotation.
