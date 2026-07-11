@@ -7,6 +7,8 @@ staticfiles/
 media/
 build/
 dist/
+build-latest/
+dist-latest/
 *.egg-info/
 *.log
 debug-scripts/
