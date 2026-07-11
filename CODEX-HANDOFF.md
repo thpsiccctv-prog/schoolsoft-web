@@ -1821,13 +1821,96 @@ verification.
 - Empty TC rows (exam result, subjects, fees paid through, attendance, application/leaving reason)
   are missing data, not layout defects; complete applicable entries before official issue.
 
-### Pending discussion: full physical Scholar Register book
-- Owner wants one print job per 100-number book, plus manual From/To override, a cover/label page,
-  an index, and individual numbered Scholar Register pages.
-- Current range print only produces the index/list. It does **not** yet produce cover + index +
-  100 individual pages.
-- Proposed correct output for Book 23: cover (school/UDISE/book/range), index including active and
-  inactive students, then SID 2201-2300 in order; missing SID slots should have blank numbered
-  pages if the owner confirms the physical-ledger interpretation.
-- Do not implement the full batch until the owner approves the plan below and confirms how missing
-  numbers and historical class rows must be handled.
+### Pending discussion: full physical Scholar Register book — RESOLVED, see checkpoint below
+The 4 open questions (missing SID handling, which statuses to include, cover format, index
+content) were put to the owner via explicit multiple-choice questions and decided on 2026-07-11.
+See "Full Scholar Register Book (July 11, 2026)" checkpoint below for the decisions and the
+implementation built on top of them.
+
+## Full Scholar Register Book (July 11, 2026)
+
+Implements the "Full Register Book" print job discussed above: one PDF per book (or custom
+range) containing a cover page, an index, and one individual Scholar Register page per student
+that actually exists in that range - built on top of the existing per-student
+`build_scholar_register_pdf` (unchanged in behavior/output for the single-student route).
+
+### Owner decisions (via AskUserQuestion, all four answered explicitly)
+1. **Missing SID/Admission numbers**: skip entirely - no blank placeholder page for a number with
+   no student record. (Owner chose this over the "blank numbered page" option I'd recommended for
+   audit-continuity reasons - honoring the owner's explicit choice.)
+2. **Which statuses to include**: all of them - active, inactive, and TC-issued students that fall
+   in the number range are all included. A register is a permanent ledger; leaving school doesn't
+   remove a student's page.
+3. **Cover page**: minimal - school identity (name/UDISE/recognition), Book No., admission-number
+   range, and Prepared-by/Verified-by signature lines. No summary-stats table.
+4. **Index page**: SID, Name, Class, Status columns. Missing numbers still get a row, shown as
+   "Not Allotted" (status column) so gaps are visibly intentional, not typos - even though they
+   get no individual page in the book itself.
+
+### Implementation
+- `core/pdf.py`:
+  - Refactored `build_scholar_register_pdf` to extract the actual page layout into
+    `_scholar_register_page_flowables(student, school_profile)`, a reusable flowables-list builder
+    (no `SimpleDocTemplate`/`buffer` of its own). `build_scholar_register_pdf` is now a thin
+    wrapper that calls it and builds a single-page PDF - unchanged public behavior.
+  - New `_scholar_register_cover_flowables(book_no, from_no, to_no, entries, school_profile)` -
+    school identity, "SCHOLAR'S REGISTER" title, Book No./range, a coverage line ("N of M numbers
+    in this range have student records..."), and signature lines.
+  - New `_scholar_register_index_flowables(entries, book_no, from_no, to_no, school_profile,
+    standalone=False)` - builds the SID/Name/Class/Status table; `standalone=True` (used by the
+    Index-Only PDF, which has no cover page before it) also renders the school header block.
+    Status per row: `"Active"` / `"TC Issued"` (inactive + has a `transfer_certificate`) /
+    `"Inactive"` (inactive, no TC) / `"Not Allotted"` (no student for that SID).
+  - New `build_scholar_register_book_pdf(entries, book_no, from_no, to_no, school_profile=None)` -
+    cover + `PageBreak()` + index + one `PageBreak()` + `_scholar_register_page_flowables(...)` per
+    student that exists in `entries` (skips `None` entries - no page for missing numbers).
+  - New `build_scholar_register_index_pdf(entries, book_no, from_no, to_no, school_profile=None)` -
+    just the standalone index, no cover, no individual pages ("Index Only" print action).
+- `core/views.py`:
+  - `_resolve_book_range(request)` - reads `book`/`from_no`/`to_no` GET params (same names as the
+    existing Print Register page's range controls). A `book` number auto-fills From/To
+    (`(book-1)*100+1` to `book*100`) if they're not explicitly given. Returns `(None, None, None)`
+    if no usable contiguous range results - the full book only makes sense for a fixed range,
+    unlike the existing filtered student list.
+  - `_scholar_register_book_entries(from_no, to_no)` - one `(sid, student_or_None)` tuple per
+    number in range, built from `Student.objects.filter(legacy_sid__gte=..., legacy_sid__lte=...)`
+    (uses `legacy_sid`, the same field the existing Book/From/To range filter on the student list
+    print already uses - kept consistent rather than switching to `admission_no`, which is a
+    free-text `CharField` and not guaranteed numeric/contiguous for every record).
+  - `scholar_register_book_pdf(request)` / `scholar_register_index_pdf(request)` - both call
+    `_resolve_book_range`, redirect back to `student_register` with an error message if no valid
+    range was given, otherwise build entries and return the PDF inline.
+- `core/urls.py`: `students/register/scholar-book/pdf/` (`scholar_register_book_pdf`) and
+  `students/register/scholar-book/index/pdf/` (`scholar_register_index_pdf`), both gated on the
+  `students` module like the rest of this feature.
+- `templates/core/student_register_report.html`: two new buttons inside the existing range form,
+  using `formaction`/`formtarget="_blank"` (HTML5 multi-submit-button pattern) so they reuse
+  whatever Book No./From/To values are currently in the form without any extra JS - "Scholar
+  Register Index" (teal) and "Full Register Book" (gold), both open the PDF in a new tab.
+- `core/tests.py`: new `ScholarRegisterBookTests` (7 tests), inserted right after
+  `Month2DocumentTests` (before `AccountsTests`):
+  - `test_book_entries_marks_missing_sid_as_none` / `test_book_entries_includes_every_status` -
+    unit tests directly on `_scholar_register_book_entries`, the actual decision logic, rather than
+    trying to parse generated PDF bytes (no PDF-parsing library is used anywhere else in this
+    test file - kept consistent).
+  - `test_book_pdf_requires_a_range` / `test_index_pdf_requires_a_range` - no book/from/to ->
+    redirects to `student_register`.
+  - `test_book_pdf_with_explicit_from_to_range` / `test_book_pdf_with_book_number_autofills_range`
+    - both entry points into `_resolve_book_range` produce a 200 PDF.
+  - `test_index_pdf_with_no_students_in_range_still_renders` - an entirely empty range (no
+    students at all) still produces a valid PDF (every row "Not Allotted") rather than crashing.
+
+Not done / next session must:
+1. Run `manage.py test core` to confirm the 7 new `ScholarRegisterBookTests` pass alongside the
+   full suite (last known count before this checkpoint: 77+3 individual Scholar Register tests).
+2. No new migration needed - this checkpoint only adds views/URLs/PDF generators/tests, no model
+   changes.
+3. Manually run a real book (e.g. Book 23) through both "Scholar Register Index" and "Full
+   Register Book" from the Print Register page and visually verify against the 3 reference PDFs
+   the owner originally uploaded - especially that missing SIDs show as "Not Allotted" in the
+   index and are silently skipped (no blank page) in the full book.
+4. `collectstatic` + `build-desktop.bat` + full EXE close/reopen to ship this to desktop.
+5. If a book has zero students in its range, `build_scholar_register_book_pdf` still runs (cover +
+   index with every row "Not Allotted", no individual pages after) - confirmed by
+   `test_index_pdf_with_no_students_in_range_still_renders` for the index route; worth a quick
+   manual look at the full-book route too since it's a slightly unusual empty-book document.

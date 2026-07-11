@@ -118,6 +118,8 @@
             <label>From SID<input id="from-no" name="from_no" inputmode="numeric" value="{{ from_no }}"></label>
             <label>To SID<input id="to-no" name="to_no" inputmode="numeric" value="{{ to_no }}"></label>
             <button type="submit" class="btn-print">Load Range</button>
+            <button type="submit" formaction="{% url 'core:scholar_register_index_pdf' %}" formtarget="_blank" class="btn-print" style="background:#0f766e;" title="Sirf SID/Naam/Class/Status ki table - koi individual page nahi">Scholar Register Index</button>
+            <button type="submit" formaction="{% url 'core:scholar_register_book_pdf' %}" formtarget="_blank" class="btn-print" style="background:#b58a2a;" title="Cover + Index + har existing student ka Scholar Register page - Book No. ya From/To SID zaroori hai">Full Register Book</button>
         </form>
         <a href="javascript:history.back()" class="btn-back">Back</a>
         <button onclick="window.print()" class="btn-print">Print Register</button>

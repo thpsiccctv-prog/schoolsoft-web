@@ -932,8 +932,84 @@ class Month2DocumentTests(AuthenticatedClientMixin, TestCase):
         self.assertEqual(log.reason, "Wrong amount entered")
         self.assertEqual(log.changes["received_amount"]["before"], "100.00")
         self.assertEqual(log.changes["received_amount"]["after"], "150.00")
-        
-        
+
+
+class ScholarRegisterBookTests(AuthenticatedClientMixin, TestCase):
+    """Full physical Scholar Register book print (2026-07-11 checkpoint).
+    Owner's explicit decisions: a missing SID in the range gets NO
+    individual page (skipped entirely, not a blank placeholder) but DOES
+    still appear as a 'Not Allotted' row in the index; every student status
+    (active, inactive, TC-issued) is included in the range."""
+
+    def setUp(self):
+        super().setUp()
+        self.school_class = SchoolClass.objects.create(name="IV", display_order=1)
+
+    def test_book_entries_marks_missing_sid_as_none(self):
+        from .views import _scholar_register_book_entries
+
+        present_a = Student.objects.create(full_name="Present A", current_class=self.school_class, legacy_sid=101)
+        present_b = Student.objects.create(full_name="Present B", current_class=self.school_class, legacy_sid=103)
+        # 102 deliberately has no student.
+
+        entries = _scholar_register_book_entries(101, 103)
+
+        self.assertEqual([sid for sid, _ in entries], [101, 102, 103])
+        self.assertEqual(entries[0][1], present_a)
+        self.assertIsNone(entries[1][1])
+        self.assertEqual(entries[2][1], present_b)
+
+    def test_book_entries_includes_every_status(self):
+        from .views import _scholar_register_book_entries
+
+        active = Student.objects.create(full_name="Active Student", current_class=self.school_class, legacy_sid=201, is_active=True)
+        inactive = Student.objects.create(full_name="Inactive Student", current_class=self.school_class, legacy_sid=202, is_active=False)
+        left = Student.objects.create(full_name="Left Student", current_class=self.school_class, legacy_sid=203, is_active=False)
+        TransferCertificate.objects.create(
+            student=left, tc_number="TC-TEST-0002", last_class_studied=self.school_class,
+        )
+
+        entries = _scholar_register_book_entries(201, 203)
+        found = {sid: student for sid, student in entries}
+
+        self.assertEqual(found[201], active)
+        self.assertEqual(found[202], inactive)
+        self.assertEqual(found[203], left)
+
+    def test_book_pdf_requires_a_range(self):
+        response = self.client.get(reverse("core:scholar_register_book_pdf"))
+        self.assertRedirects(response, reverse("core:student_register"))
+
+    def test_index_pdf_requires_a_range(self):
+        response = self.client.get(reverse("core:scholar_register_index_pdf"))
+        self.assertRedirects(response, reverse("core:student_register"))
+
+    def test_book_pdf_with_explicit_from_to_range(self):
+        Student.objects.create(full_name="Range Student", current_class=self.school_class, legacy_sid=301)
+
+        response = self.client.get(reverse("core:scholar_register_book_pdf"), {"from_no": "301", "to_no": "301"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+
+    def test_book_pdf_with_book_number_autofills_range(self):
+        # Book 1 = SID 1-100.
+        Student.objects.create(full_name="Book One Student", current_class=self.school_class, legacy_sid=50)
+
+        response = self.client.get(reverse("core:scholar_register_book_pdf"), {"book": "1"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+
+    def test_index_pdf_with_no_students_in_range_still_renders(self):
+        # An empty book (no students at all in this range) should still
+        # produce a valid index PDF listing every slot as Not Allotted.
+        response = self.client.get(reverse("core:scholar_register_index_pdf"), {"from_no": "9001", "to_no": "9010"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+
+
 class AccountsTests(AuthenticatedClientMixin, TestCase):
     def setUp(self):
         super().setUp()

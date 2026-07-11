@@ -51,6 +51,8 @@ from .pdf import (
     build_id_card_pdf,
     build_marksheet_pdf,
     build_salary_payslip_pdf,
+    build_scholar_register_book_pdf,
+    build_scholar_register_index_pdf,
     build_scholar_register_pdf,
     build_transfer_certificate_pdf,
 )
@@ -1139,6 +1141,71 @@ def scholar_register_pdf(request, pk):
     pdf_bytes = build_scholar_register_pdf(student, get_active_school_profile())
     response = HttpResponse(pdf_bytes, content_type="application/pdf")
     response["Content-Disposition"] = f'inline; filename="scholar-register-{student.admission_no or student.pk}.pdf"'
+    return response
+
+
+def _resolve_book_range(request):
+    """Reads book/from_no/to_no GET params (same names/semantics as the
+    Print Register page's range controls) and resolves them into a concrete
+    (book_no, from_no, to_no) integer range. Returns (None, None, None) if
+    no usable range was supplied - the full register book only makes sense
+    for a fixed, contiguous number range."""
+    book_no_raw = request.GET.get("book", "").strip()
+    from_raw = request.GET.get("from_no", "").strip()
+    to_raw = request.GET.get("to_no", "").strip()
+
+    book_no = int(book_no_raw) if book_no_raw.isdigit() and int(book_no_raw) > 0 else None
+    if book_no and not from_raw:
+        from_raw = str((book_no - 1) * 100 + 1)
+    if book_no and not to_raw:
+        to_raw = str(book_no * 100)
+
+    from_no = int(from_raw) if from_raw.isdigit() else None
+    to_no = int(to_raw) if to_raw.isdigit() else None
+    if from_no is None or to_no is None or from_no > to_no:
+        return None, None, None
+    return book_no, from_no, to_no
+
+
+def _scholar_register_book_entries(from_no, to_no):
+    """One entry per SID/Admission number in [from_no, to_no], in order.
+    Entry is (sid, student_or_None) - None means no student record exists
+    for that number (a 'Not Allotted' slot). Includes students of every
+    status (active, inactive, TC-issued) by the owner's explicit decision -
+    a register is a permanent ledger, students aren't removed from it when
+    they leave."""
+    students_by_sid = {
+        s.legacy_sid: s
+        for s in Student.objects.filter(legacy_sid__gte=from_no, legacy_sid__lte=to_no).select_related(
+            "current_class", "current_section", "transfer_certificate", "transfer_certificate__last_class_studied"
+        )
+    }
+    return [(n, students_by_sid.get(n)) for n in range(from_no, to_no + 1)]
+
+
+def scholar_register_book_pdf(request):
+    book_no, from_no, to_no = _resolve_book_range(request)
+    if from_no is None:
+        messages.error(request, "Full Register Book print karne ke liye Book No. ya From/To SID range dein.")
+        return redirect("core:student_register")
+    entries = _scholar_register_book_entries(from_no, to_no)
+    pdf_bytes = build_scholar_register_book_pdf(entries, book_no, from_no, to_no, get_active_school_profile())
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
+    label = f"book-{book_no}" if book_no else f"{from_no}-{to_no}"
+    response["Content-Disposition"] = f'inline; filename="scholar-register-{label}.pdf"'
+    return response
+
+
+def scholar_register_index_pdf(request):
+    book_no, from_no, to_no = _resolve_book_range(request)
+    if from_no is None:
+        messages.error(request, "Scholar Register Index print karne ke liye Book No. ya From/To SID range dein.")
+        return redirect("core:student_register")
+    entries = _scholar_register_book_entries(from_no, to_no)
+    pdf_bytes = build_scholar_register_index_pdf(entries, book_no, from_no, to_no, get_active_school_profile())
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
+    label = f"book-{book_no}" if book_no else f"{from_no}-{to_no}"
+    response["Content-Disposition"] = f'inline; filename="scholar-register-index-{label}.pdf"'
     return response
 
 

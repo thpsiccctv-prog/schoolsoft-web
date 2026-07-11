@@ -10,7 +10,7 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import Image, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 try:
     _reg_path = os.path.join(settings.BASE_DIR, 'static', 'core', 'fonts', 'NotoSansDevanagari-Regular.ttf')
@@ -713,17 +713,11 @@ def build_transfer_certificate_pdf(tc, school_profile=None):
 _SCHOLAR_REGISTER_CLASS_ROWS = ["NUR", "LKG", "UKG", "I", "II", "III", "IV", "V", "VI", "VII", "VIII"]
 
 
-def build_scholar_register_pdf(student, school_profile=None):
-    buffer = BytesIO()
-    document = SimpleDocTemplate(
-        buffer,
-        pagesize=A4,
-        rightMargin=10 * mm,
-        leftMargin=10 * mm,
-        topMargin=9 * mm,
-        bottomMargin=9 * mm,
-        title=f"Scholar Register - {student.full_name}",
-    )
+def _scholar_register_page_flowables(student, school_profile=None):
+    """Builds the flowables for ONE student's Scholar Register page. Shared by
+    the single-student PDF (build_scholar_register_pdf) and the full physical
+    register book PDF (build_scholar_register_book_pdf) so the two documents
+    always render identically."""
     styles = getSampleStyleSheet()
     story = []
 
@@ -766,7 +760,7 @@ def build_scholar_register_pdf(student, school_profile=None):
     top_meta = [[
         f"Admission File No.: {student.admission_no or ''}",
         f"Transfer Certificate No.: {tc.tc_number if tc else ''}",
-        f"Register No.: {student.scholar_register_no or ''}",
+        f"Book No.: {student.scholar_register_no or ''}",
     ]]
     meta_t = Table(top_meta, colWidths=[63 * mm, 63 * mm, 63 * mm])
     meta_t.setStyle(TableStyle([
@@ -880,6 +874,207 @@ def build_scholar_register_pdf(student, school_profile=None):
     ]))
     story.append(cert_t)
 
+    return story
+
+
+def build_scholar_register_pdf(student, school_profile=None):
+    buffer = BytesIO()
+    document = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=10 * mm,
+        leftMargin=10 * mm,
+        topMargin=9 * mm,
+        bottomMargin=9 * mm,
+        title=f"Scholar Register - {student.full_name}",
+    )
+    story = _scholar_register_page_flowables(student, school_profile)
+    document.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+def _scholar_register_cover_flowables(book_no, from_no, to_no, entries, school_profile=None):
+    """First page of the full physical register book print: school identity,
+    book number, admission-number range, and a coverage summary line, plus
+    signature lines for whoever prepares/verifies the book."""
+    styles = getSampleStyleSheet()
+    story = []
+    brand_color = colors.HexColor("#0f766e")
+
+    title_style = ParagraphStyle(
+        "SrCoverTitle", parent=styles["Title"], fontSize=20, leading=24, alignment=1,
+        textColor=brand_color, fontName="Helvetica-Bold", spaceAfter=2 * mm,
+    )
+    subtitle_style = ParagraphStyle("SrCoverSubtitle", parent=styles["Normal"], fontSize=12, leading=16, alignment=1, fontName="Helvetica-Bold")
+    small_style = ParagraphStyle("SrCoverSmall", parent=styles["Normal"], fontSize=9.5, leading=13, alignment=1)
+    cert_style = ParagraphStyle("SrCoverCert", parent=styles["Normal"], fontSize=10, leading=20)
+
+    school_name = school_profile.name if school_profile else "SCHOOLSOFT"
+    logo_path = os.path.join(settings.BASE_DIR, "static", "core", "school_logo.png")
+
+    story.append(Spacer(1, 28 * mm))
+    if os.path.exists(logo_path):
+        logo = Image(logo_path, 28 * mm, 28 * mm)
+        logo.hAlign = "CENTER"
+        story.append(logo)
+        story.append(Spacer(1, 6 * mm))
+    story.append(Paragraph(school_name.upper(), title_style))
+    if school_profile and school_profile.address_line1:
+        addr = f"{school_profile.address_line1}, {school_profile.address_line2}".strip(", ")
+        story.append(Paragraph(addr, small_style))
+    identity_parts = []
+    if school_profile and school_profile.udise_code:
+        identity_parts.append(f"UDISE: {school_profile.udise_code}")
+    if school_profile and school_profile.recognition_no:
+        identity_parts.append(f"Recognition: {school_profile.recognition_no}")
+    if identity_parts:
+        story.append(Paragraph(" | ".join(identity_parts), small_style))
+
+    story.append(Spacer(1, 14 * mm))
+    story.append(Paragraph("SCHOLAR'S REGISTER", title_style))
+    book_label = f"Book No. {book_no}" if book_no else "Custom Range"
+    story.append(Paragraph(book_label, subtitle_style))
+    story.append(Paragraph(f"Admission / Register Numbers {from_no} to {to_no}", small_style))
+
+    story.append(Spacer(1, 8 * mm))
+    present_count = sum(1 for _sid, student in entries if student is not None)
+    story.append(Paragraph(
+        f"{present_count} of {len(entries)} numbers in this range have student records on file. "
+        f"Individual pages appear for those {present_count}; numbers with no record are listed as "
+        f"'Not Allotted' in the index and have no page in this book.",
+        small_style,
+    ))
+
+    story.append(Spacer(1, 24 * mm))
+    story.append(Paragraph("Prepared by: ______________________          Date: ____________", cert_style))
+    story.append(Paragraph("Verified by (Head of Institute): ______________________          Date: ____________", cert_style))
+
+    return story
+
+
+def _scholar_register_index_flowables(entries, book_no, from_no, to_no, school_profile=None, standalone=False):
+    """Index table: one row per number in the range, whether or not a
+    student record exists for it. standalone=True adds a school header on
+    top (used by build_scholar_register_index_pdf, which has no cover page
+    before it)."""
+    styles = getSampleStyleSheet()
+    story = []
+    brand_color = colors.HexColor("#0f766e")
+
+    title_style = ParagraphStyle(
+        "SrIndexTitle", parent=styles["Title"], fontSize=14, leading=17, alignment=1,
+        textColor=brand_color, fontName="Helvetica-Bold", spaceAfter=1 * mm,
+    )
+    subtitle_style = ParagraphStyle("SrIndexSubtitle", parent=styles["Normal"], fontSize=9, leading=11, alignment=1)
+    small_style = ParagraphStyle("SrIndexSmall", parent=styles["Normal"], fontSize=8, leading=10, alignment=1)
+    cell_style = ParagraphStyle("SrIndexCell", parent=styles["Normal"], fontSize=8, leading=10)
+
+    if standalone:
+        school_name = school_profile.name if school_profile else "SCHOOLSOFT"
+        logo_path = os.path.join(settings.BASE_DIR, "static", "core", "school_logo.png")
+        school_heading = [Paragraph(school_name.upper(), title_style)]
+        if school_profile and school_profile.address_line1:
+            addr = f"{school_profile.address_line1}, {school_profile.address_line2}".strip(", ")
+            school_heading.append(Paragraph(addr, small_style))
+        logo = Image(logo_path, 20 * mm, 20 * mm) if os.path.exists(logo_path) else ""
+        header = Table([[logo, school_heading, ""]], colWidths=[25 * mm, 139 * mm, 25 * mm])
+        header.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("ALIGN", (1, 0), (1, 0), "CENTER")]))
+        story.append(header)
+        story.append(Table([[""]], colWidths=[189 * mm], rowHeights=[1 * mm], style=TableStyle([("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#b58a2a"))])))
+        story.append(Spacer(1, 3 * mm))
+
+    book_label = f"Book No. {book_no}" if book_no else "Custom Range"
+    story.append(Paragraph("SCHOLAR'S REGISTER - INDEX", title_style))
+    story.append(Paragraph(f"{book_label}  |  Numbers {from_no} to {to_no}", subtitle_style))
+    story.append(Spacer(1, 4 * mm))
+
+    header_row = ["S.R. / SID No.", "Name", "Class", "Status"]
+    table_data = [header_row]
+    for sid, student in entries:
+        if student is None:
+            table_data.append([str(sid), "-", "-", "Not Allotted"])
+            continue
+        class_label = student.current_class.name if student.current_class else ""
+        if student.current_section:
+            class_label = f"{class_label}-{student.current_section.name}" if class_label else student.current_section.name
+        if student.is_active:
+            status = "Active"
+        elif getattr(student, "transfer_certificate", None) is not None:
+            status = "TC Issued"
+        else:
+            status = "Inactive"
+        table_data.append([
+            str(sid),
+            Paragraph(student.full_name, cell_style),
+            class_label,
+            status,
+        ])
+
+    index_t = Table(table_data, colWidths=[25 * mm, 85 * mm, 40 * mm, 39 * mm], repeatRows=1)
+    index_t.setStyle(TableStyle([
+        ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#9aa4b2")),
+        ("BACKGROUND", (0, 0), (-1, 0), brand_color),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 8),
+        ("ALIGN", (0, 0), (0, -1), "CENTER"),
+        ("ALIGN", (3, 0), (3, -1), "CENTER"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+    ]))
+    story.append(index_t)
+
+    return story
+
+
+def build_scholar_register_book_pdf(entries, book_no, from_no, to_no, school_profile=None):
+    """Full physical register book: cover page, index (all numbers in range,
+    including 'Not Allotted' ones), then one individual Scholar Register page
+    per number that actually has a student record. Missing numbers get no
+    page - only an index row - per the owner's explicit decision (see
+    CODEX-HANDOFF.md, "Full Scholar Register Book" checkpoint)."""
+    buffer = BytesIO()
+    document = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=10 * mm,
+        leftMargin=10 * mm,
+        topMargin=9 * mm,
+        bottomMargin=9 * mm,
+        title=f"Scholar Register Book {book_no or f'{from_no}-{to_no}'}",
+    )
+    story = []
+    story.extend(_scholar_register_cover_flowables(book_no, from_no, to_no, entries, school_profile))
+    story.append(PageBreak())
+    story.extend(_scholar_register_index_flowables(entries, book_no, from_no, to_no, school_profile, standalone=False))
+
+    for _sid, student in entries:
+        if student is None:
+            continue
+        story.append(PageBreak())
+        story.extend(_scholar_register_page_flowables(student, school_profile))
+
+    document.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+def build_scholar_register_index_pdf(entries, book_no, from_no, to_no, school_profile=None):
+    """'Index Only' print action: just the index table (with the school
+    header on top), no cover page and no individual student pages."""
+    buffer = BytesIO()
+    document = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=10 * mm,
+        leftMargin=10 * mm,
+        topMargin=9 * mm,
+        bottomMargin=9 * mm,
+        title=f"Scholar Register Index {book_no or f'{from_no}-{to_no}'}",
+    )
+    story = _scholar_register_index_flowables(entries, book_no, from_no, to_no, school_profile, standalone=True)
     document.build(story)
     buffer.seek(0)
     return buffer.getvalue()
