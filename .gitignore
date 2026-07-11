@@ -17,6 +17,8 @@ build-bookfix/
 dist-bookfix/
 build-range/
 dist-range/
+build-scholar-final/
+dist-scholar-final/
 *.egg-info/
 *.log
 debug-scripts/
