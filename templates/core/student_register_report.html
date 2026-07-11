@@ -17,6 +17,10 @@
             margin-bottom: 20px;
             text-align: center;
         }
+
+        .range-form { display: inline-flex; gap: 8px; align-items: end; flex-wrap: wrap; margin-right: 12px; }
+        .range-form label { display: grid; gap: 3px; text-align: left; font-weight: bold; font-size: 11px; }
+        .range-form input { width: 90px; padding: 7px; border: 1px solid #94a3b8; border-radius: 4px; }
         
         .btn-print {
             padding: 8px 16px;
@@ -108,6 +112,13 @@
 <body>
 
     <div class="no-print">
+        <form method="get" class="range-form">
+            <input type="hidden" name="status" value="{{ selected_status }}">
+            <label>Book No.<input id="book-no" name="book" inputmode="numeric" value="{{ book_no }}"></label>
+            <label>From SID<input id="from-no" name="from_no" inputmode="numeric" value="{{ from_no }}"></label>
+            <label>To SID<input id="to-no" name="to_no" inputmode="numeric" value="{{ to_no }}"></label>
+            <button type="submit" class="btn-print">Load Range</button>
+        </form>
         <a href="javascript:history.back()" class="btn-back">Back</a>
         <button onclick="window.print()" class="btn-print">Print Register</button>
     </div>
@@ -162,4 +173,13 @@
     </table>
 
 </body>
+<script>
+    document.getElementById("book-no").addEventListener("input", function () {
+        var book = parseInt(this.value, 10);
+        if (book > 0) {
+            document.getElementById("from-no").value = ((book - 1) * 100) + 1;
+            document.getElementById("to-no").value = book * 100;
+        }
+    });
+</script>
 </html>

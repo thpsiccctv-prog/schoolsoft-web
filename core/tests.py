@@ -122,6 +122,22 @@ class DashboardTests(AuthenticatedClientMixin, TestCase):
         self.assertContains(response, "III-A")
         self.assertNotContains(response, "III-III - A")
 
+    def test_student_register_supports_book_and_manual_sid_ranges(self):
+        for sid in (2201, 2250, 2300, 2301):
+            Student.objects.create(full_name=f"Range Student {sid}", legacy_sid=sid, is_active=True)
+
+        book_response = self.client.get(reverse("core:student_register"), {"book": "23"})
+        self.assertContains(book_response, "RANGE STUDENT 2201")
+        self.assertContains(book_response, "RANGE STUDENT 2300")
+        self.assertNotContains(book_response, "RANGE STUDENT 2301")
+
+        manual_response = self.client.get(
+            reverse("core:student_register"), {"book": "23", "from_no": "2250", "to_no": "2250"}
+        )
+        self.assertContains(manual_response, "RANGE STUDENT 2250")
+        self.assertNotContains(manual_response, "RANGE STUDENT 2201")
+        self.assertNotContains(manual_response, "RANGE STUDENT 2300")
+
     def test_student_detail_loads_from_list(self):
         school_class = SchoolClass.objects.create(name="I", display_order=1)
         student = Student.objects.create(

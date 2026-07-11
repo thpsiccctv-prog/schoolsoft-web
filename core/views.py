@@ -1771,6 +1771,19 @@ def student_register(request):
     """
     students, query, class_id, section_id, status = _get_filtered_students(request)
 
+    book_no = request.GET.get("book", "").strip()
+    from_no = request.GET.get("from_no", "").strip()
+    to_no = request.GET.get("to_no", "").strip()
+    if book_no.isdigit() and int(book_no) > 0:
+        book_number = int(book_no)
+        from_no = from_no or str(((book_number - 1) * 100) + 1)
+        to_no = to_no or str(book_number * 100)
+
+    if from_no.isdigit():
+        students = students.filter(legacy_sid__gte=int(from_no))
+    if to_no.isdigit():
+        students = students.filter(legacy_sid__lte=int(to_no))
+
     # Determine filter description for header
     filter_description = []
     if class_id:
@@ -1784,6 +1797,8 @@ def student_register(request):
     filter_description.append(f"Status: {status.title()}")
     if query:
         filter_description.append(f"Search: '{query}'")
+    if from_no or to_no:
+        filter_description.append(f"SID Range: {from_no or 'start'} to {to_no or 'end'}")
 
     context = {
         "students": students,
@@ -1794,6 +1809,9 @@ def student_register(request):
         "selected_class": class_id,
         "selected_section": section_id,
         "selected_status": status,
+        "book_no": book_no,
+        "from_no": from_no,
+        "to_no": to_no,
     }
     return render(request, "core/student_register_report.html", context)
 
