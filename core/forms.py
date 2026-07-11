@@ -358,11 +358,45 @@ class TransferCertificateForm(forms.ModelForm):
             "remarks": forms.Textarea(attrs={"rows": 3}),
         }
 
+    # Fields that must always be known before a TC is issued - a TC missing
+    # any of these is administratively incomplete. Fields left optional
+    # (annual_exam_result, subjects_offered - not meaningful for Nursery-UKG;
+    # fee_concession_nature, ncc_scout, extracurricular_activities - genuinely
+    # blank/"No" for most students) are intentionally NOT forced here; the PDF
+    # renders sensible "No"/blank fallbacks for those already.
+    REQUIRED_FOR_ISSUE = [
+        "application_date",
+        "date_of_leaving",
+        "reason_for_leaving",
+        "total_working_days",
+        "days_present",
+        "fees_paid_upto",
+    ]
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["issue_date"].initial = timezone.localdate()
+        for name in self.REQUIRED_FOR_ISSUE:
+            self.fields[name].required = True
         for field in self.fields.values():
             field.widget.attrs.setdefault("class", "form-control")
+
+    def clean(self):
+        cleaned = super().clean()
+        application_date = cleaned.get("application_date")
+        date_of_leaving = cleaned.get("date_of_leaving")
+        issue_date = cleaned.get("issue_date")
+        total_working_days = cleaned.get("total_working_days")
+        days_present = cleaned.get("days_present")
+
+        if application_date and issue_date and application_date > issue_date:
+            self.add_error("application_date", "Application date cannot be after the TC issue date.")
+        if date_of_leaving and issue_date and date_of_leaving > issue_date:
+            self.add_error("date_of_leaving", "Date of leaving cannot be after the TC issue date.")
+        if total_working_days is not None and days_present is not None and days_present > total_working_days:
+            self.add_error("days_present", "Days present cannot exceed total working days.")
+
+        return cleaned
 
 
 class StaffChoiceField(forms.ModelChoiceField):

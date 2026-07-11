@@ -800,29 +800,33 @@ def build_transfer_certificate_pdf(tc, school_profile=None):
     document = SimpleDocTemplate(
         buffer,
         pagesize=A4,
-        rightMargin=11 * mm,
-        leftMargin=11 * mm,
-        topMargin=9 * mm,
-        bottomMargin=9 * mm,
+        rightMargin=13 * mm,
+        leftMargin=13 * mm,
+        topMargin=11 * mm,
+        bottomMargin=11 * mm,
         title=f"Transfer Certificate - {tc.tc_number}",
     )
     styles = getSampleStyleSheet()
     story = []
 
-    # Fonts
+    # English-only student copy. Sizes stay comfortably above the original
+    # compact layout while preserving a single-page A4 certificate.
     brand_color = colors.HexColor("#0f766e")
     title_style = ParagraphStyle(
-        "TcTitle", parent=styles["Title"], fontSize=16, leading=20, alignment=1, textColor=brand_color, fontName="Helvetica-Bold", spaceAfter=2*mm
+        "TcTitle", parent=styles["Title"], fontSize=18, leading=21, alignment=1, textColor=brand_color, fontName="Helvetica-Bold", spaceAfter=2*mm
     )
     small_style = ParagraphStyle(
-        "TcSmall", parent=styles["Normal"], fontSize=8, leading=10, alignment=1
+        "TcSmall", parent=styles["Normal"], fontSize=8.8, leading=10.5, alignment=1
     )
     field_style = ParagraphStyle(
-        "TcField", parent=styles["Normal"], fontName="Helvetica", fontSize=8.6, leading=10.5
+        "TcField", parent=styles["Normal"], fontName="Helvetica", fontSize=9.2, leading=11
     )
     value_style = ParagraphStyle(
-        "TcValue", parent=styles["Normal"], fontSize=8.6, leading=10.5, fontName="Helvetica-Bold"
+        "TcValue", parent=styles["Normal"], fontSize=9.2, leading=11, fontName="Helvetica-Bold"
     )
+    meta_left_style = ParagraphStyle("TcMetaLeft", parent=styles["Normal"], fontSize=8.4, leading=10, alignment=0)
+    meta_center_style = ParagraphStyle("TcMetaCenter", parent=meta_left_style, alignment=1)
+    meta_right_style = ParagraphStyle("TcMetaRight", parent=meta_left_style, alignment=2)
 
     school_name = school_profile.name if school_profile else "SCHOOLSOFT"
     logo_path = os.path.join(settings.BASE_DIR, "static", "core", "school_logo.png")
@@ -830,38 +834,40 @@ def build_transfer_certificate_pdf(tc, school_profile=None):
     if school_profile and school_profile.address_line1:
         addr = f"{school_profile.address_line1}, {school_profile.address_line2}".strip(", ")
         school_heading.append(Paragraph(addr, small_style))
-    
+
     contact_parts = []
     if school_profile and school_profile.phone: contact_parts.append(f"Ph: {school_profile.phone}")
     if school_profile and school_profile.email: contact_parts.append(f"Email: {school_profile.email}")
     if school_profile and getattr(school_profile, 'udise_code', None): contact_parts.append(f"UDISE: {school_profile.udise_code}")
     if contact_parts:
         school_heading.append(Paragraph(" | ".join(contact_parts), small_style))
-    logo = Image(logo_path, 20 * mm, 20 * mm) if os.path.exists(logo_path) else ""
-    header = Table([[logo, school_heading, ""]], colWidths=[25 * mm, 139 * mm, 25 * mm])
+    logo = Image(logo_path, 22 * mm, 22 * mm) if os.path.exists(logo_path) else ""
+    header = Table([[logo, school_heading, ""]], colWidths=[28 * mm, 128 * mm, 28 * mm])
     header.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("ALIGN", (1, 0), (1, 0), "CENTER")]))
     story.append(header)
-    story.append(Table([[""]], colWidths=[189 * mm], rowHeights=[1 * mm], style=TableStyle([("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#b58a2a"))])))
-    
-    story.append(Spacer(1, 4 * mm))
+    story.append(Table([[""]], colWidths=[184 * mm], rowHeights=[1.2 * mm], style=TableStyle([("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#b58a2a"))])))
+
+    story.append(Spacer(1, 3.5 * mm))
     story.append(Paragraph("TRANSFER CERTIFICATE", title_style))
 
     student = tc.student
 
-    top_meta = [
+    top_meta_values = [
         [f"Book No.: {student.scholar_register_no or tc.book_no}", f"S.R. No.: {tc.sr_no or student.admission_no or student.legacy_sid or ''}", f"Admission No.: {student.admission_no}"],
         [f"TC No.: {tc.tc_number}", f"PEN: {getattr(student, 'pen_number', '')}", f"Medium: {getattr(school_profile, 'medium', '') or 'English'}"],
         [f"UDISE Code: {getattr(school_profile, 'udise_code', '') or '____________'}", f"Recognition Order No.: {getattr(school_profile, 'recognition_no', '') or '____________'}", f"Recognized up to: {getattr(school_profile, 'recognized_upto', '') or '____________'}"]
     ]
-    meta_t = Table(top_meta, colWidths=[63*mm, 63*mm, 63*mm])
+    meta_styles = [meta_left_style, meta_center_style, meta_right_style]
+    top_meta = [[Paragraph(value, meta_styles[index]) for index, value in enumerate(row)] for row in top_meta_values]
+    meta_t = Table(top_meta, colWidths=[61*mm, 61*mm, 62*mm])
     meta_t.setStyle(TableStyle([
         ("FONTNAME", (0,0), (-1,-1), "Helvetica"),
-        ("FONTSIZE", (0,0), (-1,-1), 8),
+        ("FONTSIZE", (0,0), (-1,-1), 8.4),
         ("ALIGN", (0,0), (0,-1), "LEFT"),
         ("ALIGN", (1,0), (1,-1), "CENTER"),
         ("ALIGN", (2,0), (2,-1), "RIGHT"),
         ("GRID", (0,0), (-1,-1), 0.35, colors.HexColor("#9aa5b1")),
-        ("BOTTOMPADDING", (0,0), (-1,-1), 3), ("TOPPADDING", (0,0), (-1,-1), 3),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 3.5), ("TOPPADDING", (0,0), (-1,-1), 3.5),
     ]))
     story.append(meta_t)
     story.append(Spacer(1, 2*mm))
@@ -910,42 +916,45 @@ def build_transfer_certificate_pdf(tc, school_profile=None):
     for label, val in fields:
         table_data.append([Paragraph(label, field_style), Paragraph(val, value_style)])
         
-    t = Table(table_data, colWidths=[105*mm, 84*mm])
+    t = Table(table_data, colWidths=[102*mm, 82*mm])
     t.setStyle(TableStyle([
         ("VALIGN", (0,0), (-1,-1), "TOP"),
-        ("BOTTOMPADDING", (0,0), (-1,-1), 2.4),
-        ("TOPPADDING", (0,0), (-1,-1), 2.4),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 2.8),
+        ("TOPPADDING", (0,0), (-1,-1), 2.8),
         ("GRID", (0,0), (-1,-1), 0.3, colors.HexColor("#9aa5b1")),
         ("BACKGROUND", (0,0), (0,-1), colors.HexColor("#f7f8f8")),
     ]))
     story.append(t)
-    
+
     story.append(Spacer(1, 2*mm))
     story.append(Paragraph("CERTIFIED that the above entries have been verified with the Admission/Scholar Register and school records and are correct.", small_style))
-    story.append(Spacer(1, 8*mm))
-    
+    # Reserve real handwriting and seal space above the signature captions.
+    story.append(Spacer(1, 12*mm))
+
     sig_data = [
         ["Prepared by\n(Name & Designation)", "Checked by\n(Name & Designation)", "Head Teacher / Principal\n(Signature with official seal)"]
     ]
-    sig_t = Table(sig_data, colWidths=[60*mm, 60*mm, 60*mm])
+    sig_t = Table(sig_data, colWidths=[61.3*mm, 61.3*mm, 61.4*mm])
     sig_t.setStyle(TableStyle([
         ("FONTNAME", (0,0), (-1,-1), "Helvetica-Bold"),
-        ("FONTSIZE", (0,0), (-1,-1), 9),
+        ("FONTSIZE", (0,0), (-1,-1), 9.2),
         ("ALIGN", (0,0), (0,0), "LEFT"),
         ("ALIGN", (1,0), (1,0), "CENTER"),
         ("ALIGN", (2,0), (2,0), "RIGHT"),
         ("VALIGN", (0,0), (-1,-1), "BOTTOM"),
     ]))
     story.append(sig_t)
-    story.append(Spacer(1, 3*mm))
+    story.append(Spacer(1, 6*mm))
     counter = Table([
         ["COUNTERSIGN / OFFICE VERIFICATION (only where required by the competent authority)"],
         ["Verified with original Scholar Register. Signature: ______________  Name/Designation: ______________  Date: ________  Office Seal"],
-    ], colWidths=[189*mm])
-    counter.setStyle(TableStyle([("BOX", (0,0), (-1,-1), 0.6, colors.HexColor("#17202a")), ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#f3f6f5")), ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"), ("FONTSIZE", (0,0), (-1,-1), 7), ("ALIGN", (0,0), (-1,-1), "CENTER"), ("TOPPADDING", (0,0), (-1,-1), 3), ("BOTTOMPADDING", (0,0), (-1,-1), 3)]))
+    ], colWidths=[184*mm])
+    counter.setStyle(TableStyle([("BOX", (0,0), (-1,-1), 0.6, colors.HexColor("#17202a")), ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#f3f6f5")), ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"), ("FONTSIZE", (0,0), (-1,-1), 7.5), ("ALIGN", (0,0), (-1,-1), "CENTER"), ("TOPPADDING", (0,0), (-1,-1), 3.5), ("BOTTOMPADDING", (0,0), (-1,-1), 3.5)]))
     story.append(counter)
 
-    document.build(story)
+    # Thin outer border - same treatment as the Scholar Register - gives the
+    # certificate an official bordered-document look instead of a plain print.
+    document.build(story, onFirstPage=_draw_scholar_register_border, onLaterPages=_draw_scholar_register_border)
     buffer.seek(0)
     return buffer.getvalue()
 

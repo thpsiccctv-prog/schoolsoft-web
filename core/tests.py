@@ -644,6 +644,8 @@ class Month2DocumentTests(AuthenticatedClientMixin, TestCase):
             reverse("core:tc_detail", args=[student.id]),
             data={
                 "issue_date": "2026-07-01",
+                "application_date": "2026-06-25",
+                "date_of_leaving": "2026-06-30",
                 "last_class_studied": school_class.id,
                 "last_section": "",
                 "reason_for_leaving": "Family relocation",
@@ -651,6 +653,8 @@ class Month2DocumentTests(AuthenticatedClientMixin, TestCase):
                 "general_progress": TransferCertificate.Conduct.GOOD,
                 "qualified_for_promotion": "on",
                 "promoted_to_class": "",
+                "total_working_days": "200",
+                "days_present": "190",
                 "fees_paid_upto": "June 2026",
                 "remarks": "",
             },
@@ -665,6 +669,60 @@ class Month2DocumentTests(AuthenticatedClientMixin, TestCase):
         pdf_response = self.client.get(reverse("core:tc_pdf", args=[student.id]))
         self.assertEqual(pdf_response.status_code, 200)
         self.assertEqual(pdf_response["Content-Type"], "application/pdf")
+
+    def test_tc_form_rejects_incomplete_data(self):
+        """A TC missing administratively-required fields (leaving date,
+        reason, working days, fees paid upto, application date) must not be
+        saved - an issued TC with these blank is incomplete, not just an
+        unstyled one (owner decision, July 2026 TC redesign)."""
+        school_class = SchoolClass.objects.create(name="II", display_order=1)
+        student = Student.objects.create(full_name="Incomplete TC Student", current_class=school_class)
+
+        post_response = self.client.post(
+            reverse("core:tc_detail", args=[student.id]),
+            data={
+                "issue_date": "2026-07-01",
+                "last_class_studied": school_class.id,
+                "last_section": "",
+                "conduct": TransferCertificate.Conduct.GOOD,
+                "general_progress": TransferCertificate.Conduct.GOOD,
+                "qualified_for_promotion": "on",
+                "promoted_to_class": "",
+                "remarks": "",
+                # application_date, date_of_leaving, reason_for_leaving,
+                # total_working_days, days_present, fees_paid_upto all
+                # intentionally omitted.
+            },
+        )
+
+        self.assertEqual(post_response.status_code, 200)  # re-renders form with errors, no redirect
+        self.assertFalse(TransferCertificate.objects.filter(student=student).exists())
+
+    def test_tc_form_rejects_impossible_dates_and_attendance(self):
+        school_class = SchoolClass.objects.create(name="III", display_order=1)
+        student = Student.objects.create(full_name="Invalid TC Student", current_class=school_class)
+
+        response = self.client.post(
+            reverse("core:tc_detail", args=[student.id]),
+            data={
+                "issue_date": "2026-07-01",
+                "application_date": "2026-07-02",
+                "date_of_leaving": "2026-07-03",
+                "last_class_studied": school_class.id,
+                "reason_for_leaving": "Family relocation",
+                "conduct": TransferCertificate.Conduct.GOOD,
+                "general_progress": TransferCertificate.Conduct.GOOD,
+                "total_working_days": "200",
+                "days_present": "201",
+                "fees_paid_upto": "June 2026",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Application date cannot be after the TC issue date.")
+        self.assertContains(response, "Date of leaving cannot be after the TC issue date.")
+        self.assertContains(response, "Days present cannot exceed total working days.")
+        self.assertFalse(TransferCertificate.objects.filter(student=student).exists())
 
     def test_scholar_register_pdf_active_student_without_tc(self):
         """An active student who has never left should still get a Scholar

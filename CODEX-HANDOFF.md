@@ -2226,3 +2226,20 @@ Not done / next session should be aware of:
   actual Devanagari PDF work, not the general UI), paid WhatsApp API, Inventory stock-in, Family
   Ledger fuzzy matching, Render DB expiry (~Aug 1 2026), custom domain, exposed DB credential
   rotation.
+
+## Transfer Certificate English-only redesign candidate (July 11, 2026)
+
+- Owner chose a clean English-only student TC; the bilingual Scholar Register remains unchanged.
+- `TransferCertificateForm` now requires application date, leaving date, reason for leaving,
+  working days, days present, and fees-paid-up-to before saving an issued TC.
+- Added cross-field checks: application/leaving dates cannot be after issue date, and days present
+  cannot exceed total working days.
+- TC PDF now uses larger readable typography, a larger institutional header, restrained teal/gold
+  branding, an outer official border, wrapped identifier cells, and usable signature/seal space.
+- Initial 10pt/4.2pt-padding attempt rendered as two pages and was rejected during visual QA.
+  Final balanced sizing renders on exactly one A4 page without clipped or overflowing text.
+- Recognition Order wraps inside its middle identifier cell instead of crossing table boundaries.
+- Verification: targeted TC tests passed 3/3; full `core` suite passed 87/87. Poppler reports one
+  A4 page. Rendered sample: `tmp/pdfs/tc-redesign-review.pdf`.
+- Status: code is ready for owner visual approval. It has not yet been committed, pushed, or built
+  into the desktop EXE in this checkpoint.
