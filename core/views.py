@@ -692,33 +692,42 @@ def receipt_create(request):
 
     if request.method == "POST":
         receipt_form = FeeReceiptEntryForm(request.POST)
-        line_form = FeeReceiptLineEntryForm(request.POST)
+        # False: a receipt that only collects an old Previous Due (all fee-head
+        # boxes at 0.00) is valid now - checked together with previous_due_amount
+        # below instead of requiring a positive fee-head total on its own.
+        line_form = FeeReceiptLineEntryForm(request.POST, require_positive_total=False)
 
         if receipt_form.is_valid() and line_form.is_valid():
-            with transaction.atomic():
-                receipt = receipt_form.save(commit=False)
-                receipt.receipt_no = next_manual_receipt_no()
-                line_total = line_form.cleaned_data["line_total"]
-                receipt.legacy_fee_total = line_total
-                receipt.legacy_net_total = (
-                    line_total + receipt.previous_due_amount + receipt.late_fee_amount - receipt.concession_amount
+            line_total = line_form.cleaned_data["line_total"]
+            previous_due = receipt_form.cleaned_data.get("previous_due_amount") or Decimal("0.00")
+            if line_total <= Decimal("0.00") and previous_due <= Decimal("0.00"):
+                line_form.add_error(
+                    None, "Enter at least one fee head amount, or a Previous Due amount, before saving."
                 )
-                receipt.legacy_due_amount = max(
-                    receipt.legacy_net_total - receipt.received_amount,
-                    Decimal("0.00"),
-                )
-                apply_receipt_student_snapshot(receipt)
-                receipt.save()
+            else:
+                with transaction.atomic():
+                    receipt = receipt_form.save(commit=False)
+                    receipt.receipt_no = next_manual_receipt_no()
+                    receipt.legacy_fee_total = line_total
+                    receipt.legacy_net_total = (
+                        line_total + receipt.previous_due_amount + receipt.late_fee_amount - receipt.concession_amount
+                    )
+                    receipt.legacy_due_amount = max(
+                        receipt.legacy_net_total - receipt.received_amount,
+                        Decimal("0.00"),
+                    )
+                    apply_receipt_student_snapshot(receipt)
+                    receipt.save()
 
-                for fee_head, amount in line_form.amounts():
-                    receipt.lines.create(fee_head=fee_head, amount=amount)
+                    for fee_head, amount in line_form.amounts():
+                        receipt.lines.create(fee_head=fee_head, amount=amount)
 
-                if receipt.previous_due_amount > Decimal("0.00"):
-                    _mark_prior_receipts_carried_forward(receipt)
+                    if receipt.previous_due_amount > Decimal("0.00"):
+                        _mark_prior_receipts_carried_forward(receipt)
 
-            if request.POST.get("action") == "save_print":
-                return redirect(f"{reverse('core:receipt_detail', kwargs={'pk': receipt.pk})}?autoprint=1")
-            return redirect("core:receipt_detail", pk=receipt.pk)
+                if request.POST.get("action") == "save_print":
+                    return redirect(f"{reverse('core:receipt_detail', kwargs={'pk': receipt.pk})}?autoprint=1")
+                return redirect("core:receipt_detail", pk=receipt.pk)
     else:
         student_id = request.GET.get("student")
         initial_data = {}
@@ -798,9 +807,20 @@ def receipt_edit(request, pk):
 
     if request.method == "POST":
         receipt_form = FeeReceiptEditForm(request.POST, instance=receipt)
-        line_form = FeeReceiptLineEntryForm(request.POST)
+        line_form = FeeReceiptLineEntryForm(request.POST, require_positive_total=False)
 
         if receipt_form.is_valid() and line_form.is_valid():
+            line_total = line_form.cleaned_data["line_total"]
+            previous_due = receipt_form.cleaned_data.get("previous_due_amount") or Decimal("0.00")
+            if line_total <= Decimal("0.00") and previous_due <= Decimal("0.00"):
+                line_form.add_error(
+                    None, "Enter at least one fee head amount, or a Previous Due amount, before saving."
+                )
+                return render(
+                    request,
+                    "core/receipt_edit.html",
+                    {"receipt_form": receipt_form, "line_form": line_form, "receipt": receipt},
+                )
             with transaction.atomic():
                 original_receipt = FeeReceipt.objects.get(pk=receipt.pk)
                 # Capture before snapshot
@@ -814,6 +834,7 @@ def receipt_edit(request, pk):
                     "from_month": original_receipt.from_month,
                     "to_month": original_receipt.to_month,
                     "payment_mode": original_receipt.payment_mode,
+                    "previous_due_amount": str(original_receipt.previous_due_amount),
                     "concession_amount": str(original_receipt.concession_amount),
                     "late_fee_amount": str(original_receipt.late_fee_amount),
                     "received_amount": str(original_receipt.received_amount),
@@ -864,6 +885,7 @@ def receipt_edit(request, pk):
                     "from_month": updated_receipt.from_month,
                     "to_month": updated_receipt.to_month,
                     "payment_mode": updated_receipt.payment_mode,
+                    "previous_due_amount": str(updated_receipt.previous_due_amount),
                     "concession_amount": str(updated_receipt.concession_amount),
                     "late_fee_amount": str(updated_receipt.late_fee_amount),
                     "received_amount": str(updated_receipt.received_amount),
@@ -958,7 +980,7 @@ def student_fee_defaults(request, pk):
         if structure.amount > Decimal("0.00")
     }
 
-    previous_due = _suggest_previous_due(student, session_id)
+    previous_due = _suggest_previous_due(student)
 
     return JsonResponse(
         {
@@ -971,38 +993,53 @@ def student_fee_defaults(request, pk):
     )
 
 
-def _eligible_prior_due_receipts(student, session_id):
+def _eligible_prior_due_receipts(student, exclude_pk=None):
     """Receipts that can legitimately feed a 'Previous Due' carry-forward for
     this student: unpaid, not cancelled, not already carried forward into an
-    even earlier rollup, and (when session_id is known) strictly from a
-    session that started before the one being collected for. Shared by the
-    suggestion calculation and the marking step so both agree on what
-    counts as 'previous'."""
+    even earlier rollup, and entered live in this system (not part of the old
+    legacy CSV bulk-import). Shared by the suggestion calculation and the
+    marking step so both agree on what counts as 'previous'.
+
+    Deliberately SESSION-AGNOSTIC (as of the July 2026 fix below) - due can
+    carry forward from an earlier receipt within the SAME session (e.g. an
+    April receipt's leftover balance should show up when collecting May's
+    fee) just as much as from an earlier academic session. `exclude_pk` is
+    used by the marking step to leave the just-saved receipt itself out of
+    its own "prior" set.
+
+    IMPORTANT: legacy bulk-imported receipts (from import_legacy_fees /
+    import_yearly_fees - identifiable by legacy_receipt_no being set) are
+    deliberately EXCLUDED here. Their stored legacy_due_amount is a stale
+    snapshot from the old pre-automation records and is frequently already
+    resolved through payments that were never entered into this system, so
+    summing it automatically produces inflated, unreliable figures (real
+    incident: a student's auto-suggested previous due came out to ~Rs
+    56,950 - far more than a full year's fees - because it silently summed
+    years of legacy receipts). Per the owner's original request, old/legacy
+    due must be entered MANUALLY by office staff who know the correct
+    figure; only receipts created going forward inside this app (which have
+    no legacy_receipt_no) are trustworthy enough to auto carry-forward."""
     prior_receipts = FeeReceipt.objects.filter(
         student=student,
         is_cancelled=False,
         carried_forward=False,
+        legacy_receipt_no__isnull=True,
     ).exclude(legacy_due_amount__lte=Decimal("0.00"))
 
-    if session_id:
-        prior_receipts = prior_receipts.exclude(session_id=session_id)
-        selected_session = AcademicSession.objects.filter(pk=session_id).first()
-        if selected_session and selected_session.starts_on:
-            prior_receipts = prior_receipts.filter(
-                Q(session__starts_on__lt=selected_session.starts_on) | Q(session__starts_on__isnull=True)
-            )
+    if exclude_pk:
+        prior_receipts = prior_receipts.exclude(pk=exclude_pk)
 
     return prior_receipts
 
 
-def _suggest_previous_due(student, session_id):
-    """Auto-suggested 'Previous Due' figure for the Fee Collection form -
-    sum of the student's unpaid, not-yet-carried-forward receipts from
-    sessions strictly before the one being collected for. Office staff can
-    still override this in the form (needed while historical/legacy fee
-    data is incomplete); once receipts are consistently recorded session by
-    session this keeps working automatically without any manual step."""
-    total = _eligible_prior_due_receipts(student, session_id).aggregate(total=Sum("legacy_due_amount"))["total"]
+def _suggest_previous_due(student):
+    """Auto-suggested 'Previous Due' figure for the Fee Collection form - sum
+    of the student's unpaid, not-yet-carried-forward, live-system receipts
+    (any earlier receipt, same session or an earlier one). Office staff can
+    still override this in the form (needed while historical/legacy fee data
+    is incomplete); once receipts are consistently recorded this keeps
+    working automatically without any manual step."""
+    total = _eligible_prior_due_receipts(student).aggregate(total=Sum("legacy_due_amount"))["total"]
     return total or Decimal("0.00")
 
 
@@ -1011,12 +1048,15 @@ def _mark_prior_receipts_carried_forward(receipt):
     the student's earlier eligible unpaid receipts as carried_forward=True so
     the Due Report (and any future previous-due suggestion) stops counting
     them separately - their balance now lives on this new receipt instead.
+    Excludes the receipt itself (exclude_pk) so a receipt that still has its
+    own leftover due after this save doesn't get marked as carrying its own
+    balance forward into itself.
     Note: this marks ALL eligible prior receipts regardless of whether the
     office-entered previous_due_amount exactly matches their sum (the office
     figure is treated as authoritative - see CODEX-HANDOFF.md for the
     reasoning) - if it doesn't match, is_edited/remarks on this receipt is
     the audit trail for why."""
-    _eligible_prior_due_receipts(receipt.student, str(receipt.session_id)).update(carried_forward=True)
+    _eligible_prior_due_receipts(receipt.student, exclude_pk=receipt.pk).update(carried_forward=True)
 
 
 def next_manual_receipt_no():
@@ -2077,14 +2117,19 @@ def expense_create(request):
             voucher.voucher_type = Voucher.VoucherType.CASH_PAYMENT
             voucher.created_by = request.user
             
-            # For expense/advance payment, credit should be Cash/Bank and debit should be Expense or Advance Given.
+            # For expense/advance payment, credit should be Cash/Bank and debit should be Expense,
+            # Advance Given, or a Liability being paid down (e.g. repaying a personal loan someone
+            # advanced to the school - a real case: "Pragati ka paisa wapas kar diya gya" in the
+            # legacy ledger. Repaying a loan reduces what the school owes, which is a Liability
+            # debit, not an Expense - the old check rejected this with no way to record it).
             if not voucher.credit_account.is_cash_or_bank:
                 messages.error(request, "For expenses/advances, the credit account must be a Cash or Bank account.")
             elif not (
                 voucher.debit_account.group.group_type == AccountGroup.GroupType.EXPENSE
+                or voucher.debit_account.group.group_type == AccountGroup.GroupType.LIABILITY
                 or voucher.debit_account.group.name.lower() == "advance given"
             ):
-                messages.error(request, "For expenses/advances, the debit account must be an Expense or Advance Given account.")
+                messages.error(request, "For expenses/advances, the debit account must be an Expense, Liability, or Advance Given account.")
             else:
                 with transaction.atomic():
                     voucher.voucher_no = _generate_voucher_no(session, Voucher.VoucherType.CASH_PAYMENT)
@@ -2127,11 +2172,20 @@ def receipt_other_create(request):
             voucher.voucher_type = Voucher.VoucherType.CASH_RECEIPT
             voucher.created_by = request.user
             
-            # For receipts, debit should be Cash/Bank, credit should be Income
+            # For receipts, debit should be Cash/Bank, credit should be Income OR a Liability
+            # increasing (e.g. someone personally advancing cash to the school - a real case:
+            # "PRAGATI PERSONAL/ADVANCE A/C ... SCHOOL KE KHARCH KE LIYE LOAN LIYA GAYA" in the
+            # legacy ledger). Receiving a loan is real cash in, but it's not Income - it's a
+            # Liability the school now owes back. The old check rejected this with no way to
+            # record it, which would have blocked the owner's own decision to move this kind of
+            # entry into the new app going forward.
             if not voucher.debit_account.is_cash_or_bank:
                 messages.error(request, "For receipts, the debit account must be a Cash or Bank account.")
-            elif voucher.credit_account.group.group_type != AccountGroup.GroupType.INCOME:
-                messages.error(request, "For receipts, the credit account must be an Income account.")
+            elif voucher.credit_account.group.group_type not in (
+                AccountGroup.GroupType.INCOME,
+                AccountGroup.GroupType.LIABILITY,
+            ):
+                messages.error(request, "For receipts, the credit account must be an Income or Liability account.")
             else:
                 with transaction.atomic():
                     voucher.voucher_no = _generate_voucher_no(session, Voucher.VoucherType.CASH_RECEIPT)

@@ -40,11 +40,26 @@ class Command(BaseCommand):
             self.stdout.write("Created fallback AcademicSession.")
 
         expense_group = None
+        # Real example from the legacy ledger: "PRAGATI PERSONAL/ADVANCE A/C" - money
+        # personally advanced by an individual to cover a school cash shortfall, then
+        # repaid later (CPMT "Pragati ka paisa wapas kar diya gya"). This is a LIABILITY
+        # (school owes it back), not an EXPENSE - lumping it under "Legacy Expenses"
+        # would silently inflate expense totals on any future P&L/expense report even
+        # though it has zero effect on the Cash Book itself (which only cares whether a
+        # transaction touches the Cash ledger, not how the other side is classified).
+        # Any legacy ledger whose name contains one of these words is routed to a
+        # dedicated "Legacy Loans & Advances" liability group instead.
+        loan_group = None
+        LOAN_KEYWORDS = ("PERSONAL/ADVANCE", "PERSONAL ADVANCE", "LOAN", "ADVANCE A/C")
         cash_ledger = None
         if not dry_run:
             expense_group, _ = AccountGroup.objects.get_or_create(
                 name="Legacy Expenses",
                 defaults={'group_type': AccountGroup.GroupType.EXPENSE}
+            )
+            loan_group, _ = AccountGroup.objects.get_or_create(
+                name="Legacy Loans & Advances",
+                defaults={'group_type': AccountGroup.GroupType.LIABILITY}
             )
             from core.views import _get_cash_account
             cash_ledger = _get_cash_account()
@@ -58,6 +73,15 @@ class Command(BaseCommand):
         salary_skipped = 0
         voucher_created = 0
         voucher_skipped = 0
+        # Real incident (July 2026): rows whose SUBCODE/CONTRASUB didn't resolve in
+        # SubGroup.csv used to vanish silently (a bare `continue`, no log, no counter) -
+        # this is exactly how a legitimate transaction (e.g. a one-off "Pragati
+        # Personal/Advance" loan ledger that isn't in the standard SubGroup list) can
+        # disappear from the Cash Book with zero trace that it was ever seen. Every
+        # unresolved row is now counted and logged with enough detail to look it up
+        # and fix (in SubGroup.csv, or by hand) on the next run.
+        unresolved_skipped = 0
+        unresolved_rows = []
 
         try:
             with open(ledger_csv, 'r', encoding='utf-8-sig', errors='ignore') as f:
@@ -68,10 +92,10 @@ class Command(BaseCommand):
                         v_date = datetime.strptime(v_date_str, '%d/%m/%Y').date()
                     except ValueError:
                         continue
-                    
+
                     if v_date < date(2026, 4, 1):
                         continue
-                    
+
                     v_type = row['V_TYPE']
                     if v_type not in ['CPMT', 'CREC']:
                         continue
@@ -81,7 +105,7 @@ class Command(BaseCommand):
                         amount = Decimal(cr_val)
                     except:
                         amount = Decimal('0')
-                    
+
                     if amount <= 0:
                         continue
 
@@ -96,6 +120,17 @@ class Command(BaseCommand):
                     target_sub = subgroups.get(target_subcode)
 
                     if not target_sub:
+                        unresolved_skipped += 1
+                        unresolved_rows.append(
+                            f"  V_NO={v_no} V_TYPE={v_type} DATE={v_date} AMOUNT={amount} "
+                            f"SUBCODE={subcode} CONTRASUB={contrasub} (tried={target_subcode}) "
+                            f"NARRATION={narration[:80]!r}"
+                        )
+                        self.stderr.write(self.style.WARNING(
+                            f"Unresolved SUBCODE/CONTRASUB '{target_subcode}' for {v_type} {v_no} "
+                            f"on {v_date} (Rs {amount}) - '{narration[:60]}' - NOT imported. "
+                            f"Add this code to SubGroup.csv or create the ledger by hand."
+                        ))
                         continue
 
                     # If this is a SALARY payment
@@ -147,9 +182,14 @@ class Command(BaseCommand):
                             else:
                                 voucher_created += 1
                         else:
+                            ledger_group = (
+                                loan_group
+                                if any(kw in ledger_name.upper() for kw in LOAN_KEYWORDS)
+                                else expense_group
+                            )
                             target_ledger, _ = LedgerAccount.objects.get_or_create(
                                 name=ledger_name,
-                                defaults={'group': expense_group}
+                                defaults={'group': ledger_group}
                             )
 
                             db_v_type = Voucher.VoucherType.CASH_PAYMENT if v_type == 'CPMT' else Voucher.VoucherType.CASH_RECEIPT
@@ -184,5 +224,14 @@ class Command(BaseCommand):
             f"Salary Skipped (dupes): {salary_skipped}\n"
             f"Voucher Created: {voucher_created}\n"
             f"Voucher Skipped (dupes): {voucher_skipped}\n"
+            f"Unresolved (SUBCODE/CONTRASUB not found - NOT imported at all): {unresolved_skipped}\n"
             f"{'(DRY RUN - no data saved)' if dry_run else '(Data saved to database)'}"
         ))
+        if unresolved_rows:
+            self.stdout.write(self.style.WARNING(
+                f"\n{unresolved_skipped} row(s) could not be matched to any ledger and were "
+                f"skipped entirely - these transactions are MISSING from the Cash Book until "
+                f"fixed. Details:"
+            ))
+            for line in unresolved_rows:
+                self.stdout.write(line)

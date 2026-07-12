@@ -242,6 +242,8 @@
             return;
         }
 
+        var dueRow = dueTotalOutput.closest(".pay-total-row");
+
         function recalculate() {
             var feeTotal = amountInputs.reduce(function (sum, input) {
                 return sum + toNumber(input.value);
@@ -251,15 +253,29 @@
             var lateFee = toNumber(lateFeeInput && lateFeeInput.value);
             var received = toNumber(receivedInput && receivedInput.value);
             var netTotal = feeTotal + previousDue + lateFee - concession;
-            var dueTotal = Math.max(netTotal - received, 0);
+            // Not clamped to 0 here on purpose (owner request, July 2026): if Received
+            // Amount is entered higher than Net Total - almost always a typo (e.g. an
+            // extra digit) rather than a genuine advance payment - show the shortfall
+            // as a negative number instead of silently displaying "0.00", so office
+            // staff spot the mistake immediately instead of it looking like a normal
+            // fully-paid receipt. This is purely a live on-screen warning: the amount
+            // actually SAVED to the receipt (legacy_due_amount) still clamps at 0, as
+            // before - no change to stored/reported due totals.
+            var rawDue = netTotal - received;
 
             feeTotalOutput.textContent = formatMoney(feeTotal);
             netTotalOutput.textContent = formatMoney(netTotal);
-            dueTotalOutput.textContent = formatMoney(dueTotal);
+            dueTotalOutput.textContent = formatMoney(rawDue);
+            if (dueRow) {
+                dueRow.classList.toggle("is-advance", rawDue < 0);
+            }
 
             if (receivedInput && (!receivedInput.value || receivedInput.value === "0" || receivedInput.value === "0.00")) {
                 receivedInput.value = formatMoney(Math.max(netTotal, 0));
                 dueTotalOutput.textContent = "0.00";
+                if (dueRow) {
+                    dueRow.classList.remove("is-advance");
+                }
             }
         }
 

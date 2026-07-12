@@ -211,8 +211,13 @@ class FeeReceiptEditForm(FeeReceiptEntryForm):
 
 
 class FeeReceiptLineEntryForm(forms.Form):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, require_positive_total=True, **kwargs):
         self.fee_heads = list(FeeHead.objects.filter(is_active=True).order_by("name"))
+        # A receipt that ONLY collects an old/previous due (all fee-head boxes left
+        # at 0.00) is a legitimate real-world case now that Previous Due is a
+        # dedicated field - the view is responsible for checking line_total +
+        # previous_due_amount together in that scenario, so it passes False here.
+        self.require_positive_total = require_positive_total
         super().__init__(*args, **kwargs)
 
         for fee_head in self.fee_heads:
@@ -234,7 +239,7 @@ class FeeReceiptLineEntryForm(forms.Form):
             amount = cleaned_data.get(self.field_name(fee_head)) or Decimal("0.00")
             total += amount
 
-        if total <= Decimal("0.00"):
+        if self.require_positive_total and total <= Decimal("0.00"):
             raise forms.ValidationError("At least one fee head amount is required.")
 
         cleaned_data["line_total"] = total
@@ -511,20 +516,26 @@ class VoucherForm(forms.ModelForm):
         cash_ledgers = active_ledgers.filter(is_cash_or_bank=True)
         expense_ledgers = active_ledgers.filter(group__group_type=AccountGroup.GroupType.EXPENSE)
         advance_ledgers = active_ledgers.filter(group__name__iexact="Advance Given")
-        expense_payment_ledgers = (expense_ledgers | advance_ledgers).distinct()
+        # Liability ledgers cover both directions of a personal loan/advance someone gives the
+        # school (e.g. "Pragati Personal/Advance A/C" from the legacy ledger): receiving the loan
+        # (a receipt crediting Liability) and repaying it later (an expense debiting Liability).
+        # Without this, staff have no way to record either side through Daily Expense / New
+        # Other Receipt - a real gap now that expenses/loans are meant to be entered live here.
+        liability_ledgers = active_ledgers.filter(group__group_type=AccountGroup.GroupType.LIABILITY)
+        expense_payment_ledgers = (expense_ledgers | advance_ledgers | liability_ledgers).distinct()
         income_ledgers = active_ledgers.filter(group__group_type=AccountGroup.GroupType.INCOME)
 
         if self.voucher_kind == "expense":
             self.fields["credit_account"].queryset = cash_ledgers
             self.fields["debit_account"].queryset = expense_payment_ledgers
             self.fields["credit_account"].empty_label = None
-            self.fields["debit_account"].empty_label = "Select expense / advance head"
+            self.fields["debit_account"].empty_label = "Select expense / advance / loan repayment head"
         elif self.voucher_kind == "receipt":
-            income_receipt_ledgers = (income_ledgers | advance_ledgers).distinct()
+            income_receipt_ledgers = (income_ledgers | advance_ledgers | liability_ledgers).distinct()
             self.fields["debit_account"].queryset = cash_ledgers
             self.fields["credit_account"].queryset = income_receipt_ledgers
             self.fields["debit_account"].empty_label = None
-            self.fields["credit_account"].empty_label = "Select income / advance head"
+            self.fields["credit_account"].empty_label = "Select income / advance / loan received head"
 
         self.fields["staff"].queryset = Staff.objects.filter(is_active=True)
         self.fields["staff"].empty_label = "Select staff"
@@ -548,8 +559,12 @@ class VoucherForm(forms.ModelForm):
             if debit_account:
                 is_expense = debit_account.group.group_type == AccountGroup.GroupType.EXPENSE
                 is_advance = debit_account.group.name.lower() == "advance given"
-                if not (is_expense or is_advance):
-                    self.add_error("debit_account", "Expense / Advance Head me Expense ya Advance Given ledger select kijiye.")
+                # Liability: repaying a personal loan/advance someone gave the school (e.g.
+                # "Pragati ka paisa wapas kar diya gya") reduces what's owed - a Liability debit,
+                # not an Expense. See VoucherForm.__init__ for the fuller reasoning.
+                is_liability = debit_account.group.group_type == AccountGroup.GroupType.LIABILITY
+                if not (is_expense or is_advance or is_liability):
+                    self.add_error("debit_account", "Expense / Advance Head me Expense, Liability, ya Advance Given ledger select kijiye.")
                 if debit_account.name.lower() == "staff advance":
                     if not staff:
                         self.add_error("staff", "Staff Advance ke liye staff select kijiye.")
@@ -563,8 +578,12 @@ class VoucherForm(forms.ModelForm):
             if credit_account:
                 is_income = credit_account.group.group_type == AccountGroup.GroupType.INCOME
                 is_advance = credit_account.group.name.lower() == "advance given"
-                if not (is_income or is_advance):
-                    self.add_error("credit_account", "Income Head me sirf Income ya Advance Given ledger select kijiye.")
+                # Liability: receiving a personal loan/advance from someone (e.g. Pragati covering
+                # a cash shortfall) is real cash in, but it's not Income - it's a Liability the
+                # school now owes back.
+                is_liability = credit_account.group.group_type == AccountGroup.GroupType.LIABILITY
+                if not (is_income or is_advance or is_liability):
+                    self.add_error("credit_account", "Income Head me sirf Income, Liability, ya Advance Given ledger select kijiye.")
                 if credit_account.name.lower() == "staff advance":
                     if not staff:
                         self.add_error("staff", "Staff Advance refund ke liye staff select kijiye.")

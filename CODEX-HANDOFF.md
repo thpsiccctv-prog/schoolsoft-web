@@ -2492,3 +2492,500 @@ project, for consistency):
    total (see reasoning above). If this ever causes a real mismatch complaint, the fix is to only mark
    receipts up to covering the entered amount (oldest first) and leave the remainder un-marked - not
    done now since it adds real complexity for a scenario that hasn't happened yet.
+
+---
+
+## Incident: "Previous Due" double-entered as a Fee Head (real receipt, real money) - guardrail added
+
+**What happened (confirmed with owner):** On receipt `MR-20260712170536` (student Pawan Vishwakarma), the
+office went into Django admin (Fee Setup > Fee Heads) and manually created a brand-new **Fee Head** named
+"Previous Due", then entered ₹1,900 against it as an ordinary line item - on top of the *separate*,
+dedicated `previous_due_amount` field on the same receipt (which had correctly auto-suggested ₹56,950 from
+this student's real earlier unpaid receipts). Result: the old due was counted twice under two different
+mechanisms with the same name, producing a receipt that showed Fee Total ₹5,950 (includes the bogus
+₹1,900 "Previous Due" fee-head line) but Net Payable ₹62,900 (₹5,950 + ₹56,950 previous-due field), which
+looked nonsensical to the owner ("total galat dikha rha hai").
+
+Root cause: the dedicated "Previous Due" field (shipped this session, see checkpoint above) and a
+plain Fee Head are two completely different mechanisms that happen to look identical to office staff -
+nothing in the UI stopped someone from creating a Fee Head with that exact name.
+
+**Fix shipped this session:**
+- `core/models.py`: `FeeHead.clean()` now rejects (case/whitespace-insensitive) the names
+  `"previous due"`, `"prev due"`, `"old due"`, `"old dues"`, `"previous dues"`, `"past due"` with a
+  `ValidationError` explaining to use the dedicated Payable-panel field instead. Since Django admin's
+  `ModelForm` always calls `full_clean()` (which calls `.clean()`) before saving, this is enforced the
+  moment staff try to save such a Fee Head in the admin - no way to recreate this incident going forward.
+- `core/tests.py`: new `FeeHeadGuardrailTests` (3 tests: rejects "Previous Due", rejects
+  case/whitespace/synonym variants, confirms ordinary Fee Head names like "Tuition Fee" still work).
+  Test count now 95 (was 92).
+
+**UPDATE (same incident, corrected root cause):** owner pushed back that ₹61,000 due is unrealistic -
+"pure sal ka bhi fee itna nahi hua" (not even a full year's fee is this much) - which led to finding a
+SECOND, more serious bug stacked on top of the first:
+
+- The "Previous Due" Fee Head is **not** something the owner freshly created in admin this week - its
+  "Legacy column: DUE_FEE" (visible in the admin screenshot) proves it has existed since the *original*
+  `import_legacy_fees.py` CSV import (see `FEE_HEADS = {..., "DUE": "Previous Due", ...}` in that command,
+  years old). The owner just used a fee-head line that has always been in the list, out of old habit -
+  not a new mistake.
+- The real bug: `_eligible_prior_due_receipts` summed `legacy_due_amount` across **every** prior receipt,
+  including years of legacy CSV bulk-imported receipts (`SF-...` receipt numbers, `legacy_receipt_no` set)
+  going back to 2018-19. Legacy per-receipt "due" figures are stale snapshots from the old manual system -
+  frequently already resolved via cash payments that were never entered into this system - so blindly
+  summing years of them produced a wildly inflated, meaningless total (~₹56,950 auto-filled on this
+  receipt). This directly contradicted the owner's original request: *"is sal jo purana due hai manual
+  dala jayega aur next year se agar koi due ho to autometic next year show ho jaye"* (this year's old due
+  should be entered manually; only from next year should it show automatically) - the auto-suggestion was
+  never supposed to reach back into pre-automation legacy data at all.
+
+**Fix (code):** `core/views.py` `_eligible_prior_due_receipts` now also filters
+`legacy_receipt_no__isnull=True`, so only receipts created live inside this app (going forward) ever feed
+the auto-suggestion or get auto-marked `carried_forward`. Legacy bulk-imported receipts are now
+completely invisible to this feature - their old dues must be entered manually, exactly as the owner
+originally asked. Added `test_previous_due_ignores_legacy_bulk_imported_receipts` (test count now 96, was
+95) reproducing this exact scenario (a legacy receipt with legacy_due_amount=56950 must NOT be suggested).
+
+**Not done - owner must do these manually (data correction, not a code change):**
+1. **Deactivate the bad Fee Head**: Django admin > Fee Heads > find "Previous Due" > uncheck
+   "Is active" (owner's screenshot shows this already unchecked/saved - confirm it stuck). Do not delete
+   it - it's referenced by real historic `FeeReceiptLine` rows from the legacy import and deleting would
+   cascade. Deactivating just hides it from the Fee Collection form's line-item list going forward. The
+   new model-level guardrail blocks anyone from ever reactivating/recreating one with this name.
+2. **Correct receipt `MR-20260712170536`**: open it in Edit mode.
+   - Remove/zero the ₹1,900 "Previous Due" fee-head line item (it's a duplicate of the dedicated field).
+   - Change the dedicated "Previous Due" field from the bogus auto-suggested ~₹56,950 down to the ACTUAL
+     correct old-due figure for this student, which only the office knows (from their paper/manual
+     records) - do not trust the old auto-filled number, it was computed by the now-fixed buggy logic.
+   - Re-check "Amount Paid" reflects what was actually collected in cash/bank for this receipt.
+3. Run `manage.py test core`, confirm 96/96 (not run this session - bash sandbox unavailable).
+4. Spot-check 2-3 other students who already have receipts with a Previous Due auto-fill from before this
+   fix, in case any of them also picked up an inflated legacy-based figure - the fix only prevents *new*
+   bad suggestions, it does not retroactively correct receipts already saved.
+5. `collectstatic` + `build-desktop.bat` + commit once the receipt correction and test run above are both
+   confirmed, bundled with whatever else is still pending from the previous checkpoint's "Not done" list.
+
+---
+
+## Follow-up: allow "previous-due-only" receipts + explain same-session carry-forward limit
+
+**Owner's next question:** if a student has an old due and the office wants to collect ONLY that due today
+(leaving all Fee Head boxes at 0.00, filling just the Previous Due field), will next month's regular fee
+receipt still auto-fill correctly?
+
+**Bug found and fixed:** `FeeReceiptLineEntryForm.clean()` had a pre-existing rule - "At least one fee head
+amount is required" - that raises `ValidationError` whenever every `fee_head_*` box is 0.00, with no
+awareness of `previous_due_amount` (a separate field on a separate form). This predates the Previous Due
+feature and made total sense before it (a receipt had to be "for" something), but now silently blocks a
+completely legitimate case: a receipt that exists purely to record a previous-due payment.
+- `core/forms.py`: `FeeReceiptLineEntryForm.__init__` gained a `require_positive_total=True` kwarg (default
+  preserves old behavior everywhere it isn't explicitly overridden); `clean()` only raises when that flag
+  is true.
+- `core/views.py` `receipt_create` and `receipt_edit`: both now construct
+  `FeeReceiptLineEntryForm(request.POST, require_positive_total=False)` and, once both forms individually
+  validate, run a combined check: `line_total <= 0 and previous_due <= 0` -> add a non-field error ("Enter
+  at least one fee head amount, or a Previous Due amount, before saving.") instead of the old blanket rule.
+  This still blocks a totally empty receipt, just no longer blocks a previous-due-only one.
+- Tests added: `test_receipt_create_previous_due_only_allowed_with_zero_fee_heads` (zero fee heads +
+  positive previous_due_amount -> saves fine, 0 lines created) and
+  `test_receipt_create_rejects_completely_empty_amounts` (zero everything -> still rejected, no receipt
+  created). Test count now 98 (was 96).
+
+**Answered directly to owner - a real limitation, not fixed this round (needs owner sign-off on the
+right fix before touching it):** the auto-suggest/carry-forward logic (`_eligible_prior_due_receipts`)
+only looks at receipts from an *earlier academic session* (`session__starts_on__lt` the one being
+collected for). It does NOT look at earlier receipts within the SAME session. So if the office creates a
+"previous-due-only" receipt today (session 2026-27) and doesn't collect the full amount - leaving some
+due behind - then next month's regular fee receipt (also session 2026-27) will NOT auto-suggest that
+leftover due, because both receipts are in the same session and the cross-session filter excludes it.
+Office must currently track/enter that leftover manually within the same session. Told the owner this
+plainly; if it becomes a real pain point, the fix is to extend `_eligible_prior_due_receipts` to also
+consider earlier receipts *within* the same session (ordered by receipt_date/id, excluding the receipt
+being created) - not done now since it changes carry-forward semantics and deserves explicit owner
+sign-off first, especially interacting with the existing "marks ALL eligible prior receipts as carried
+forward" behavior noted above.
+
+**Not done:** run `manage.py test core`, confirm 98/98 (bash sandbox unavailable this session, as always -
+every change here was verified by careful code reading, not execution). Bundle with the rest of the
+pending rebuild/commit once the owner confirms all of the above.
+
+---
+
+## Follow-up: same-session carry-forward implemented (the limitation above is now fixed)
+
+**Owner's real workflow, stated directly:** collect April's fee together with any previous due in ONE
+receipt; if that receipt still leaves some due unpaid, it should automatically show up when collecting
+May's fee - not require the office to remember and re-type it. This is the exact limitation flagged in the
+previous checkpoint ("same-session carry-forward NOT fixed this round") - the owner confirmed it matters,
+so it's done now.
+
+**Change:** `_eligible_prior_due_receipts` is now session-agnostic. Previously it only looked at receipts
+from a *strictly earlier academic session*; now it considers ANY of the student's own earlier live-system
+receipts (non-cancelled, non-carried-forward, non-legacy-import) with a positive `legacy_due_amount`,
+regardless of session - so an April receipt's leftover due now feeds straight into May's auto-suggestion,
+even though both are in session 2026-27.
+- `core/views.py`:
+  - `_eligible_prior_due_receipts(student, exclude_pk=None)` - dropped the `session_id` parameter and all
+    session-boundary filtering; added `exclude_pk` so the marking step can leave the just-saved receipt out
+    of its own "prior" set (critical - without this, a receipt with its own leftover due would incorrectly
+    try to mark itself `carried_forward=True`, hiding its own balance from the Due Report).
+  - `_suggest_previous_due(student)` - dropped `session_id`, calls the above with no exclusion (a
+    not-yet-saved receipt can't exclude itself).
+  - `_mark_prior_receipts_carried_forward(receipt)` - now calls
+    `_eligible_prior_due_receipts(receipt.student, exclude_pk=receipt.pk)`.
+  - `student_fee_defaults` - calls `_suggest_previous_due(student)` (session no longer threaded through;
+    the `session` GET param is still used separately for the Fee Head amount suggestions, unrelated to
+    this).
+- Tests added: `test_previous_due_suggested_from_earlier_receipt_same_session` (April receipt with due
+  500, both in session 2026-27 -> May's fee-defaults call suggests exactly 500) and
+  `test_carried_forward_receipt_does_not_mark_itself` (a receipt that absorbs an old due but still has its
+  own leftover balance must NOT flip its own `carried_forward` to True - only the older receipt it
+  absorbed should). Test count now 100 (was 98).
+- Existing cross-session tests (`test_previous_due_suggested_from_earlier_session`,
+  `test_receipt_create_with_previous_due_marks_prior_receipts_carried_forward`,
+  `test_previous_due_ignores_legacy_bulk_imported_receipts`) still pass unchanged - session-agnostic
+  behavior is a strict superset of the old cross-session-only behavior for those scenarios.
+
+**Not done:** run `manage.py test core`, confirm 100/100 (bash sandbox unavailable all session). Then, once
+the owner has done the manual receipt correction from the earlier checkpoint and confirmed everything in
+the browser: `collectstatic` (no static files changed in this specific follow-up, but bundle with whatever
+else is pending) + `build-desktop.bat` + commit - this is a meaningful batch of fixes (double-counting
+guardrail, legacy-data exclusion, previous-due-only receipts, same-session carry-forward) that should ship
+together.
+
+---
+
+## CRITICAL REGRESSION FOUND AND FIXED: "Correct Receipt" was silently broken for EVERY receipt
+
+**Owner report:** cancelled the bad receipt, created a correct fresh one (MR-20260712183241, ₹4,050 fees,
+₹800 paid, ₹3,250 due - itself correct), then tried "Correct Receipt" to adjust it, filled a reason, saved
+- and the Due amount never changed. Tried a second time, same result. "edit save nahi ho raha hai."
+
+**Root cause:** earlier this session, `previous_due_amount` was added to `FeeReceiptEntryForm.Meta.fields`
+(inherited by `FeeReceiptEditForm`). The model field has no `blank=True` (matching the established pattern
+for `concession_amount`/`late_fee_amount`), so Django's ModelForm makes it **required**. `templates/core/
+receipt_form.html` (Fee Collection / create) was updated to render this field at the time - but
+**`templates/core/receipt_edit.html` (Correct Receipt) was never updated and has no input for it at all.**
+Result: every single POST to `receipt_edit` since that change has been missing `previous_due_amount`,
+`receipt_form.is_valid()` returns False ("This field is required"), and the view falls through to
+re-render the same form - with NO visible indication of what went wrong, because the template has no
+`{{ receipt_form.previous_due_amount.errors }}` element to show it (only `non_field_errors`, which this
+isn't). From the owner's side this looked exactly like "I save, nothing happens" - because that's
+literally what was happening, silently, for every correction attempt on every receipt since the field was
+added. This is the most serious bug of the session - it broke a core, already-shipped-and-working feature
+(receipt correction/audit trail) for ALL receipts, not just the Previous Due ones.
+
+**Fix:**
+- `templates/core/receipt_edit.html`: added the missing "Previous Due" field block (mirrors
+  `receipt_form.html` exactly - label, input, hint span, error span), inserted right after the "Fees" row
+  and before "Concession Amount", matching the Payable panel layout used on the create page.
+  `static/core/receipt-form.js` needed no changes - `setupTotals()`/`setupFeeDefaults()` already query by
+  static element ID (`#id_previous_due_amount`), so they now work correctly on the edit page automatically
+  now that the input exists in the DOM. (The auto-suggest fetch itself still won't re-fire on this page,
+  since student/session are `disabled` fields and disabled fields don't emit `change` events - which is
+  correct/intentional: the office should not have their manually-entered previous_due_amount silently
+  overwritten mid-correction.)
+- `core/tests.py`:
+  - `test_receipt_edit_workflow` - added an assertion that the GET-rendered edit page contains
+    `id="id_previous_due_amount"` (would have caught this exact regression).
+  - New `test_receipt_edit_page_renders_every_required_form_field` - a GENERAL regression guard: iterates
+    every required, non-disabled field on `FeeReceiptEditForm` and asserts an `id="id_<name>"` element
+    exists in the rendered `receipt_edit.html` response. This is deliberately generic (not hardcoded to
+    `previous_due_amount`) so that if a future required field is added to the form and someone forgets to
+    add it to this specific template again, this test fails immediately with the exact field name(s)
+    missing, instead of silently breaking receipt correction in production for weeks.
+  - Test count now 101 (was 100).
+
+**Practical impact for the owner:** any receipt "corrected" via the Correct Receipt screen since this
+session's Previous Due changes went in did NOT actually save those corrections - the receipt data is
+whatever it was before those correction attempts (the fields being edited stayed at their original
+values). Worth a quick sanity check of any receipts believed to have been corrected recently, though based
+on this conversation the only one affected in practice is MR-20260712183241 (Pawan Vishwakarma) - and
+since its correction attempts changed nothing, its data (₹4,050 fee / ₹800 paid / ₹3,250 due) should
+already be accurate as originally created; the owner should just retry "Correct Receipt" on it now if a
+change (e.g. Received Amount) is still needed.
+
+**Not done:** run `manage.py test core`, confirm 101/101 (bash sandbox unavailable all session - every
+change here verified by careful reading of the actual template/view/form code, not execution). Bundle with
+everything else pending, then `collectstatic` + `build-desktop.bat` + commit.
+
+---
+
+## Second parity bug found (same class): receipt_detail.html missing the Previous Due line
+
+**Context:** a background agent/tool (not this session) ran `manage.py test core` (101/101 passed) and
+`build-desktop.bat` successfully, and the owner tested the rebuilt EXE. The receipt_edit.html fix above DID
+work - "Correct Receipt" now saves properly (confirmed: owner edited receipt MR-20260712183241, setting
+`previous_due_amount` to 1900, and the Audit History correctly shows the change). BUT the owner then saw
+the receipt's Fee Total (Rs 4,050) not matching Net Payable (Rs 5,950) with no visible line explaining the
+Rs 1,900 gap - looking exactly like the original double-counting incident. Owner asked to "deep think" it.
+
+**Investigated via the owner's own Django admin screenshots (not assumption):** the underlying data is
+100% correct and consistent - `previous_due_amount=1900.00`, `legacy_fee_total=4050.00`,
+`legacy_net_total=5950.00` (= 4050 + 1900, exactly right), `legacy_due_amount=4050.00`, `carried_forward`
+unchecked, and the `FeeReceiptLine` rows sum to exactly 4050 with no bogus "Previous Due" line among them.
+**This is NOT a double-counting bug - it's a display bug.** The Audit History table even confirmed the
+edit correctly changed `legacy_net_total` 4050 -> 5950 and `received_amount` 800 -> 1900.
+
+**Root cause (same mistake pattern as receipt_edit.html):** the "Previous Due (carried forward)" line item
+was added to `core/pdf.py`'s `build_fee_receipt_pdf` (the downloadable PDF) back when Previous Due first
+shipped - but the *parallel* HTML page, `templates/core/receipt_detail.html` (used both for on-screen
+viewing AND for the "Print Receipt" button), never got the matching row. Its `print-table` only has
+conditional rows for Concession and Late Fee, not Previous Due, so the jump from Fee Total to Net Payable
+had no explanation on that specific surface - while the PDF (if downloaded separately) would have shown it
+correctly all along. The existing test (`test_receipt_pdf_shows_previous_due_line`) only asserted
+`"NOT FULLY PAID"` appeared in the detail response, never checking for the actual line text - so this gap
+went untested.
+
+**Fix:**
+- `templates/core/receipt_detail.html`: added the missing row - purple, bold, `+ {amount}` - positioned
+  right after "Fee Total" and before "Concession / Discount", matching `pdf.py`'s ordering exactly.
+- `core/tests.py`: strengthened `test_receipt_pdf_shows_previous_due_line` to also assert
+  `"Previous Due (carried forward)"` appears in `detail_response` (would have caught this).
+- Also closed a related audit-trail gap noticed while investigating: the `receipt_edit` view's
+  before/after snapshot dicts (used to build the audit log's diff) never included `previous_due_amount`,
+  so correcting that specific field left no record of the change in Audit History even though the totals
+  it affects were tracked. Added it to both snapshots in `core/views.py`. New test
+  `test_receipt_edit_audit_log_tracks_previous_due_amount_change`.
+- Test count now 102 (was 101).
+
+**Also flagged to owner (not yet resolved - needs owner to check):** the owner's own screenshot of the Fee
+Heads grid on the Correct Receipt page still shows a "Previous Due" box (value 0.00) among the Fee Heads -
+meaning the legacy "Previous Due" FeeHead (legacy_column DUE_FEE) appears to be ACTIVE again, even though
+the owner deactivated it earlier this session. The model-level guardrail (`FeeHead.clean()`) only blocks
+*creating or reactivating* a Fee Head with this name going forward - if it was somehow reactivated (e.g. by
+someone unchecking "Is active" -> checking it back, or a data reset), the guardrail doesn't retroactively
+re-deactivate it. **Owner must re-check Django admin > Fee Heads > "Previous Due" > confirm "Is active" is
+unchecked** before further Fee Collection is done, or the original double-entry risk returns.
+
+**Not done:** run `manage.py test core`, confirm 102/102. Then rebuild + ship together with everything else
+pending in this document.
+
+**CLOSED (verified against owner's own screenshots, not just tool claims):** owner confirmed 102/102 tests
+passed and rebuilt the EXE. Re-tested receipt MR-20260712183241 in the new build - the receipt detail page,
+print view, and downloaded PDF all now correctly show "Previous Due (carried forward): +1,900" between Fee
+Total and Net Payable, with every number self-consistent (4,050 + 1,900 = 5,950 Net Payable, 1,900 paid,
+4,050 due - matches everywhere, all three surfaces agree). The Audit History's older entry (from before
+this fix) doesn't show `previous_due_amount` in its diff, which is expected/historical - only edits made
+*after* this fix will have that field tracked. The whole "Previous Due carry-forward" feature arc (model,
+migration, forms, views, both templates, PDF, guardrail, legacy-data exclusion, same-session
+carry-forward, previous-due-only receipts, audit trail) is now considered shipped and verified working end
+to end in the real desktop app, not just in tests.
+
+**Still open / owner to confirm separately:** whether the legacy "Previous Due" Fee Head (legacy_column
+DUE_FEE) is still deactivated in Fee Heads admin - this was flagged in the previous checkpoint and not yet
+confirmed either way. Worth a quick check before relying on the guardrail alone.
+
+---
+
+## Small follow-up: show overpayment as negative Due (live, on-screen only)
+
+**Owner request:** on the Fee Collection form, if Received Amount is typed higher than Net Total (owner's
+example: Net 3,950 but Received 9,601, an obvious typo), the Due field silently showed "0.00" - looked like
+a normal fully-paid receipt, hiding the mistake. Owner wants the Due field to show the negative shortfall
+(-5,651) instead, so a typo is caught immediately.
+
+**Decision (asked owner directly, two options):** (a) on-screen warning only - Due field shows the
+negative number live while typing, but the amount actually SAVED to the receipt (`legacy_due_amount`)
+still clamps at 0 as before, no change to Due Report/Dashboard totals; vs (b) genuinely save/print a
+negative due as a tracked "advance" affecting aggregate totals. **Owner chose (a) - on-screen only.**
+Simpler, safer, doesn't touch core financial calculation or reporting.
+
+**Implemented:**
+- `static/core/receipt-form.js` `setupTotals()`: `recalculate()` no longer clamps the *displayed* due to
+  0 - shows the raw `netTotal - received` (can be negative). When negative, toggles a new `is-advance`
+  class on the Due row's parent `.pay-total-row` element.
+- `static/core/styles.css`: added `.fee-desk .pay-total-row.due.is-advance` - teal/green styling (instead
+  of the alarming red used for genuine due) so an overpayment doesn't look like the same kind of problem
+  as an underpayment.
+- Deliberately did NOT touch `core/views.py` - `legacy_due_amount = max(net_total - received, 0)` is
+  unchanged in both `receipt_create` and `receipt_edit`, so saved/printed receipts and every due
+  aggregation (Due Report, Dashboard, Family Ledger, etc.) behave exactly as before. Pure front-end,
+  zero backend/financial-logic risk.
+- No Django test added (JS-only/cosmetic change, consistent with how other JS-only UI features in this
+  codebase - month chips, student search dropdown - aren't covered by Django tests either).
+
+**Not done:** `collectstatic` (static files changed: receipt-form.js, styles.css) + rebuild EXE, bundle with
+whatever else is still pending.
+
+---
+
+# ACCOUNTS MODULE: Cash Book gap investigation + backfill plan (2026-07-12)
+
+**Owner's request:** "ab account ki bari" (now it's Accounts' turn) - uploaded two Cash Book PDFs for the
+SAME date range (1 June - 12 July 2026): one exported from the new Django app's own `/accounts/cash-book/`
+report, one from the old legacy VB software ("Sun Software Solution"). Asked for a diagnosis, a plan, and
+this document updated so another AI/session can pick it up.
+
+## What the two PDFs showed
+
+- **New app's Cash Book**: only Fee Receipts appear as "Receipts". The "Payments" column is completely
+  empty every single day except `Balance b/d`/`Balance c/d` carry-forward lines. Closing balance as of
+  12/07: Rs 38,292.
+- **Legacy software's Cash Book**: fee receipts (SFEE vouchers, same totals - reconciles correctly, e.g.
+  17/06 SF-99/100/101 = Rs 5,100 in both) PLUS dozens of real CPMT (cash payment) vouchers: staff salaries
+  paid to named individuals (Mahant Guptaji, Shivanshu Tiwari, Aman Sir, Bindu Dai, Satyam Verma Clerk,
+  Ravindra driver, Rishika Miss, Reji Joy), bus/vehicle expenses (diesel, mechanic, brake change), sweeper
+  payments (Ramayan Sweaper, recurring), tea/snacks, stationary, RO water repair - PLUS two CREC (cash
+  receipt) entries where an individual "Pragati" personally advanced cash to the school to cover shortfalls
+  (Rs 30,000 on 09/07, Rs 20,500 on 12/07 - "SCHOOL KE KHARCH KE LIYE LOAN LIYA GAYA"), later partially
+  used to pay a staff salary arrear. Closing balance as of 12/07: Rs 10,367.
+
+## Investigation (via subagent, then personally verified against the real source files - not assumption)
+
+**First hypothesis checked and REJECTED:** that `core/views.py`'s `cash_book` view only queries
+`FeeReceipt` and never joins Voucher/SalaryPayment data. **False.** Read the actual view
+(`core/views.py:2379-2598`): it correctly unions three sources -
+`FeeReceipt.objects.filter(payment_mode=CASH)` (2416-2421), `Voucher.objects.filter(Q(debit_account=cash)
+| Q(credit_account=cash))` (2424-2428), and `SalaryPayment.objects.filter(payment_mode=CASH)` when
+`?include_salary=1` (2430-2438, and the owner's URL already had this param). The query logic is correct.
+
+**Second hypothesis checked and REJECTED:** that the sync script's SUBCODE/CONTRASUB lookup was silently
+dropping Pragati's entries because her ledger wasn't in `SubGroup.csv`. Checked directly:
+`D:\english medium\migration_audit\exports\SubGroup.csv` line 64 - `"10249","5","1","PRAGATI
+PERSONAL/ADVANCE A/C",...` - **it's there, fully resolvable.** Not the cause.
+
+**Actual root cause, confirmed by directly inspecting the CSV file (not guessed):**
+`D:\english medium\migration_audit\exports\LEDGER.csv` - the file the one-time import command
+(`core/management/commands/sync_recent_vouchers.py`) reads from - **has ZERO rows for June or July 2026 at
+all.** Grepped the whole file for `/06/2026` and `/07/2026`: no matches. The latest dated row found
+(searching around the Pragati SUBCODE 10249 and generally) is **16/05/2026**. This CSV snapshot is a
+frozen point-in-time export from mid-May and was never refreshed since. Every fee receipt in the Cash Book
+PDF comes through a *different*, always-live path (the app's own `FeeReceipt` records, entered directly by
+office staff in Fee Collection) - which is exactly why fee income shows correctly while every expense/
+salary/loan line is silently absent: **that entire side of the ledger has no live path into the new app at
+all** except this one, stale, manually-run CSV import.
+
+**Why this happened / what it really means:** office continues to record all day-to-day expenses,
+salaries, and cash loans/advances *only* in the old legacy VB software. The new app already has full,
+working UI for all of this (Daily Expense, Salary Register, New Other Receipt, Voucher Register, Ledger
+Master - all pre-existing, all functional, nothing missing to build). It has simply never been used for
+this purpose - the office's real workflow for money-out-of-cash-drawer transactions still lives entirely in
+the old system, and the only bridge (`sync_recent_vouchers.py` against a manually-exported CSV) hasn't been
+re-run with fresh data since mid-May.
+
+## Owner's decisions (asked directly, two questions)
+
+1. **Going forward**: office will now enter expenses/salary/vouchers **directly in the new SchoolSoft app**
+   (Daily Expense / Salary Register / New Other Receipt / Voucher Register) instead of the old VB software.
+   Not a "transition period with double entry" and not "keep relying on periodic CSV sync forever" - a
+   clean cutover, chosen as the recommended option.
+2. **The June-July gap**: owner wants it **backfilled** into the new system (not left as "old software's
+   problem, new system starts clean from today") - re-sync should be done so both Cash Books reconcile and
+   the record is complete.
+
+## Code fixes made this session (in `core/management/commands/sync_recent_vouchers.py`)
+
+1. **Fixed the silent-skip bug** (a real defect, even though it wasn't THIS gap's cause - it's a live risk
+   for future syncs): any row whose SUBCODE/CONTRASUB didn't resolve in `SubGroup.csv` used to just
+   `continue` with zero logging, zero counting - a transaction could vanish with no trace it was ever seen.
+   Now every unresolved row is counted (`unresolved_skipped`) and logged to stderr AND to the final summary
+   with the voucher no/type/date/amount/narration, so a future sync makes any gap immediately visible and
+   diagnosable instead of silent.
+2. **Added proper Liability classification for loan/advance ledgers**: previously every non-salary legacy
+   ledger (including something like "Pragati Personal/Advance") was dumped into a single "Legacy Expenses"
+   (EXPENSE-type) `AccountGroup` - accounting-wise wrong for a loan/advance (it's money owed BACK, a
+   liability, not an expense). Doesn't affect the Cash Book report itself (which only cares about
+   debit/credit to the Cash ledger, not the other side's classification) but WOULD silently corrupt any
+   future Expense Report / P&L that groups by AccountGroup. Now any ledger whose name contains
+   "PERSONAL/ADVANCE", "LOAN", or "ADVANCE A/C" is routed to a new "Legacy Loans & Advances" LIABILITY
+   group instead.
+
+## The plan (next session / other AI / owner - in order)
+
+1. **Owner/office**: re-export a fresh `LEDGER.csv` (and ideally `SubGroup.csv` too, cheap insurance in
+   case any new sub-ledgers were added since May) from the legacy VB software, covering everything through
+   today. Overwrite `D:\english medium\migration_audit\exports\LEDGER.csv` (and `SubGroup.csv`) with the
+   fresh export.
+2. Run `python manage.py sync_recent_vouchers --dry-run` first. Review the summary - especially the new
+   "Unresolved" section - before touching real data. If anything shows up there, decide whether to add it
+   to `SubGroup.csv` or handle by hand, then re-run dry-run until clean.
+3. **Critical, learned from the 2026-07-08 checkpoint's mistake** (documented earlier in this file: "the
+   legacy Salaries and Vouchers were initially missed because the import script was run on the local dev DB
+   instead of the Desktop EXE DB"): confirm which database the sync is about to write to BEFORE running for
+   real. The office's live data lives in `%LOCALAPPDATA%\SchoolSoft\` on the school's PC (or wherever the
+   live desktop/online DB actually is) - running against a throwaway dev DB would silently produce nothing
+   useful again, exactly like last time.
+4. Run `python manage.py sync_recent_vouchers` for real (no `--dry-run`) against the confirmed-correct
+   database.
+5. **Verify by reconciling, not by assuming it worked**: re-open `/accounts/cash-book/` for
+   `from_date=2026-06-01&to_date=2026-07-12&include_salary=1` in the live app and compare against the
+   legacy PDF line by line - closing balance should land on Rs 10,367 (matching the legacy PDF), and every
+   CPMT/CREC line the owner already saw (salaries, diesel, sweeper, tea/snacks, RO repair, Pragati's two
+   loans) should now appear with the correct classification.
+6. **Cutover prerequisite check**: the sync's `get_or_create` calls already auto-create every
+   `LedgerAccount` it encounters (staff members' names show up via `Staff.objects.filter(full_name=...)`
+   matching for salaries; expense/loan ledger names via `LedgerAccount.objects.get_or_create`) - so after
+   this backfill, all the ledgers the office needs (bus/diesel, sweeper, tea & snacks, stationary, RO
+   repair, Pragati's loan account, etc.) will already exist in Ledger Master, ready to select from Daily
+   Expense / New Other Receipt going forward. Spot-check Ledger Master after the sync to confirm this
+   looks sane (no duplicate near-identical ledger names, correct groups) before telling office staff to
+   start using it live.
+7. Once verified, **owner communicates the cutover to office staff**: stop entering expenses/salary/loans
+   in the old VB software, use Daily Expense / Salary Register / New Other Receipt / Voucher Register in
+   the new SchoolSoft app from here on. (This is a process/communication step, not a code task.)
+
+## Cross-checked against another AI's independent investigation (2026-07-12, same day)
+
+Owner had a second AI/session do its own read-only investigation and pasted the report back. Compared
+line by line against the findings above rather than trusting it at face value:
+
+**Agreed on (independently, good sign):** `cash_book` view already unions FeeReceipt + Voucher +
+SalaryPayment correctly; not a code-gap in that view; all the Daily Expense / Salary Register / Other
+Receipt / Voucher Register / Ledger Master UI already exists; the real problem is data/adoption, not a
+missing feature.
+
+**One claim in that report is misleading and should NOT be trusted as-is:** it included a "Local DB Check"
+claiming to query "the local workspace DB" for 1 June - 12 July 2026 and found only 5 cash FeeReceipts
+totaling Rs 5,700, plus 3 vouchers and 2 salary payments that all exist but are `is_cancelled=True`. **This
+does not match the owner's own uploaded Cash Book PDF at all** - that PDF alone shows single fee receipts
+larger than that whole "Rs 5,700 total" (e.g. MR-20260712154721 SONAM alone = Rs 10,800), and many more
+receipts than 5. This is near-certainly the exact same mistake already documented in this file's 2026-07-08
+checkpoint ("the legacy Salaries and Vouchers were initially missed because the import script was run on
+the local dev DB instead of the Desktop EXE DB") happening again - that AI queried *some* local/dev SQLite
+file, not the live database backing the owner's actual `127.0.0.1:65058` session that produced the PDF.
+**Do not treat those "3 cancelled vouchers / 2 cancelled salaries" figures as real production data** -
+they're very likely test/dev rows in an unrelated database. This doesn't change the plan above (fresh CSV
+export + correct-DB sync + reconciliation is still exactly right), but it's a live example of why every
+step in that plan explicitly says to confirm the target DB and verify by reconciling against the actual PDF
+rather than trusting a DB query's headline numbers.
+
+**One claim in that report is real and led to an additional fix:** it correctly caught that
+`receipt_other_create` (`core/views.py`, "New Other Receipt") hardcoded `credit_account.group.group_type
+!= AccountGroup.GroupType.INCOME` as a rejection condition - meaning a legitimate loan/advance RECEIPT
+(like Pragati's Rs 30,000/Rs 20,500) could never be entered through this screen once the new "Legacy Loans
+& Advances" LIABILITY group exists, because Liability isn't Income. Verified this by reading the actual
+view code - confirmed real. Also found the mirror-image problem it didn't check:
+`expense_create` similarly hardcoded debit account must be EXPENSE or literally named "Advance Given" -
+so *repaying* that same loan later ("Pragati ka paisa wapas kar diya gya" - a real line in the legacy
+ledger) had no way to be recorded either. Both would have directly blocked the owner's own decision to
+move this kind of entry into the new app going forward, so fixed both, plus the underlying `VoucherForm`
+in `core/forms.py` which independently re-validates the same rule AND restricts the dropdown querysets
+(fixing only the view-level check without also fixing the form would have left the ledger unselectable
+in the UI and re-rejected by `form.clean()` regardless):
+- `core/forms.py` `VoucherForm.__init__`: `expense_payment_ledgers` and `income_receipt_ledgers`
+  querysets now also include LIABILITY-group ledgers (previously only Expense/Income + literally-named
+  "Advance Given").
+- `core/forms.py` `VoucherForm.clean()`: both branches now accept a LIABILITY-group account alongside the
+  existing Expense/Income/Advance-Given checks.
+- `core/views.py` `expense_create` and `receipt_other_create`: same relaxation at the view level (defense
+  in depth - matches the form-level fix rather than replacing it).
+- Tests added to `AccountsTests` in `core/tests.py`: `test_receipt_allows_liability_credit_account` and
+  `test_expense_allows_liability_debit_account`, using the exact Pragati loan/repayment scenario from the
+  legacy ledger. Test count now 104 (was 102).
+
+**Independently re-verified by the other AI session** (targeted `AccountsTests` run: 4/4 pass) - confirmed
+the same reading of the fix (Liability ledgers now selectable/valid on both New Other Receipt and Daily
+Expense) and independently agreed the "5,700 total / cancelled vouchers" DB-check claim from its own
+earlier report isn't reliable production data. Both sessions now aligned. This specific fix is CLOSED.
+
+## Deliberately NOT done this session (flagged, not forgotten)
+
+- `sync_recent_vouchers.py` has no `transaction.atomic()` wrapping its save loop (imported but unused) -
+  a crash partway through a real run could leave a partial import. Low risk for a one-time backfill run
+  that's about to become obsolete after cutover, but worth wrapping if this script is ever run again later.
+- No reconciliation/diff report was built (e.g. an automated "does new Cash Book match an uploaded legacy
+  PDF/CSV" checker) - the plan above relies on manual side-by-side comparison, which is fine for a one-time
+  backfill but would be tedious if this ever needs to happen again. Not built now since the owner's decision
+  makes this a one-time historical catch-up, not a recurring need.
+- Did not touch `core/views.py`'s `cash_book` view itself - it was already correct, nothing to fix there.

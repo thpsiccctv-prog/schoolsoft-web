@@ -4,6 +4,7 @@ import re
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
+from django.core.exceptions import ValidationError
 from django.db import connection
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
@@ -12,7 +13,7 @@ from django.utils import timezone
 
 from .access import READONLY_GROUP
 
-from .forms import VoucherForm
+from .forms import FeeReceiptEditForm, VoucherForm
 from .whatsapp import build_wa_link, fee_due_message, normalize_indian_mobile
 from .models import (
     AccountGroup,
@@ -573,6 +574,70 @@ class FeeReceiptTests(AuthenticatedClientMixin, TestCase):
         self.assertContains(detail_response, "I-A")
         self.assertNotContains(detail_response, "Changed Student")
 
+    def test_receipt_create_previous_due_only_allowed_with_zero_fee_heads(self):
+        """Owner request (July 2026): must be able to create a receipt that
+        collects ONLY an old previous due, with every Fee Head box left at
+        0.00 - this used to be blocked by a validation rule written before
+        Previous Due existed as its own field."""
+        session = AcademicSession.objects.create(name="2026-27")
+        school_class = SchoolClass.objects.create(name="III", display_order=3)
+        student = Student.objects.create(full_name="Due Only Student", current_class=school_class)
+        fee_head = FeeHead.objects.create(name="Tuition Fee")
+
+        post_response = self.client.post(
+            reverse("core:receipt_create"),
+            data={
+                "student": student.id,
+                "session": session.id,
+                "receipt_date": "2026-07-12",
+                "from_month": "JULY",
+                "to_month": "JULY",
+                "payment_mode": FeeReceipt.PaymentMode.CASH,
+                "previous_due_amount": "2000.00",
+                "concession_amount": "0.00",
+                "late_fee_amount": "0.00",
+                "received_amount": "2000.00",
+                "remarks": "Previous due only receipt",
+                f"fee_head_{fee_head.id}": "0.00",
+            },
+        )
+
+        receipt = FeeReceipt.objects.get(remarks="Previous due only receipt")
+        self.assertRedirects(post_response, reverse("core:receipt_detail", args=[receipt.id]))
+        self.assertEqual(receipt.legacy_fee_total, Decimal("0.00"))
+        self.assertEqual(receipt.legacy_net_total, Decimal("2000.00"))
+        self.assertEqual(receipt.lines.count(), 0)
+
+    def test_receipt_create_rejects_completely_empty_amounts(self):
+        """Zero fee heads AND zero previous due together must still be
+        rejected - a receipt has to collect something."""
+        session = AcademicSession.objects.create(name="2026-27")
+        school_class = SchoolClass.objects.create(name="III", display_order=3)
+        student = Student.objects.create(full_name="Empty Receipt Student", current_class=school_class)
+        fee_head = FeeHead.objects.create(name="Tuition Fee")
+
+        post_response = self.client.post(
+            reverse("core:receipt_create"),
+            data={
+                "student": student.id,
+                "session": session.id,
+                "receipt_date": "2026-07-12",
+                "from_month": "JULY",
+                "to_month": "JULY",
+                "payment_mode": FeeReceipt.PaymentMode.CASH,
+                "previous_due_amount": "0.00",
+                "concession_amount": "0.00",
+                "late_fee_amount": "0.00",
+                "received_amount": "0.00",
+                "remarks": "Should not save",
+                f"fee_head_{fee_head.id}": "0.00",
+            },
+        )
+
+        self.assertEqual(post_response.status_code, 200)
+        self.assertFalse(FeeReceipt.objects.filter(remarks="Should not save").exists())
+        self.assertContains(post_response, "Enter at least one fee head amount")
+
     def test_student_fee_defaults_api(self):
         session = AcademicSession.objects.create(name="2026-27")
         school_class = SchoolClass.objects.create(name="I", display_order=1)
@@ -643,6 +708,111 @@ class FeeReceiptTests(AuthenticatedClientMixin, TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["previous_due"], "700.00")
+
+    def test_previous_due_suggested_from_earlier_receipt_same_session(self):
+        """Owner request (July 2026): due left over from an April receipt
+        must show up automatically when collecting May's fee, even though
+        both receipts are in the SAME academic session - carry-forward is
+        not limited to session boundaries."""
+        session = AcademicSession.objects.create(name="2026-27", starts_on=date(2026, 4, 1))
+        school_class = SchoolClass.objects.create(name="IV", display_order=4)
+        student = Student.objects.create(full_name="Same Session Carry Student", current_class=school_class)
+        FeeReceipt.objects.create(
+            receipt_no="MR-APRIL",
+            student=student,
+            session=session,
+            received_amount=Decimal("400.00"),
+            legacy_net_total=Decimal("900.00"),
+            legacy_due_amount=Decimal("500.00"),
+        )
+
+        response = self.client.get(
+            reverse("core:student_fee_defaults", args=[student.id]),
+            {"session": session.id},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["previous_due"], "500.00")
+
+    def test_carried_forward_receipt_does_not_mark_itself(self):
+        """A receipt that still has its own leftover due after absorbing an
+        earlier receipt's previous due must not be marked carried_forward on
+        itself - only the OLDER receipt whose balance it absorbed should
+        flip to carried_forward=True."""
+        session = AcademicSession.objects.create(name="2026-27", starts_on=date(2026, 4, 1))
+        school_class = SchoolClass.objects.create(name="V", display_order=5)
+        student = Student.objects.create(full_name="Self Exclude Student", current_class=school_class)
+        old_receipt = FeeReceipt.objects.create(
+            receipt_no="MR-OLD",
+            student=student,
+            session=session,
+            received_amount=Decimal("0.00"),
+            legacy_net_total=Decimal("500.00"),
+            legacy_due_amount=Decimal("500.00"),
+        )
+        fee_head = FeeHead.objects.create(name="Tuition Fee")
+
+        post_response = self.client.post(
+            reverse("core:receipt_create"),
+            data={
+                "student": student.id,
+                "session": session.id,
+                "receipt_date": "2026-07-12",
+                "from_month": "MAY",
+                "to_month": "MAY",
+                "payment_mode": FeeReceipt.PaymentMode.CASH,
+                "previous_due_amount": "500.00",
+                "concession_amount": "0.00",
+                "late_fee_amount": "0.00",
+                "received_amount": "600.00",
+                "remarks": "May receipt still leaves due",
+                f"fee_head_{fee_head.id}": "1000.00",
+            },
+        )
+
+        new_receipt = FeeReceipt.objects.get(remarks="May receipt still leaves due")
+        self.assertRedirects(post_response, reverse("core:receipt_detail", args=[new_receipt.id]))
+        # 1000 (fee) + 500 (previous due) = 1500 net; 600 received -> 900 due left on THIS receipt.
+        self.assertEqual(new_receipt.legacy_due_amount, Decimal("900.00"))
+        self.assertFalse(new_receipt.carried_forward)
+
+        old_receipt.refresh_from_db()
+        self.assertTrue(old_receipt.carried_forward)
+
+    def test_previous_due_ignores_legacy_bulk_imported_receipts(self):
+        """Real incident (July 2026): a student's auto-suggested Previous Due
+        came out to ~Rs 56,950 - more than a full year's fees - because the
+        suggestion summed legacy_due_amount across years of old legacy CSV
+        bulk-imported receipts, whose 'due' figures are stale/unreliable
+        snapshots that were often already resolved outside the system. Per
+        the owner's original request, old/legacy due must be entered
+        MANUALLY; only receipts created live inside this app (no
+        legacy_receipt_no) should feed the auto-suggestion."""
+        old_session = AcademicSession.objects.create(
+            name="2018-19", starts_on=date(2018, 4, 1), ends_on=date(2019, 3, 31)
+        )
+        new_session = AcademicSession.objects.create(
+            name="2026-27", starts_on=date(2026, 4, 1), ends_on=date(2027, 3, 31)
+        )
+        school_class = SchoolClass.objects.create(name="VII", display_order=7)
+        student = Student.objects.create(full_name="Legacy History Student", current_class=school_class)
+        FeeReceipt.objects.create(
+            receipt_no="SF-9001",
+            legacy_receipt_no=9001,
+            student=student,
+            session=old_session,
+            received_amount=Decimal("100.00"),
+            legacy_net_total=Decimal("57050.00"),
+            legacy_due_amount=Decimal("56950.00"),
+        )
+
+        response = self.client.get(
+            reverse("core:student_fee_defaults", args=[student.id]),
+            {"session": new_session.id},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["previous_due"], "0.00")
 
     def test_receipt_create_with_previous_due_marks_prior_receipts_carried_forward(self):
         """When a new receipt rolls in a Previous Due, the source unpaid
@@ -741,6 +911,13 @@ class FeeReceiptTests(AuthenticatedClientMixin, TestCase):
         self.assertEqual(pdf_response["Content-Type"], "application/pdf")
         self.assertEqual(detail_response.status_code, 200)
         self.assertContains(detail_response, "NOT FULLY PAID")
+        # Real incident (July 2026): this line item was added to core/pdf.py's
+        # build_fee_receipt_pdf but the parallel HTML view (receipt_detail.html,
+        # used both on-screen and for "Print Receipt") never got the matching
+        # row - so Net Payable jumped above Fee Total with no visible
+        # explanation, looking exactly like the double-counting bug this
+        # feature was built to prevent. Must appear in both surfaces.
+        self.assertContains(detail_response, "Previous Due (carried forward)")
 
 class Month2DocumentTests(AuthenticatedClientMixin, TestCase):
     def test_admission_form_pdf(self):
@@ -1088,7 +1265,16 @@ class Month2DocumentTests(AuthenticatedClientMixin, TestCase):
         get_edit = self.client.get(reverse("core:receipt_edit", args=[receipt.id]))
         self.assertEqual(get_edit.status_code, 200)
         self.assertContains(get_edit, "Correct Fee Receipt")
-        
+        # Real incident (July 2026): previous_due_amount was added as a
+        # required ModelForm field but templates/core/receipt_edit.html was
+        # never updated to render it, so every "Correct Receipt" submission
+        # silently failed validation ("This field is required") with no
+        # visible error, since the template had no element for that specific
+        # field. Guard against this class of bug recurring: the rendered
+        # edit page must always include an input for every required field
+        # on FeeReceiptEditForm.
+        self.assertContains(get_edit, 'id="id_previous_due_amount"')
+
         post_edit = self.client.post(
             reverse("core:receipt_edit", args=[receipt.id]),
             data={
@@ -1119,6 +1305,83 @@ class Month2DocumentTests(AuthenticatedClientMixin, TestCase):
         self.assertEqual(log.reason, "Wrong amount entered")
         self.assertEqual(log.changes["received_amount"]["before"], "100.00")
         self.assertEqual(log.changes["received_amount"]["after"], "150.00")
+
+    def test_receipt_edit_audit_log_tracks_previous_due_amount_change(self):
+        """Real incident (July 2026): the before/after snapshot dicts used to
+        build the audit log's "changes" diff never included
+        previous_due_amount, so correcting a receipt's Previous Due left no
+        audit trail of that specific change - a real gap for a financial
+        field. Must be tracked like every other money field on the
+        receipt."""
+        session = AcademicSession.objects.create(name="2026-27")
+        school_class = SchoolClass.objects.create(name="VII", display_order=7)
+        student = Student.objects.create(full_name="Audit Trail Student", current_class=school_class)
+        fee_head = FeeHead.objects.create(name="Tuition Fee")
+        receipt = FeeReceipt.objects.create(
+            receipt_no="AUDIT-1",
+            student=student,
+            session=session,
+            previous_due_amount=Decimal("0.00"),
+            received_amount=Decimal("800.00"),
+            legacy_fee_total=Decimal("4050.00"),
+            legacy_net_total=Decimal("4050.00"),
+            legacy_due_amount=Decimal("3250.00"),
+        )
+        FeeReceiptLine.objects.create(receipt=receipt, fee_head=fee_head, amount=Decimal("4050.00"))
+
+        self.client.force_login(self.user)
+        self.client.post(
+            reverse("core:receipt_edit", args=[receipt.id]),
+            data={
+                "receipt_date": "2026-07-12",
+                "payment_mode": FeeReceipt.PaymentMode.CASH,
+                "previous_due_amount": "1900.00",
+                "concession_amount": "0.00",
+                "late_fee_amount": "0.00",
+                "received_amount": "1900.00",
+                "remarks": "",
+                "edit_reason": "Add real previous due",
+                f"fee_head_{fee_head.id}": "4050.00",
+            },
+        )
+
+        receipt.refresh_from_db()
+        log = receipt.audit_logs.first()
+        self.assertEqual(log.changes["previous_due_amount"]["before"], "0.00")
+        self.assertEqual(log.changes["previous_due_amount"]["after"], "1900.00")
+
+    def test_receipt_edit_page_renders_every_required_form_field(self):
+        """General regression guard for the previous_due_amount incident
+        above: every REQUIRED field on FeeReceiptEditForm must actually have
+        an input rendered on the edit page, or a submission omitting it will
+        silently fail validation with no visible error to the office staff.
+        Checks all required fields generically so a future new required
+        field being forgotten in the template fails this test immediately,
+        instead of silently breaking "Correct Receipt" in production."""
+        session = AcademicSession.objects.create(name="2026-27")
+        school_class = SchoolClass.objects.create(name="I", display_order=1)
+        student = Student.objects.create(full_name="Field Coverage Student", current_class=school_class)
+        receipt = FeeReceipt.objects.create(
+            receipt_no="EDIT-COVER-1",
+            student=student,
+            session=session,
+            received_amount=Decimal("100.00"),
+            legacy_fee_total=Decimal("100.00"),
+            legacy_net_total=Decimal("100.00"),
+        )
+
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("core:receipt_edit", args=[receipt.id]))
+        self.assertEqual(response.status_code, 200)
+
+        edit_form = FeeReceiptEditForm(instance=receipt)
+        content = response.content.decode()
+        missing = [
+            name
+            for name, field in edit_form.fields.items()
+            if field.required and not field.disabled and f'id="id_{name}"' not in content
+        ]
+        self.assertEqual(missing, [], f"Required field(s) missing from receipt_edit.html: {missing}")
 
 
 class ScholarRegisterBookTests(AuthenticatedClientMixin, TestCase):
@@ -1254,6 +1517,56 @@ class AccountsTests(AuthenticatedClientMixin, TestCase):
             name="Staff Advance",
         )
         self.staff = Staff.objects.create(full_name="RAVINDRA SINGH", designation="Driver")
+
+        loan_group = AccountGroup.objects.create(
+            name="Legacy Loans & Advances", group_type=AccountGroup.GroupType.LIABILITY
+        )
+        self.loan_ledger = LedgerAccount.objects.create(
+            group=loan_group, name="Pragati Personal/Advance A/C"
+        )
+
+    def test_receipt_allows_liability_credit_account(self):
+        """Real case from the legacy ledger: someone (Pragati) personally advances cash to the
+        school to cover a shortfall - a real receipt of cash, but the credit side is a Liability
+        (money owed back), not Income. Must be recordable via New Other Receipt, or the owner's
+        decision to move this kind of entry into the new app live has no way to actually happen."""
+        form = VoucherForm(
+            data={
+                "voucher_date": "2026-07-09",
+                "payment_mode": Voucher.PaymentMode.CASH,
+                "debit_account": self.cash_ledger.id,
+                "credit_account": self.loan_ledger.id,
+                "amount": "30000.00",
+                "paid_to_or_received_from": "Pragati",
+                "staff": "",
+                "narration": "School ke kharch ke liye loan liya gaya",
+                "physical_slip_no": "",
+            },
+            voucher_kind="receipt",
+        )
+
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_expense_allows_liability_debit_account(self):
+        """Real case from the legacy ledger: repaying that same loan later
+        ("Pragati ka paisa wapas kar diya gya") reduces what the school owes -
+        a Liability debit, not an Expense. Must be recordable via Daily Expense."""
+        form = VoucherForm(
+            data={
+                "voucher_date": "2026-07-15",
+                "payment_mode": Voucher.PaymentMode.CASH,
+                "debit_account": self.loan_ledger.id,
+                "credit_account": self.cash_ledger.id,
+                "amount": "30000.00",
+                "paid_to_or_received_from": "Pragati",
+                "staff": "",
+                "narration": "Pragati ka paisa wapas kar diya gya",
+                "physical_slip_no": "",
+            },
+            voucher_kind="expense",
+        )
+
+        self.assertTrue(form.is_valid(), form.errors)
 
     def test_staff_advance_requires_staff(self):
         form = VoucherForm(
@@ -1519,6 +1832,27 @@ class HouseAssignmentTests(AuthenticatedClientMixin, TestCase):
 
         form = response.context["form"]
         self.assertEqual(form.fields["house"].initial, active_house.pk)
+
+
+class FeeHeadGuardrailTests(TestCase):
+    """Guards against a real incident: staff manually created a "Previous Due" Fee Head
+    and entered an amount there, on top of the dedicated FeeReceipt.previous_due_amount
+    field, silently doubling a receipt's total. See CODEX-HANDOFF.md."""
+
+    def test_previous_due_name_rejected_on_full_clean(self):
+        head = FeeHead(name="Previous Due")
+        with self.assertRaises(ValidationError):
+            head.full_clean()
+
+    def test_previous_due_name_rejected_case_and_space_insensitive(self):
+        for bad_name in ["previous due", "  Previous Due  ", "OLD DUE", "Past Due"]:
+            head = FeeHead(name=bad_name)
+            with self.assertRaises(ValidationError):
+                head.full_clean()
+
+    def test_ordinary_fee_head_name_still_allowed(self):
+        head = FeeHead(name="Tuition Fee")
+        head.full_clean()  # should not raise
 
 
 class DisciplineRecordTests(TestCase):

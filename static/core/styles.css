@@ -4039,6 +4039,11 @@ th.amount,
     border: 1px solid #fecaca;
     margin-top: 8px;
 }
+.fee-desk .pay-total-row.due.is-advance {
+    color: #0f766e;
+    background: #f0fdfa;
+    border: 1px solid #99f6e4;
+}
 
 .fee-desk .save-print-button {
     background: #0f766e;

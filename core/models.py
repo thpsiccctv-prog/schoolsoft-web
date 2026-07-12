@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 
@@ -279,6 +280,27 @@ class FeeHead(TimeStampedModel):
 
     def __str__(self):
         return self.name
+
+    def clean(self):
+        super().clean()
+        # "Previous Due" / "Old Due" etc. must never exist as a regular Fee Head line item.
+        # Receipts already have a dedicated "Previous Due" field (FeeReceipt.previous_due_amount)
+        # that is auto-suggested from the student's earlier unpaid receipts. Allowing a Fee Head
+        # with this name lets staff double-enter the old due (once as a normal fee-head amount,
+        # once in the dedicated field), which silently doubles the receipt total. See
+        # CODEX-HANDOFF.md for the incident this guards against.
+        normalized = (self.name or "").strip().lower()
+        blocked_names = {"previous due", "prev due", "old due", "old dues", "previous dues", "past due"}
+        if normalized in blocked_names:
+            raise ValidationError(
+                {
+                    "name": (
+                        "'Previous Due' cannot be created as a Fee Head. Use the dedicated "
+                        "'Previous Due' field on the Fee Collection form instead - it is "
+                        "filled in automatically from the student's earlier unpaid receipts."
+                    )
+                }
+            )
 
 
 class FeeStructure(TimeStampedModel):

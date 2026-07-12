@@ -110,6 +110,12 @@
                     <strong data-fee-total>0.00</strong>
                 </div>
                 <label>
+                    <span>{{ receipt_form.previous_due_amount.label|default:"Previous Due" }}</span>
+                    {{ receipt_form.previous_due_amount }}
+                    <small data-previous-due-hint style="display:block;color:#64748b;margin-top:2px;"></small>
+                    {% if receipt_form.previous_due_amount.errors %}<small>{{ receipt_form.previous_due_amount.errors|striptags }}</small>{% endif %}
+                </label>
+                <label>
                     <span>{{ receipt_form.concession_amount.label }}</span>
                     {{ receipt_form.concession_amount }}
                     {% if receipt_form.concession_amount.errors %}<small>{{ receipt_form.concession_amount.errors|striptags }}</small>{% endif %}

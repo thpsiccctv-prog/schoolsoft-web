@@ -147,6 +147,12 @@
                     <th style="text-align: right;">Fee Total</th>
                     <td class="amount">{{ receipt.legacy_fee_total|indian_number }}</td>
                 </tr>
+                {% if receipt.previous_due_amount > 0 %}
+                <tr>
+                    <th style="text-align: right; color: #7c3aed;">Previous Due (carried forward)</th>
+                    <td class="amount" style="color: #7c3aed; font-weight: 700;">+ {{ receipt.previous_due_amount|indian_number }}</td>
+                </tr>
+                {% endif %}
                 {% if receipt.concession_amount > 0 %}
                 <tr>
                     <th style="text-align: right;">Concession / Discount</th>
