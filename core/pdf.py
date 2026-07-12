@@ -980,13 +980,13 @@ def _scholar_register_page_flowables(student, school_profile=None):
 
     brand_color = colors.HexColor("#0f766e")
     title_style = ParagraphStyle(
-        "SrTitle", parent=styles["Title"], fontSize=16, leading=19, alignment=1,
+        "SrTitle", parent=styles["Title"], fontSize=15, leading=18, alignment=1,
         textColor=brand_color, fontName="Helvetica-Bold", spaceAfter=1 * mm,
     )
-    subtitle_style = ParagraphStyle("SrSubtitle", parent=styles["Normal"], fontSize=10, leading=12, alignment=1)
-    small_style = ParagraphStyle("SrSmall", parent=styles["Normal"], fontSize=9, leading=11, alignment=1)
-    field_style = ParagraphStyle("SrField", parent=styles["Normal"], fontName="Helvetica", fontSize=8, leading=10)
-    value_style = ParagraphStyle("SrValue", parent=styles["Normal"], fontSize=9.5, leading=11.5, fontName="Helvetica-Bold")
+    subtitle_style = ParagraphStyle("SrSubtitle", parent=styles["Normal"], fontSize=9, leading=11, alignment=1)
+    small_style = ParagraphStyle("SrSmall", parent=styles["Normal"], fontSize=8.2, leading=10, alignment=1)
+    field_style = ParagraphStyle("SrField", parent=styles["Normal"], fontName="Helvetica", fontSize=7.5, leading=9)
+    value_style = ParagraphStyle("SrValue", parent=styles["Normal"], fontSize=8.7, leading=10, fontName="Helvetica-Bold")
 
     school_name = school_profile.name if school_profile else "SCHOOLSOFT"
     logo_path = os.path.join(settings.BASE_DIR, "static", "core", "school_logo.png")
@@ -1001,15 +1001,15 @@ def _scholar_register_page_flowables(student, school_profile=None):
         contact_parts.append(f"Email: {school_profile.email}")
     if contact_parts:
         school_heading.append(Paragraph(" | ".join(contact_parts), small_style))
-    logo = Image(logo_path, 22 * mm, 22 * mm) if os.path.exists(logo_path) else ""
+    logo = Image(logo_path, 20 * mm, 20 * mm) if os.path.exists(logo_path) else ""
     header = Table([[logo, school_heading, ""]], colWidths=[25 * mm, 139 * mm, 25 * mm])
     header.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("ALIGN", (1, 0), (1, 0), "CENTER")]))
     story.append(header)
     story.append(Table([[""]], colWidths=[189 * mm], rowHeights=[1.2 * mm], style=TableStyle([("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#b58a2a"))])))
-    story.append(Spacer(1, 4 * mm))
+    story.append(Spacer(1, 2.5 * mm))
     story.append(Paragraph("SCHOLAR'S REGISTER &amp; TRANSFER CERTIFICATE FORM", title_style))
-    story.append(_devanagari_flowable("छात्र पंजिका तथा स्थानान्तरण प्रमाण-पत्र - कार्यालय प्रति", 10, align=1))
-    story.append(Spacer(1, 4 * mm))
+    story.append(_devanagari_flowable("छात्र पंजिका तथा स्थानान्तरण प्रमाण-पत्र - कार्यालय प्रति", 9, align=1))
+    story.append(Spacer(1, 2.5 * mm))
 
     tc = getattr(student, "transfer_certificate", None)
 
@@ -1021,15 +1021,15 @@ def _scholar_register_page_flowables(student, school_profile=None):
     meta_t = Table(top_meta, colWidths=[63 * mm, 63 * mm, 63 * mm])
     meta_t.setStyle(TableStyle([
         ("FONTNAME", (0, 0), (-1, -1), "Helvetica"),
-        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("FONTSIZE", (0, 0), (-1, -1), 8.4),
         ("ALIGN", (0, 0), (0, -1), "LEFT"),
         ("ALIGN", (1, 0), (1, -1), "CENTER"),
         ("ALIGN", (2, 0), (2, -1), "RIGHT"),
         ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#9aa5b1")),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4), ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3), ("TOPPADDING", (0, 0), (-1, -1), 3),
     ]))
     story.append(meta_t)
-    story.append(Spacer(1, 3 * mm))
+    story.append(Spacer(1, 2 * mm))
 
     caste_religion = " / ".join(part for part in [student.religion, student.caste] if part) or ""
     address = student.address_permanent or student.address_local or ""
@@ -1062,10 +1062,10 @@ def _scholar_register_page_flowables(student, school_profile=None):
         ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f7f8f8")),
         ("BACKGROUND", (2, 0), (2, -1), colors.HexColor("#f7f8f8")),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
     ]))
     story.append(info_t)
-    story.append(Spacer(1, 5 * mm))
+    story.append(Spacer(1, 3 * mm))
 
     tc_class_name = None
     if tc:
@@ -1073,8 +1073,8 @@ def _scholar_register_page_flowables(student, school_profile=None):
             student.current_class.name if student.current_class else None
         )
 
-    grid_head_style = ParagraphStyle("SrGridHead", parent=field_style, fontSize=6.8, leading=8, alignment=1, fontName="Helvetica-Bold")
-    group_style = ParagraphStyle("SrGroup", parent=field_style, fontSize=6.2, leading=7, alignment=1, fontName="Helvetica-Bold")
+    grid_head_style = ParagraphStyle("SrGridHead", parent=field_style, fontSize=6.4, leading=7.4, alignment=1, fontName="Helvetica-Bold")
+    group_style = ParagraphStyle("SrGroup", parent=field_style, fontSize=5.9, leading=6.6, alignment=1, fontName="Helvetica-Bold")
 
     def grid_heading(english, hindi=""):
         if not hindi:
@@ -1120,14 +1120,14 @@ def _scholar_register_page_flowables(student, school_profile=None):
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#17202a")),
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
         ("FONTNAME", (0, 1), (0, -1), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 0), (-1, -1), 7.2),
+        ("FONTSIZE", (0, 0), (-1, -1), 6.8),
         ("ALIGN", (0, 0), (-1, -1), "CENTER"),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("TOPPADDING", (0, 0), (-1, -1), 4.5),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4.5),
+        ("TOPPADDING", (0, 0), (-1, -1), 3.7),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3.7),
     ]))
     story.append(grid_t)
-    story.append(Spacer(1, 4 * mm))
+    story.append(Spacer(1, 2.5 * mm))
 
     # Rendered as three separate single-line images (heading, then 1., then 2.)
     # - not one wrapped Paragraph - so each mixed English/Hindi sentence gets
@@ -1141,7 +1141,7 @@ def _scholar_register_page_flowables(student, school_profile=None):
     story.append(_devanagari_flowable("2. प्रत्येक entry को Admission Form एवं school record से सत्यापित करें।", 7.5))
     story.append(Spacer(1, 3 * mm))
 
-    cert_style = ParagraphStyle("CertText", parent=field_style, fontSize=9, leading=11)
+    cert_style = ParagraphStyle("CertText", parent=field_style, fontSize=8.2, leading=10)
     cert_t = Table(
         [
             [Paragraph("I - Certified that the entries as records details of the student have been daily checked from the admission form and that they are complete.", cert_style)],
@@ -1152,9 +1152,9 @@ def _scholar_register_page_flowables(student, school_profile=None):
         colWidths=[189 * mm],
     )
     cert_t.setStyle(TableStyle([
-        ("FONTSIZE", (0, 0), (-1, -1), 9),
-        ("TOPPADDING", (0, 0), (-1, -1), 3),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ("FONTSIZE", (0, 0), (-1, -1), 8.2),
+        ("TOPPADDING", (0, 0), (-1, -1), 2.2),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2.2),
         ("ALIGN", (0, 1), (0, 1), "RIGHT"),
         ("ALIGN", (0, 3), (0, 3), "RIGHT"),
     ]))

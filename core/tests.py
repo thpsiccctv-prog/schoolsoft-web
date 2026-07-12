@@ -1067,6 +1067,39 @@ class ScholarRegisterBookTests(AuthenticatedClientMixin, TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "application/pdf")
 
+    def test_long_student_register_stays_on_one_page_in_full_book(self):
+        from .pdf import build_scholar_register_book_pdf, build_scholar_register_pdf
+
+        student = Student.objects.create(
+            full_name="ANUBHUTI DWIVEDI",
+            father_name="ALOK RANJAN DWIVEDI",
+            mother_name="MANDAVI DWIVEDI",
+            date_of_birth=date(2014, 10, 17),
+            admission_date=date(2022, 4, 7),
+            religion="HINDU",
+            caste="BRAHMAN",
+            category="GENERAL",
+            aadhaar_no="570850472850",
+            address_permanent="VILL - DUDHAI, POST - DUDHAI, KUSHINAGAR",
+            current_class=self.school_class,
+            legacy_sid=2222,
+        )
+        profile = SchoolProfile.objects.create(
+            name="THPS ENGLISH MEDIUM SCHOOL",
+            address_line1="DUDAHI 274302, KUSHINAGAR, (U.P)",
+            phone="7379568527",
+            email="thpses@gmail.com",
+            is_active=True,
+        )
+
+        individual_pdf = build_scholar_register_pdf(student, profile)
+        full_book_pdf = build_scholar_register_book_pdf([(2222, student)], 23, 2222, 2222, profile)
+
+        page_pattern = rb"/Type\s*/Page\b"
+        self.assertEqual(len(re.findall(page_pattern, individual_pdf)), 1)
+        # Cover + one-page index + exactly one student page.
+        self.assertEqual(len(re.findall(page_pattern, full_book_pdf)), 3)
+
 
 class AccountsTests(AuthenticatedClientMixin, TestCase):
     def setUp(self):

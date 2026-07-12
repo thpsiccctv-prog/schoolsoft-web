@@ -2241,5 +2241,20 @@ Not done / next session should be aware of:
 - Recognition Order wraps inside its middle identifier cell instead of crossing table boundaries.
 - Verification: targeted TC tests passed 3/3; full `core` suite passed 87/87. Poppler reports one
   A4 page. Rendered sample: `tmp/pdfs/tc-redesign-review.pdf`.
-- Status: code is ready for owner visual approval. It has not yet been committed, pushed, or built
-  into the desktop EXE in this checkpoint.
+- Owner approved the rendered design. Shipped in commit `9872b81`; full suite passed 87/87,
+  `collectstatic` completed, and `dist/SchoolSoft/SchoolSoft.exe` was rebuilt successfully.
+
+## Scholar Register full-book split-page fix (July 12, 2026)
+
+- Owner reported Book 23 showing a student across pages 40-41, with the final certification/signature
+  row alone on the second page; the browser showed 175 pages for the book.
+- Reproduced with a long-name/address/DOB-in-words record: both the individual Scholar Register and
+  its full-book student page rendered as two pages. This was content-height dependent, not a
+  page-40 limit or browser issue.
+- Compacted only Scholar Register vertical spacing: slightly smaller header typography/logo,
+  reduced table paddings and section spacers, and modestly reduced certification text. No fields,
+  class rows, bilingual labels, handwriting cells, or official certifications were removed.
+- Added a page-count regression test using a representative long record. It requires exactly one
+  page for the individual register and exactly three pages for a one-student full book (cover,
+  index, student).
+- Poppler visual QA confirms the long record is complete and legible on one bordered A4 page.
