@@ -39,6 +39,9 @@ echo [4/4] Building EXE with PyInstaller...
 "%PYTHON_EXE%" -m PyInstaller --noconfirm SchoolSoft.spec
 if errorlevel 1 goto :fail
 
+REM Workaround for PyInstaller with Python 3.14+ failing to bundle the base Python DLL
+"%PYTHON_EXE%" -c "import sys, os, shutil; dll=f'python{sys.version_info.major}{sys.version_info.minor}.dll'; src=os.path.join(sys.base_prefix, dll); dst=os.path.join('dist', 'SchoolSoft', '_internal', dll); shutil.copy(src, dst) if os.path.exists(src) and not os.path.exists(dst) else None"
+
 echo.
 echo BUILD OK: dist\SchoolSoft\SchoolSoft.exe
 echo User data lives in %%LOCALAPPDATA%%\SchoolSoft\ (never overwritten by rebuilds).

@@ -2296,3 +2296,61 @@ Not done / next session should be aware of:
   `Admission / S.R. No.`, `Withdrawal File No.`, `Transfer Certificate No.`, `Register Book No.`
 - Updated TC and Scholar Register school heading to a stronger official serif treatment using bundled PDF fonts only; no internet/CDN font dependency.
 - Visual QA rendered `tmp/pdfs/tc-withdrawal-header-preview-v2.pdf` and `tmp/pdfs/sr-withdrawal-header-preview.pdf`; both remain single-page A4.
+
+## 2026-07-12 Checkpoint - Character Certificate world-class redesign + PyInstaller/Python 3.14 DLL fix
+
+Owner compared the old VB SchoolSoft character certificate (cursive title, "Developed by Sun Software
+Solution" branding) against the first Django version and rejected both - old looked dated, new left
+~40% of the page blank below the body text and buried the actual character rating inside a paragraph.
+
+**Real bug found and fixed, not just styling**: `_premium_header()` (shared by Character Certificate
+and the Marksheet/Report Card) rendered its optional Hindi title via a raw `Paragraph` in
+`NotoSansDevanagari-Bold` - the exact same no-shaping bug fixed for the Scholar Register weeks earlier,
+but never propagated here. "चरित्र प्रमाण-पत्र" was rendering as "चरत्रि प्रमाण-पत्" (matra
+reordering broken). Fixed by routing through `_devanagari_flowable()` instead. Marksheet is unaffected
+- it never passes `title_hi`.
+
+To make this fix possible, `_devanagari_flowable()` gained an optional `color=(r,g,b,a)` param (default
+unchanged, dark ink) threaded through to `_render_devanagari_png()` (already had a `color` param) and to
+`StringFlowable` (gained a new optional `fill_color` constructor arg, default `None` = old behaviour) so
+mixed Devanagari+Latin runs stay one consistent colour - needed here for white text on the teal title
+band.
+
+`build_character_certificate_pdf()` redesign:
+- School name switched to `Times-Bold` (also changed in the shared `_premium_header`, so Marksheet gets
+  the same serif treatment) - matches the official-serif identity already used on TC/Scholar Register.
+- Ref No./Session/Date moved into a bordered meta strip (was plain unbordered text).
+- New "CHARACTER & CONDUCT: GOOD" badge (gold border, teal-tint background) - previously this fact was
+  only buried mid-paragraph.
+- Real bordered "Office Seal" box replacing plain italic "(Office Seal)" text.
+- New verification/authenticity footer note.
+- Same thin outer border as TC/Scholar Register (`_draw_scholar_register_border` reused) for one
+  consistent document-family identity.
+- Removed the old single 26mm blank spacer before the signature block - replaced with real content, so
+  the page reads as filled/intentional rather than empty.
+- Tests: existing `test_character_certificate_pdf` only asserts status/content-type, unaffected by the
+  redesign. Full suite: 88/88.
+- Visual QA: owner rendered via local `runserver`, confirmed Hindi title now shapes correctly, Times-Bold
+  header, badge, and seal box all render as intended, single A4 page, no crash.
+
+**Separate, unrelated build issue hit during this checkpoint**: the venv's Python is 3.14 (a very new
+release) and PyInstaller failed to bundle `python314.dll` into `dist\SchoolSoft\_internal\`, so the built
+EXE failed at launch with "Failed to import encodings module". Root-caused and fixed in
+`build-desktop.bat`: after the `PyInstaller` step, a one-line Python snippet copies
+`{sys.base_prefix}/python{major}{minor}.dll` into `dist/SchoolSoft/_internal/` if missing - version-
+agnostic (reads `sys.version_info` at build time), so this keeps working across future Python upgrades
+too, not just 3.14. A second, unrelated snag during the same rebuild: a crashed prior EXE run had the old
+`_internal` DLLs file-locked, causing a `PermissionError` mid-build; worked around by renaming the old
+`dist\SchoolSoft` to `dist\SchoolSoft_old` before rebuilding.
+
+Not done / next session must:
+1. **Commit the changes** - as of this checkpoint, `core/pdf.py` (Character Certificate redesign +
+   `_devanagari_flowable`/`StringFlowable` color support + `_premium_header` fixes) and
+   `build-desktop.bat` (DLL fix) are uncommitted. Last commit is still `6e8fed8` (TC withdrawal file
+   number). Commit before starting new work.
+2. **Delete `dist\SchoolSoft_old\`** - leftover renamed folder from the file-lock workaround, ~15,000
+   duplicate files, safe to delete, not referenced by anything.
+3. Owner should spot-check the Marksheet/Report Card PDF once (font changed from Helvetica-Bold to
+   Times-Bold for the school name via the shared `_premium_header`) - not expected to cause any layout
+   issue since it's a drop-in Base-14 font swap, but not independently visually re-confirmed this
+   session.

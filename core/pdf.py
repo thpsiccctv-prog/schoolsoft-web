@@ -26,16 +26,19 @@ except Exception:
 from reportlab.platypus.flowables import Flowable
 
 class StringFlowable(Flowable):
-    def __init__(self, text, font_name, font_size):
+    def __init__(self, text, font_name, font_size, fill_color=None):
         Flowable.__init__(self)
         self.text = text
         self.font_name = font_name
         self.font_size = font_size
+        self.fill_color = fill_color
         self.width = pdfmetrics.stringWidth(text, font_name, font_size)
         self.height = font_size * 1.2
     def draw(self):
         self.canv.saveState()
         self.canv.setFont(self.font_name, self.font_size)
+        if self.fill_color is not None:
+            self.canv.setFillColor(self.fill_color)
         self.canv.drawString(0, self.font_size * 0.25, self.text)
         self.canv.restoreState()
 
@@ -211,14 +214,17 @@ def _text_script_runs(text):
     return [(is_deva, run_text) for is_deva, run_text in runs]
 
 
-def _devanagari_flowable(text, font_size_pt, bold=False, align=0):
+def _devanagari_flowable(text, font_size_pt, bold=False, align=0, color=(23, 32, 42, 255)):
     """Flowable for text that may contain Devanagari, Latin, or both mixed
     together. Devanagari runs are shaped/rasterized via HarfBuzz + FreeType
     (_render_devanagari_png); everything else (English words, digits,
     hyphens, colons, etc.) is rendered as a normal Helvetica Paragraph,
     since the Devanagari font has no Latin glyphs to fall back on. Multiple
     runs are laid out left-to-right in a borderless single-row Table so they
-    read as one continuous line. align: 0=left, 1=center, 2=right."""
+    read as one continuous line. align: 0=left, 1=center, 2=right. color is
+    an (r,g,b,a) 0-255 tuple applied to BOTH the rasterized Devanagari runs
+    and the plain-text Latin runs, so mixed-script text stays one consistent
+    colour (e.g. white text on a coloured title band)."""
     latin_style = ParagraphStyle(
         "DevanagariLatinRun", fontName="Helvetica-Bold" if bold else "Helvetica",
         fontSize=font_size_pt, leading=font_size_pt * 1.25,
@@ -227,6 +233,7 @@ def _devanagari_flowable(text, font_size_pt, bold=False, align=0):
         "DevanagariFallback", fontName="NotoSansDevanagari-Bold" if bold else "NotoSansDevanagari",
         fontSize=font_size_pt, leading=font_size_pt * 1.25,
     )
+    latin_fill = colors.Color(color[0] / 255.0, color[1] / 255.0, color[2] / 255.0, alpha=color[3] / 255.0)
 
     pieces = []
     widths = []
@@ -234,13 +241,13 @@ def _devanagari_flowable(text, font_size_pt, bold=False, align=0):
         if not run_text.strip():
             continue
         if not is_deva:
-            sf = StringFlowable(run_text, latin_style.fontName, font_size_pt)
+            sf = StringFlowable(run_text, latin_style.fontName, font_size_pt, fill_color=latin_fill)
             pieces.append(sf)
             widths.append(sf.width + 2) # small buffer
             continue
-        rendered = _render_devanagari_png(run_text, font_size_pt, bold=bold)
+        rendered = _render_devanagari_png(run_text, font_size_pt, bold=bold, color=color)
         if rendered is None:
-            sf = StringFlowable(run_text, fallback_style.fontName, font_size_pt)
+            sf = StringFlowable(run_text, fallback_style.fontName, font_size_pt, fill_color=latin_fill)
             pieces.append(sf)
             widths.append(sf.width + 2)
         else:
@@ -1589,8 +1596,11 @@ def _premium_header(story, school_profile, title_en, styles, title_hi=None, subt
     Does NOT touch the older _school_header used by receipts/TC/etc.
     """
     school_name = (school_profile.name if school_profile else "SchoolSoft").upper()
-    name_st = ParagraphStyle("PhName", fontSize=18, leading=21, alignment=1,
-                             textColor=_C_BRAND_DK, fontName="Helvetica-Bold", spaceAfter=1)
+    # Times-Bold (built-in Base-14, no external/internet font) matches the
+    # official-serif treatment used on the Transfer Certificate and Scholar
+    # Register headers, so the whole document family reads as one identity.
+    name_st = ParagraphStyle("PhName", fontSize=19, leading=22, alignment=1,
+                             textColor=_C_BRAND_DK, fontName="Times-Bold", spaceAfter=1)
     addr_st = ParagraphStyle("PhAddr", fontSize=8.5, leading=11, alignment=1, textColor=_C_INK)
     muted_st = ParagraphStyle("PhMuted", fontSize=8, leading=10, alignment=1, textColor=_C_MUTED)
 
@@ -1633,17 +1643,21 @@ def _premium_header(story, school_profile, title_en, styles, title_hi=None, subt
 
     use_hi = title_hi and _has_devanagari()
     if use_hi:
-        t_hi = ParagraphStyle("PhTiHi", fontName="NotoSansDevanagari-Bold", fontSize=12.5,
-                              leading=15, alignment=1, textColor=colors.white)
+        # ReportLab does not shape Devanagari (no matra reordering, no
+        # conjunct ligatures) - a raw Paragraph in a Devanagari font renders
+        # garbled text (e.g. "चरित्र" comes out as "चरत्रि"). Route through
+        # the HarfBuzz+FreeType pipeline instead, in white to match the band.
+        hi_flowable = _devanagari_flowable(title_hi, 13, bold=True, align=1, color=(255, 255, 255, 255))
         t_en = ParagraphStyle("PhTiEn", fontName="Helvetica-Bold", fontSize=13,
                               leading=15, alignment=1, textColor=colors.white)
-        band = Table([[Paragraph(title_hi, t_hi)], [Paragraph(title_en, t_en)]], colWidths=[180 * mm])
+        band = Table([[hi_flowable], [Paragraph(title_en, t_en)]], colWidths=[180 * mm])
     else:
         t_en = ParagraphStyle("PhTiEn2", fontName="Helvetica-Bold", fontSize=13.5,
                               leading=16, alignment=1, textColor=colors.white)
         band = Table([[Paragraph(title_en, t_en)]], colWidths=[180 * mm])
     band.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, -1), _C_BRAND),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
         ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
         ("ROUNDEDCORNERS", [3, 3, 3, 3]),
     ]))
@@ -1655,14 +1669,23 @@ def _premium_header(story, school_profile, title_en, styles, title_hi=None, subt
 
 
 def build_character_certificate_pdf(student, school_profile=None):
+    """World-class redesign (owner review, July 2026): the old VB SchoolSoft
+    layout looked dated (cursive title, dev-tool watermark), and the first
+    Django version - while cleaner - left ~40% of the page blank below the
+    body text and buried the actual character rating inside a paragraph.
+    This version fills the page with genuinely useful structure (bordered
+    meta strip, a scannable Character & Conduct badge, a real seal box,
+    a verification footer) instead of one big empty spacer, and adds the
+    same thin outer border used on the TC/Scholar Register so the whole
+    document family reads as one consistent official identity."""
     buffer = BytesIO()
     document = SimpleDocTemplate(
         buffer,
         pagesize=A4,
         rightMargin=18 * mm,
         leftMargin=18 * mm,
-        topMargin=14 * mm,
-        bottomMargin=16 * mm,
+        topMargin=13 * mm,
+        bottomMargin=14 * mm,
         title=f"Character Certificate - {student.full_name}",
     )
     styles = getSampleStyleSheet()
@@ -1675,18 +1698,6 @@ def build_character_certificate_pdf(student, school_profile=None):
         subj, poss, obj, rel = "she", "her", "her", "daughter"
     else:
         subj, poss, obj, rel = "he", "his", "him", "son"
-
-    ref_no = f"CC-{timezone.localdate().year}-{student.admission_no or student.legacy_sid or student.pk}"
-    meta = ParagraphStyle("CcMeta", fontSize=9.5, textColor=_C_MUTED)
-    mrow = Table([[Paragraph(f"<b>Ref. No.:</b> {ref_no}", meta),
-                   Paragraph(f"<b>Date:</b> {timezone_today()}",
-                             ParagraphStyle("CcMetaR", parent=meta, alignment=2))]],
-                 colWidths=[90 * mm, 90 * mm])
-    story.append(mrow)
-    story.append(Spacer(1, 6 * mm))
-
-    body = ParagraphStyle("CcBody", parent=styles["Normal"], fontSize=11.5, leading=22,
-                          alignment=4, textColor=_C_INK, firstLineIndent=10 * mm, spaceAfter=5 * mm)
 
     class_label = _class_section_label(student)
     parents = []
@@ -1701,6 +1712,45 @@ def build_character_certificate_pdf(student, school_profile=None):
     except Exception:
         session_bit = ""
 
+    ref_no = f"CC-{timezone.localdate().year}-{student.admission_no or student.legacy_sid or student.pk}"
+    meta_cell = ParagraphStyle("CcMetaCell", fontSize=9, textColor=_C_INK)
+    meta_cell_c = ParagraphStyle("CcMetaCellC", parent=meta_cell, alignment=1)
+    meta_cell_r = ParagraphStyle("CcMetaCellR", parent=meta_cell, alignment=2)
+    mrow = Table([[
+        Paragraph(f"<b>Ref. No.:</b> {ref_no}", meta_cell),
+        Paragraph(f"<b>Session:</b> {session_bit or '-'}", meta_cell_c),
+        Paragraph(f"<b>Date:</b> {timezone_today()}", meta_cell_r),
+    ]], colWidths=[58 * mm, 58 * mm, 58 * mm])
+    mrow.setStyle(TableStyle([
+        ("GRID", (0, 0), (-1, -1), 0.35, _C_LINE),
+        ("BACKGROUND", (0, 0), (-1, -1), _C_SOFT2),
+        ("TOPPADDING", (0, 0), (-1, -1), 4.5), ("BOTTOMPADDING", (0, 0), (-1, -1), 4.5),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8), ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+    ]))
+    story.append(mrow)
+    story.append(Spacer(1, 5 * mm))
+
+    # A distinct, scannable rating badge - the single fact most readers of a
+    # character certificate look for first, previously buried mid-paragraph.
+    badge_label = ParagraphStyle("CcBadgeLabel", fontSize=8.5, textColor=_C_MUTED,
+                                 fontName="Helvetica-Bold", leading=10)
+    badge_value = ParagraphStyle("CcBadgeValue", fontSize=14, textColor=_C_BRAND_DK,
+                                 fontName="Helvetica-Bold", alignment=2)
+    badge = Table([[Paragraph("CHARACTER &amp; CONDUCT", badge_label), Paragraph("GOOD", badge_value)]],
+                 colWidths=[110 * mm, 64 * mm])
+    badge.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), _C_SOFT2),
+        ("BOX", (0, 0), (-1, -1), 0.9, _C_GOLD),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 6.5), ("BOTTOMPADDING", (0, 0), (-1, -1), 6.5),
+        ("LEFTPADDING", (0, 0), (-1, -1), 10), ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+    ]))
+    story.append(badge)
+    story.append(Spacer(1, 7 * mm))
+
+    body = ParagraphStyle("CcBody", parent=styles["Normal"], fontSize=11.5, leading=20,
+                          alignment=4, textColor=_C_INK, firstLineIndent=10 * mm, spaceAfter=5.5 * mm)
+
     story.append(Paragraph(
         f"This is to certify that <b>{student.full_name}</b>{parent_bit}, bearing Admission No. "
         f"<b>{student.admission_no or '-'}</b>, has been a bona fide student of this institution"
@@ -1712,19 +1762,41 @@ def build_character_certificate_pdf(student, school_profile=None):
     story.append(Paragraph(
         f"I wish {obj} every success in all {poss} future endeavours.", body))
 
-    story.append(Spacer(1, 26 * mm))
-    sign = Table([["", "Principal / Headmaster"]], colWidths=[95 * mm, 75 * mm])
-    sign.setStyle(TableStyle([
-        ("LINEABOVE", (1, 0), (1, 0), 0.6, _C_INK),
-        ("ALIGN", (1, 0), (1, 0), "CENTER"),
+    story.append(Spacer(1, 15 * mm))
+
+    seal_caption = ParagraphStyle("CcSealCaption", fontSize=7.8, alignment=1, textColor=_C_MUTED)
+    seal_box = Table([[""]], colWidths=[30 * mm], rowHeights=[26 * mm])
+    seal_box.setStyle(TableStyle([("BOX", (0, 0), (-1, -1), 0.8, _C_LINE)]))
+
+    sign_line = Table([["Principal / Headmaster"]], colWidths=[75 * mm])
+    sign_line.setStyle(TableStyle([
+        ("LINEABOVE", (0, 0), (0, 0), 0.6, _C_INK),
+        ("ALIGN", (0, 0), (0, 0), "CENTER"),
         ("FONTSIZE", (0, 0), (-1, -1), 10), ("TEXTCOLOR", (0, 0), (-1, -1), _C_INK),
         ("TOPPADDING", (0, 0), (-1, -1), 4),
     ]))
-    story.append(sign)
-    story.append(Spacer(1, 3 * mm))
-    story.append(Paragraph("(Office Seal)", ParagraphStyle("CcSeal", fontSize=8.5, textColor=_C_MUTED)))
 
-    document.build(story)
+    sign_row = Table(
+        [[[seal_box, Spacer(1, 1.5 * mm), Paragraph("Office Seal", seal_caption)], "", sign_line]],
+        colWidths=[40 * mm, 59 * mm, 75 * mm],
+    )
+    sign_row.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "BOTTOM"),
+        ("ALIGN", (0, 0), (0, 0), "CENTER"),
+    ]))
+    story.append(sign_row)
+    story.append(Spacer(1, 6 * mm))
+
+    footer_school = (school_profile.name if school_profile else "the school").upper()
+    story.append(Paragraph(
+        f"This is a computer-generated certificate issued from the official Scholar's Register of "
+        f"{footer_school}. For verification, please contact the school office.",
+        ParagraphStyle("CcFooterNote", fontSize=7.5, leading=10, alignment=1, textColor=_C_MUTED)
+    ))
+
+    # Thin outer border - same treatment as the TC/Scholar Register - gives
+    # the whole official-document family one consistent bordered identity.
+    document.build(story, onFirstPage=_draw_scholar_register_border, onLaterPages=_draw_scholar_register_border)
     buffer.seek(0)
     return buffer.getvalue()
 
