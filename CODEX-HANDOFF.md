@@ -2286,3 +2286,13 @@ Not done / next session should be aware of:
   - Then individual Scholar Register pages for allotted students only
 - Visual QA rendered `tmp/pdfs/full-book23-old-style-index-v2.pdf` and confirmed SR 2300 appears on the second index page, not on a spillover page.
 - Note: Book 23 address cells are blank where student `address_permanent` and `address_local` are blank in the database. The PDF will print addresses automatically where those fields are filled.
+
+## 2026-07-12 Checkpoint - TC Withdrawal File No. + Stronger School Header
+
+- Added optional `TransferCertificate.withdrawal_file_no` with migration `0028_transfercertificate_withdrawal_file_no`.
+- TC edit form now has `Withdrawal File No.` so the office can enter the withdrawal/nikasan file number at TC issue time.
+- Transfer Certificate PDF top meta now includes `Withdrawal File No.` alongside Book No., S.R. No., Admission No., TC No., PEN, UDISE, Recognition Order, and recognized-up-to fields.
+- Scholar Register student page top meta now matches the older physical form more closely:
+  `Admission / S.R. No.`, `Withdrawal File No.`, `Transfer Certificate No.`, `Register Book No.`
+- Updated TC and Scholar Register school heading to a stronger official serif treatment using bundled PDF fonts only; no internet/CDN font dependency.
+- Visual QA rendered `tmp/pdfs/tc-withdrawal-header-preview-v2.pdf` and `tmp/pdfs/sr-withdrawal-header-preview.pdf`; both remain single-page A4.

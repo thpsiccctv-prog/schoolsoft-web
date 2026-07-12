@@ -326,6 +326,7 @@ class TransferCertificateForm(forms.ModelForm):
         model = TransferCertificate
         fields = [
             "issue_date",
+            "withdrawal_file_no",
             "application_date",
             "date_of_leaving",
             "last_class_studied",
@@ -353,6 +354,7 @@ class TransferCertificateForm(forms.ModelForm):
             "date_of_leaving": forms.DateInput(attrs={"type": "date"}),
             "struck_off_date": forms.DateInput(attrs={"type": "date"}),
             "reason_for_leaving": forms.TextInput(),
+            "withdrawal_file_no": forms.TextInput(),
             "fees_paid_upto": forms.TextInput(),
             "promoted_to_class": forms.TextInput(),
             "remarks": forms.Textarea(attrs={"rows": 3}),

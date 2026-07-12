@@ -442,6 +442,7 @@ class TransferCertificate(TimeStampedModel):
     student = models.OneToOneField(Student, on_delete=models.CASCADE, related_name="transfer_certificate")
     tc_number = models.CharField(max_length=30, unique=True)
     book_no = models.CharField(max_length=30, blank=True)
+    withdrawal_file_no = models.CharField(max_length=30, blank=True)
     sr_no = models.CharField(max_length=30, blank=True)
     issue_date = models.DateField(default=timezone.localdate)
     date_of_leaving = models.DateField(null=True, blank=True)

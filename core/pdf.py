@@ -813,7 +813,12 @@ def build_transfer_certificate_pdf(tc, school_profile=None):
     # compact layout while preserving a single-page A4 certificate.
     brand_color = colors.HexColor("#0f766e")
     title_style = ParagraphStyle(
-        "TcTitle", parent=styles["Title"], fontSize=18, leading=21, alignment=1, textColor=brand_color, fontName="Helvetica-Bold", spaceAfter=2*mm
+        "TcTitle", parent=styles["Title"], fontSize=18, leading=21, alignment=1,
+        textColor=brand_color, fontName="Helvetica-Bold", spaceAfter=2*mm,
+    )
+    school_name_style = ParagraphStyle(
+        "TcSchoolName", parent=styles["Title"], fontSize=20, leading=23, alignment=1,
+        textColor=brand_color, fontName="Times-Bold", spaceAfter=0.5*mm,
     )
     small_style = ParagraphStyle(
         "TcSmall", parent=styles["Normal"], fontSize=8.8, leading=10.5, alignment=1
@@ -830,7 +835,7 @@ def build_transfer_certificate_pdf(tc, school_profile=None):
 
     school_name = school_profile.name if school_profile else "SCHOOLSOFT"
     logo_path = os.path.join(settings.BASE_DIR, "static", "core", "school_logo.png")
-    school_heading = [Paragraph(school_name.upper(), title_style)]
+    school_heading = [Paragraph(school_name.upper(), school_name_style)]
     if school_profile and school_profile.address_line1:
         addr = f"{school_profile.address_line1}, {school_profile.address_line2}".strip(", ")
         school_heading.append(Paragraph(addr, small_style))
@@ -841,8 +846,8 @@ def build_transfer_certificate_pdf(tc, school_profile=None):
     if school_profile and getattr(school_profile, 'udise_code', None): contact_parts.append(f"UDISE: {school_profile.udise_code}")
     if contact_parts:
         school_heading.append(Paragraph(" | ".join(contact_parts), small_style))
-    logo = Image(logo_path, 22 * mm, 22 * mm) if os.path.exists(logo_path) else ""
-    header = Table([[logo, school_heading, ""]], colWidths=[28 * mm, 128 * mm, 28 * mm])
+    logo = Image(logo_path, 24 * mm, 24 * mm) if os.path.exists(logo_path) else ""
+    header = Table([[logo, school_heading, ""]], colWidths=[26 * mm, 132 * mm, 26 * mm])
     header.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("ALIGN", (1, 0), (1, 0), "CENTER")]))
     story.append(header)
     story.append(Table([[""]], colWidths=[184 * mm], rowHeights=[1.2 * mm], style=TableStyle([("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#b58a2a"))])))
@@ -853,19 +858,35 @@ def build_transfer_certificate_pdf(tc, school_profile=None):
     student = tc.student
 
     top_meta_values = [
-        [f"Book No.: {student.scholar_register_no or tc.book_no}", f"S.R. No.: {tc.sr_no or student.admission_no or student.legacy_sid or ''}", f"Admission No.: {student.admission_no}"],
-        [f"TC No.: {tc.tc_number}", f"PEN: {getattr(student, 'pen_number', '')}", f"Medium: {getattr(school_profile, 'medium', '') or 'English'}"],
-        [f"UDISE Code: {getattr(school_profile, 'udise_code', '') or '____________'}", f"Recognition Order No.: {getattr(school_profile, 'recognition_no', '') or '____________'}", f"Recognized up to: {getattr(school_profile, 'recognized_upto', '') or '____________'}"]
+        [
+            f"Book No.: {student.scholar_register_no or tc.book_no}",
+            f"Withdrawal File No.: {tc.withdrawal_file_no or ''}",
+            f"S.R. No.: {tc.sr_no or student.admission_no or student.legacy_sid or ''}",
+            f"Admission No.: {student.admission_no}",
+        ],
+        [
+            f"TC No.: {tc.tc_number}",
+            f"PEN: {getattr(student, 'pen_number', '')}",
+            f"Medium: {getattr(school_profile, 'medium', '') or 'English'}",
+            f"UDISE Code: {getattr(school_profile, 'udise_code', '') or '____________'}",
+        ],
+        [
+            f"Recognition Order No.: {getattr(school_profile, 'recognition_no', '') or '____________'}",
+            "",
+            "",
+            f"Recognized up to: {getattr(school_profile, 'recognized_upto', '') or '____________'}",
+        ],
     ]
-    meta_styles = [meta_left_style, meta_center_style, meta_right_style]
+    meta_styles = [meta_left_style, meta_center_style, meta_center_style, meta_right_style]
     top_meta = [[Paragraph(value, meta_styles[index]) for index, value in enumerate(row)] for row in top_meta_values]
-    meta_t = Table(top_meta, colWidths=[61*mm, 61*mm, 62*mm])
+    meta_t = Table(top_meta, colWidths=[46*mm, 46*mm, 46*mm, 46*mm])
     meta_t.setStyle(TableStyle([
         ("FONTNAME", (0,0), (-1,-1), "Helvetica"),
         ("FONTSIZE", (0,0), (-1,-1), 8.4),
         ("ALIGN", (0,0), (0,-1), "LEFT"),
-        ("ALIGN", (1,0), (1,-1), "CENTER"),
-        ("ALIGN", (2,0), (2,-1), "RIGHT"),
+        ("ALIGN", (1,0), (2,-1), "CENTER"),
+        ("ALIGN", (3,0), (3,-1), "RIGHT"),
+        ("SPAN", (0,2), (2,2)),
         ("GRID", (0,0), (-1,-1), 0.35, colors.HexColor("#9aa5b1")),
         ("BOTTOMPADDING", (0,0), (-1,-1), 3.5), ("TOPPADDING", (0,0), (-1,-1), 3.5),
     ]))
@@ -987,6 +1008,10 @@ def _scholar_register_page_flowables(student, school_profile=None, content_width
         "SrTitle", parent=styles["Title"], fontSize=15, leading=18, alignment=1,
         textColor=brand_color, fontName="Helvetica-Bold", spaceAfter=1 * mm,
     )
+    school_name_style = ParagraphStyle(
+        "SrSchoolName", parent=styles["Title"], fontSize=17.5, leading=20, alignment=1,
+        textColor=brand_color, fontName="Times-Bold", spaceAfter=0.2 * mm,
+    )
     subtitle_style = ParagraphStyle("SrSubtitle", parent=styles["Normal"], fontSize=9, leading=11, alignment=1)
     small_style = ParagraphStyle("SrSmall", parent=styles["Normal"], fontSize=8.2, leading=10, alignment=1)
     field_style = ParagraphStyle("SrField", parent=styles["Normal"], fontName="Helvetica", fontSize=7.5, leading=9)
@@ -994,7 +1019,7 @@ def _scholar_register_page_flowables(student, school_profile=None, content_width
 
     school_name = school_profile.name if school_profile else "SCHOOLSOFT"
     logo_path = os.path.join(settings.BASE_DIR, "static", "core", "school_logo.png")
-    school_heading = [Paragraph(school_name.upper(), title_style)]
+    school_heading = [Paragraph(school_name.upper(), school_name_style)]
     if school_profile and school_profile.address_line1:
         addr = f"{school_profile.address_line1}, {school_profile.address_line2}".strip(", ")
         school_heading.append(Paragraph(addr, small_style))
@@ -1019,16 +1044,17 @@ def _scholar_register_page_flowables(student, school_profile=None, content_width
 
     top_meta = [[
         f"Admission / S.R. No.: {student.admission_no or student.legacy_sid or ''}",
+        f"Withdrawal File No.: {tc.withdrawal_file_no if tc else ''}",
         f"Transfer Certificate No.: {tc.tc_number if tc else ''}",
         f"Register Book No.: {student.scholar_register_no or ''}",
     ]]
-    meta_t = Table(top_meta, colWidths=scaled_widths([63, 63, 63]))
+    meta_t = Table(top_meta, colWidths=scaled_widths([47.25, 47.25, 47.25, 47.25]))
     meta_t.setStyle(TableStyle([
         ("FONTNAME", (0, 0), (-1, -1), "Helvetica"),
-        ("FONTSIZE", (0, 0), (-1, -1), 8.4),
+        ("FONTSIZE", (0, 0), (-1, -1), 7.6),
         ("ALIGN", (0, 0), (0, -1), "LEFT"),
-        ("ALIGN", (1, 0), (1, -1), "CENTER"),
-        ("ALIGN", (2, 0), (2, -1), "RIGHT"),
+        ("ALIGN", (1, 0), (2, -1), "CENTER"),
+        ("ALIGN", (3, 0), (3, -1), "RIGHT"),
         ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#9aa5b1")),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 3), ("TOPPADDING", (0, 0), (-1, -1), 3),
     ]))
