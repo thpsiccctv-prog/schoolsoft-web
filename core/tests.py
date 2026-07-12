@@ -545,6 +545,7 @@ class FeeReceiptTests(AuthenticatedClientMixin, TestCase):
                 "from_month": "JULY",
                 "to_month": "JULY",
                 "payment_mode": FeeReceipt.PaymentMode.CASH,
+                "previous_due_amount": "0.00",
                 "concession_amount": "10.00",
                 "late_fee_amount": "0.00",
                 "received_amount": "90.00",
@@ -613,6 +614,133 @@ class FeeReceiptTests(AuthenticatedClientMixin, TestCase):
         self.assertEqual(pdf_response["Content-Type"], "application/pdf")
         self.assertContains(response, "Due Report")
         self.assertContains(response, "Due Student")
+
+    def test_previous_due_suggested_from_earlier_session(self):
+        """Fee Collection's fee-defaults API should suggest last session's
+        unpaid balance as this new receipt's Previous Due, so the office
+        doesn't have to remember/re-type it (owner request, July 2026)."""
+        old_session = AcademicSession.objects.create(
+            name="2025-26", starts_on=date(2025, 4, 1), ends_on=date(2026, 3, 31)
+        )
+        new_session = AcademicSession.objects.create(
+            name="2026-27", starts_on=date(2026, 4, 1), ends_on=date(2027, 3, 31)
+        )
+        school_class = SchoolClass.objects.create(name="IV", display_order=4)
+        student = Student.objects.create(full_name="Carry Forward Student", current_class=school_class)
+        FeeReceipt.objects.create(
+            receipt_no="OLD-1",
+            student=student,
+            session=old_session,
+            received_amount=Decimal("500.00"),
+            legacy_net_total=Decimal("1200.00"),
+            legacy_due_amount=Decimal("700.00"),
+        )
+
+        response = self.client.get(
+            reverse("core:student_fee_defaults", args=[student.id]),
+            {"session": new_session.id},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["previous_due"], "700.00")
+
+    def test_receipt_create_with_previous_due_marks_prior_receipts_carried_forward(self):
+        """When a new receipt rolls in a Previous Due, the source unpaid
+        receipt(s) from earlier sessions must flip carried_forward=True so
+        the Due Report doesn't count that balance twice (once on the old
+        receipt, once inside the new receipt's total)."""
+        old_session = AcademicSession.objects.create(
+            name="2025-26", starts_on=date(2025, 4, 1), ends_on=date(2026, 3, 31)
+        )
+        new_session = AcademicSession.objects.create(
+            name="2026-27", starts_on=date(2026, 4, 1), ends_on=date(2027, 3, 31)
+        )
+        school_class = SchoolClass.objects.create(name="V", display_order=5)
+        student = Student.objects.create(full_name="Rollover Student", current_class=school_class)
+        old_receipt = FeeReceipt.objects.create(
+            receipt_no="OLD-2",
+            student=student,
+            session=old_session,
+            received_amount=Decimal("300.00"),
+            legacy_net_total=Decimal("1000.00"),
+            legacy_due_amount=Decimal("700.00"),
+        )
+        fee_head = FeeHead.objects.create(name="Tuition Fee")
+
+        post_response = self.client.post(
+            reverse("core:receipt_create"),
+            data={
+                "student": student.id,
+                "session": new_session.id,
+                "receipt_date": "2026-07-05",
+                "from_month": "APR",
+                "to_month": "MAR",
+                "payment_mode": FeeReceipt.PaymentMode.CASH,
+                "previous_due_amount": "700.00",
+                "concession_amount": "0.00",
+                "late_fee_amount": "0.00",
+                "received_amount": "1500.00",
+                "remarks": "New session receipt with carry forward",
+                f"fee_head_{fee_head.id}": "1000.00",
+            },
+        )
+
+        new_receipt = FeeReceipt.objects.get(remarks="New session receipt with carry forward")
+        self.assertRedirects(post_response, reverse("core:receipt_detail", args=[new_receipt.id]))
+        # 1000 (fee) + 700 (previous due) = 1700 net; 1500 received -> 200 due.
+        self.assertEqual(new_receipt.legacy_net_total, Decimal("1700.00"))
+        self.assertEqual(new_receipt.legacy_due_amount, Decimal("200.00"))
+
+        old_receipt.refresh_from_db()
+        self.assertTrue(old_receipt.carried_forward)
+
+    def test_due_report_excludes_carried_forward_receipts(self):
+        """A carried_forward receipt stays in the system (audit trail) but
+        must not add to Due Report totals - its balance now lives on the
+        newer receipt that absorbed it, so counting both would overstate
+        the true outstanding amount."""
+        session = AcademicSession.objects.create(name="2026-27")
+        school_class = SchoolClass.objects.create(name="VI", display_order=6)
+        student = Student.objects.create(full_name="Settled Student", current_class=school_class)
+        FeeReceipt.objects.create(
+            receipt_no="CF-1",
+            student=student,
+            session=session,
+            received_amount=Decimal("0.00"),
+            legacy_net_total=Decimal("500.00"),
+            legacy_due_amount=Decimal("500.00"),
+            carried_forward=True,
+        )
+
+        response = self.client.get(reverse("core:due_report"), {"session": "all"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "Settled Student")
+
+    def test_receipt_pdf_shows_previous_due_line(self):
+        session = AcademicSession.objects.create(name="2026-27")
+        school_class = SchoolClass.objects.create(name="VII", display_order=7)
+        student = Student.objects.create(full_name="Previous Due PDF Student", current_class=school_class)
+        fee_head = FeeHead.objects.create(name="Tuition Fee")
+        receipt = FeeReceipt.objects.create(
+            receipt_no="PD-1",
+            student=student,
+            session=session,
+            previous_due_amount=Decimal("700.00"),
+            received_amount=Decimal("1000.00"),
+            legacy_fee_total=Decimal("1000.00"),
+            legacy_net_total=Decimal("1700.00"),
+            legacy_due_amount=Decimal("700.00"),
+        )
+        FeeReceiptLine.objects.create(receipt=receipt, fee_head=fee_head, amount=Decimal("1000.00"))
+
+        pdf_response = self.client.get(reverse("core:receipt_pdf", args=[receipt.id]))
+        detail_response = self.client.get(reverse("core:receipt_detail", args=[receipt.id]))
+
+        self.assertEqual(pdf_response.status_code, 200)
+        self.assertEqual(pdf_response["Content-Type"], "application/pdf")
+        self.assertEqual(detail_response.status_code, 200)
+        self.assertContains(detail_response, "NOT FULLY PAID")
 
 class Month2DocumentTests(AuthenticatedClientMixin, TestCase):
     def test_admission_form_pdf(self):
@@ -966,6 +1094,7 @@ class Month2DocumentTests(AuthenticatedClientMixin, TestCase):
             data={
                 "receipt_date": "2026-07-02",
                 "payment_mode": FeeReceipt.PaymentMode.ONLINE,
+                "previous_due_amount": "0.00",
                 "concession_amount": "0.00",
                 "late_fee_amount": "0.00",
                 "received_amount": "150.00",

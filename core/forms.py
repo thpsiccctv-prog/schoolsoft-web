@@ -163,6 +163,7 @@ class FeeReceiptEntryForm(forms.ModelForm):
             "from_month",
             "to_month",
             "payment_mode",
+            "previous_due_amount",
             "concession_amount",
             "late_fee_amount",
             "received_amount",

@@ -57,6 +57,18 @@
 </section>
 {% endif %}
 
+{% if not receipt.is_cancelled and receipt.legacy_due_amount > 0 %}
+<section class="section no-print" style="margin-bottom: 20px;">
+    <div style="background: #fef2f2; border-left: 4px solid #dc2626; padding: 16px 20px; border-radius: 4px;">
+        <h3 style="margin: 0 0 4px 0; color: #b91c1c; font-size: 16px; font-weight: 700;">⚠ NOT FULLY PAID - ₹{{ receipt.legacy_due_amount|indian_number }} STILL DUE</h3>
+        <p style="margin: 0; color: #991b1b; font-size: 13px;">
+            Month range on this receipt: <strong>{{ receipt.from_month|default:"-" }} to {{ receipt.to_month|default:"-" }}</strong>.
+            The range being selected does not mean the amount is fully paid - always check the Due amount below before assuming this receipt is settled.
+        </p>
+    </div>
+</section>
+{% endif %}
+
 <section class="receipt-paper">
     <header class="receipt-header">
         <div>
@@ -73,6 +85,13 @@
             <div class="receipt-title-badge" {% if receipt.is_cancelled %}style="background: #dc2626;"{% endif %}>
                 {% if receipt.is_cancelled %}VOID RECEIPT{% else %}Fee Receipt{% endif %}
             </div>
+            {% if not receipt.is_cancelled %}
+                {% if receipt.legacy_due_amount > 0 %}
+                    <div class="receipt-title-badge" style="background: #dc2626; margin-top: 4px;">DUE - Rs. {{ receipt.legacy_due_amount|indian_number }}</div>
+                {% else %}
+                    <div class="receipt-title-badge" style="background: #15803d; margin-top: 4px;">FULLY PAID</div>
+                {% endif %}
+            {% endif %}
         </div>
         <div class="receipt-number">
             <span>Receipt No.</span>

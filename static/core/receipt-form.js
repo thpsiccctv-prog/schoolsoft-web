@@ -230,6 +230,7 @@
 
     function setupTotals() {
         var amountInputs = Array.from(document.querySelectorAll(".amount-input"));
+        var previousDueInput = document.querySelector("#id_previous_due_amount");
         var concessionInput = document.querySelector("#id_concession_amount");
         var lateFeeInput = document.querySelector("#id_late_fee_amount");
         var receivedInput = document.querySelector("#id_received_amount");
@@ -245,10 +246,11 @@
             var feeTotal = amountInputs.reduce(function (sum, input) {
                 return sum + toNumber(input.value);
             }, 0);
+            var previousDue = toNumber(previousDueInput && previousDueInput.value);
             var concession = toNumber(concessionInput && concessionInput.value);
             var lateFee = toNumber(lateFeeInput && lateFeeInput.value);
             var received = toNumber(receivedInput && receivedInput.value);
-            var netTotal = feeTotal + lateFee - concession;
+            var netTotal = feeTotal + previousDue + lateFee - concession;
             var dueTotal = Math.max(netTotal - received, 0);
 
             feeTotalOutput.textContent = formatMoney(feeTotal);
@@ -261,7 +263,7 @@
             }
         }
 
-        amountInputs.concat([concessionInput, lateFeeInput, receivedInput]).forEach(function (input) {
+        amountInputs.concat([previousDueInput, concessionInput, lateFeeInput, receivedInput]).forEach(function (input) {
             if (input) {
                 input.addEventListener("input", recalculate);
             }
@@ -299,6 +301,19 @@
                             input.dispatchEvent(new Event("input", {bubbles: true}));
                         }
                     });
+
+                    var previousDueInput = document.querySelector("#id_previous_due_amount");
+                    var previousDueHint = document.querySelector("[data-previous-due-hint]");
+                    if (previousDueInput) {
+                        var suggested = toNumber(data.previous_due);
+                        previousDueInput.value = formatMoney(suggested);
+                        previousDueInput.dispatchEvent(new Event("input", {bubbles: true}));
+                        if (previousDueHint) {
+                            previousDueHint.textContent = suggested > 0
+                                ? "Auto-filled from earlier unpaid receipts - adjust if this figure looks wrong."
+                                : "No earlier unpaid receipts found for this student. Enter manually if an old due exists outside the system.";
+                        }
+                    }
 
                     var summary = document.querySelector("[data-student-summary]");
                     if (summary && data.student) {

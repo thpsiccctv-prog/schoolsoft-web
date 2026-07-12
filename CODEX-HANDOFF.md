@@ -2354,3 +2354,141 @@ Not done / next session must:
    Times-Bold for the school name via the shared `_premium_header`) - not expected to cause any layout
    issue since it's a drop-in Base-14 font swap, but not independently visually re-confirmed this
    session.
+
+**Update same day**: items 1 and 3 above are resolved - commit `87a5188` ("feat: world-class character
+certificate redesign + fix devanagari title shaping") pushed to GitHub, and EXE rebuilt/verified working
+by the owner (screenshot confirmed correct Hindi title, Times-Bold header, badge, seal box, single page).
+Item 2 (`dist\SchoolSoft_old\` cleanup) is still pending - `Remove-Item` failed with a file-lock
+(`VCRUNTIME140.dll` in use by a lingering old process); owner needs to restart the PC once, then delete
+`dist\SchoolSoft_old\` manually via File Explorer. Not urgent, just disk clutter.
+
+## 2026-07-12 Checkpoint - Character Certificate: drop section from class label
+
+Owner reported the Character Certificate showed "Class III - A" and wanted just "Class III" - section is
+an internal administrative grouping, irrelevant to what a character certificate is attesting.
+
+- `build_character_certificate_pdf()` no longer calls the shared `_class_section_label(student)` helper
+  (which includes section) - now uses `student.current_class.name` directly. One-line change, scoped to
+  this function only.
+- `_class_section_label()` itself is untouched and still used as-is by `build_marksheet_pdf()`, where the
+  exact section IS administratively meaningful (report card should identify which class group).
+- **Not yet committed, not yet in a rebuilt EXE.** Owner tested the old EXE after this fix and (correctly)
+  still saw "Class III - A", because the EXE is a frozen snapshot from before this change - not a bug,
+  just needs the standard `collectstatic` + `build-desktop.bat` rebuild + commit cycle whenever the owner
+  is ready to ship this alongside whatever's next.
+
+## 2026-07-12 - Fee Collection "Save not working" - investigated, root cause was operator workflow, not code
+
+Owner reported Fee Collection form not saving (and consequently Save & Print not reaching the print
+step, since printing only fires after a successful save + redirect to `receipt_detail?autoprint=1`).
+
+Investigation (via reading `templates/core/receipt_form.html`, `static/core/receipt-form.js`,
+`core/forms.py` `FeeReceiptEntryForm`/`FeeReceiptLineEntryForm`) found the `<select id="id_student">` is
+hidden by JS (`select.style.display = "none"`) in favour of a custom search-box + dropdown
+(`setupStudentCustomDropdown()` in `receipt-form.js`). The real select only updates when a dropdown
+suggestion is actually clicked (or Enter'd with one highlighted) - typing a SID into the search box alone
+does NOT set the underlying required `student` field. **Root cause confirmed by owner**: they typed SID
+1648 into the search box but did not click the matching dropdown suggestion, so `student` stayed empty
+and the required-field validation silently failed on submit (the error renders next to the now-hidden
+`<select>`, easy to miss). Clicking the suggestion fixed it immediately - no code bug.
+
+**Real secondary finding, not the cause this time but worth knowing**: `FeeReceiptEntryForm.__init__`
+restricts `self.fields["student"].queryset` to `Student.objects.filter(is_active=True)` only, meaning
+inactive/TC-issued students can never appear as options in this form's dropdown at all - yet
+`StudentChoiceField.label_from_instance()` (core/forms.py) still contains live `"[INACTIVE]"` badge-
+labelling logic that only makes sense if inactive students WERE selectable here. This is currently dead
+code for this form (no functional bug today, since Fee Collection legitimately usually targets active
+students), but flagging it in case a future need arises to collect/correct a fee receipt for a student
+right around their TC/leaving date.
+
+Proposed (not implemented, owner has not requested it yet): make the search-box more forgiving - e.g.
+auto-select on an unambiguous exact SID/admission-no match, and/or show a clear inline warning next to
+the visible search box (not just the hidden select) if Save is clicked with no student chosen. Pick this
+up only if the owner asks - today's incident was a one-off operator slip, not a recurring complaint.
+
+## 2026-07-12 - Previous Session Due carry-forward + clear DUE/PAID status badges
+
+Owner reported that a student's unpaid balance from an earlier session doesn't show up anywhere when
+collecting this session's fee - "pichhale session ka fee due... koi option nahi dikh raha hai". Explicit
+requirement: manual entry for the current transition year (since historical data may be incomplete),
+automatic from next session onward. A second, related request came in mid-session: when a receipt covers
+a wide month range (e.g. Apr-Mar, looks like "the whole year") but isn't fully paid, that must be
+unmistakably obvious, not just a number buried in a column.
+
+Two owner decisions locked in via AskUserQuestion before implementing:
+1. Old receipts whose due gets carried forward stay visible in the Receipt Register (audit trail) with a
+   "CARRIED FORWARD" badge, rather than being hidden.
+2. The printed Fee Receipt shows "Previous Due (carried forward)" as its own line, not folded silently
+   into the total.
+
+**Design** (mirrors the `opening_balance` pattern already used in the Accounts/Ledger module of this same
+project, for consistency):
+
+- `FeeReceipt` gained two fields (migration `0029_feereceipt_previous_due_carry_forward`):
+  - `previous_due_amount` (Decimal, default 0) - rolled into THIS receipt's `legacy_net_total` alongside
+    fee total, late fee, and concession.
+  - `carried_forward` (Boolean, default False) - flips to True on the SOURCE prior receipts once their
+    balance has been absorbed into a newer receipt's `previous_due_amount`, so the Due Report (and any
+    future previous-due suggestion) doesn't count that balance twice.
+- `core/views.py`:
+  - `_eligible_prior_due_receipts(student, session_id)` - shared query: student's unpaid, not-cancelled,
+    not-already-carried-forward receipts from sessions strictly before the one being collected for
+    (compares `AcademicSession.starts_on`; falls back to "any other session" if `starts_on` is blank).
+  - `_suggest_previous_due(student, session_id)` - sums the above for the fee-defaults API response.
+  - `_mark_prior_receipts_carried_forward(receipt)` - called after saving a new receipt with
+    `previous_due_amount > 0`; marks ALL eligible prior receipts as `carried_forward=True`. Deliberately
+    does NOT try to reconcile whether the office-entered amount exactly equals the sum of those old
+    receipts - the office figure is treated as authoritative (this is a small-school manual-entry system,
+    not a general ledger with per-transaction allocation). If the entered figure is smaller than the old
+    receipts' true total, that gap is silently absorbed - acceptable given the office already has full
+    discretion to edit the suggested figure, and is expected to know their own case better than the
+    system's incomplete legacy data.
+  - `student_fee_defaults` (the existing `/api/students/<id>/fee-defaults/` endpoint) now also returns
+    `"previous_due"` in its JSON response.
+  - `receipt_create` and `receipt_edit`: `legacy_net_total` calculation now includes
+    `previous_due_amount`.
+  - Every other place that sums `legacy_due_amount` across a student/report (`get_due_report_rows`,
+    dashboard "Total Dues" KPI, `_student_due_total` used by Family Ledger, `student_detail`'s due total,
+    the Receipt Register's own totals row) now excludes `carried_forward=True` receipts, to prevent the
+    same balance being counted on both the old and new receipt. This was checked exhaustively via
+    `grep legacy_due_amount core/views.py` - not just the Due Report.
+- `core/forms.py`: `previous_due_amount` added to `FeeReceiptEntryForm.Meta.fields` (inherited
+  automatically by `FeeReceiptEditForm`, and left NOT disabled there - unlike student/session/month, the
+  office can still correct this figure during a receipt correction).
+- `templates/core/receipt_form.html` + `static/core/receipt-form.js`: new editable "Previous Due" field
+  in the Payable panel, auto-filled from the fee-defaults API whenever student or session changes (same
+  trigger as the existing fee-head auto-fill), with a hint line explaining whether it was auto-suggested
+  or needs a manual figure. Included in the live Net Total/Due calculation in `setupTotals()`.
+- **Clear DUE/PAID status, not just a number in a column** (the mid-session request):
+  - `templates/core/receipt_detail.html`: a print-visible green "FULLY PAID" / red "DUE - Rs. X" badge
+    next to the receipt number (same visual language as the existing CANCELLED badge), plus an on-screen
+    (no-print) red banner right when the page opens if there's a balance, explicitly stating the month
+    range doesn't guarantee full payment.
+  - `core/pdf.py` `build_fee_receipt_pdf`: the same FULLY PAID / DUE badge added next to Receipt No. on
+    the downloadable/printable PDF (previously only had a "Balance Due" table row, easy to miss). Also
+    added the "Previous Due (carried forward)" line item (purple, bold) per owner decision #2 above.
+  - `templates/core/receipt_list.html`: receipt number cell now also shows a "CARRIED FORWARD" or
+    "⚠ DUE" badge (reusing the same small-pill style as the existing CANCELLED/EDITED badges).
+- Tests added to `core/tests.py` `FeeReceiptTests` (92 total tests now, was 88):
+  `test_previous_due_suggested_from_earlier_session`,
+  `test_receipt_create_with_previous_due_marks_prior_receipts_carried_forward`,
+  `test_due_report_excludes_carried_forward_receipts`, `test_receipt_pdf_shows_previous_due_line`.
+  Also had to fix two PRE-EXISTING tests (`test_manual_receipt_create`, `test_receipt_edit_workflow`) to
+  include `previous_due_amount` in their POST data, since the new model field has no `blank=True` (same
+  pattern as `concession_amount`/`late_fee_amount`) and is therefore required by the ModelForm.
+
+**Not done / next session must:**
+1. Run `manage.py test core` to confirm 92/92 (not yet run this session - bash sandbox unavailable all
+   session, as usual for this project; every change above was verified by careful code reading only, not
+   execution).
+2. Visual QA: create a receipt with an old-session due, confirm Previous Due auto-suggests correctly, and
+   confirm the DUE/FULLY PAID badges look right in the browser, on the printed HTML receipt, and on the
+   downloaded PDF.
+3. `collectstatic` (receipt-form.js changed) + `build-desktop.bat` + commit, once owner confirms the
+   visual QA above.
+4. Genuinely open design question for the owner to weigh in on later if it ever matters in practice: right
+   now `_mark_prior_receipts_carried_forward` marks ALL eligible prior receipts as carried forward the
+   moment ANY positive `previous_due_amount` is saved, even if it's smaller than their true combined
+   total (see reasoning above). If this ever causes a real mismatch complaint, the fix is to only mark
+   receipts up to covering the entered amount (oldest first) and leave the remainder un-marked - not
+   done now since it adds real complexity for a scenario that hasn't happened yet.

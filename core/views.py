@@ -136,7 +136,7 @@ def dashboard(request):
         total_dues = Decimal("0.00")
         if active_session:
             total_dues = FeeReceipt.objects.filter(
-                is_cancelled=False, session=active_session, student__is_active=True
+                is_cancelled=False, carried_forward=False, session=active_session, student__is_active=True
             ).aggregate(total=Sum("legacy_due_amount"))["total"] or Decimal("0.00")
         kpis.append({
             "label": "Total Dues",
@@ -315,7 +315,7 @@ def student_detail(request, pk):
         pk=pk,
     )
     due_total = FeeReceipt.objects.filter(
-        student=student, is_cancelled=False, legacy_due_amount__gt=0
+        student=student, is_cancelled=False, carried_forward=False, legacy_due_amount__gt=0
     ).aggregate(total=Sum("legacy_due_amount"))["total"] or 0
     school_profile = get_active_school_profile()
     return render(
@@ -552,7 +552,11 @@ def receipt_list(request):
     totals = receipts.filter(is_cancelled=False).aggregate(
         received=Sum("received_amount"),
         net=Sum("legacy_net_total"),
-        due=Sum("legacy_due_amount"),
+        # carried_forward receipts stay visible in the register (so staff can
+        # see the history) but their due is now represented on whatever newer
+        # receipt absorbed it via Previous Due - excluded here to avoid the
+        # same balance being counted twice in this total.
+        due=Sum("legacy_due_amount", filter=Q(carried_forward=False)),
     )
     cancelled_count = receipts.filter(is_cancelled=True).count()
     paginator = Paginator(receipts, 50)
@@ -625,7 +629,7 @@ def get_due_report_rows(request):
         "student",
         "student__current_class",
         "student__current_section",
-    ).filter(legacy_due_amount__gt=0, is_cancelled=False)
+    ).filter(legacy_due_amount__gt=0, is_cancelled=False, carried_forward=False)
 
     if session_id and session_id != "all":
         receipts = receipts.filter(session_id=session_id)
@@ -696,7 +700,9 @@ def receipt_create(request):
                 receipt.receipt_no = next_manual_receipt_no()
                 line_total = line_form.cleaned_data["line_total"]
                 receipt.legacy_fee_total = line_total
-                receipt.legacy_net_total = line_total + receipt.late_fee_amount - receipt.concession_amount
+                receipt.legacy_net_total = (
+                    line_total + receipt.previous_due_amount + receipt.late_fee_amount - receipt.concession_amount
+                )
                 receipt.legacy_due_amount = max(
                     receipt.legacy_net_total - receipt.received_amount,
                     Decimal("0.00"),
@@ -706,6 +712,9 @@ def receipt_create(request):
 
                 for fee_head, amount in line_form.amounts():
                     receipt.lines.create(fee_head=fee_head, amount=amount)
+
+                if receipt.previous_due_amount > Decimal("0.00"):
+                    _mark_prior_receipts_carried_forward(receipt)
 
             if request.POST.get("action") == "save_print":
                 return redirect(f"{reverse('core:receipt_detail', kwargs={'pk': receipt.pk})}?autoprint=1")
@@ -827,7 +836,10 @@ def receipt_edit(request, pk):
                 # Recalculate totals
                 line_total = line_form.cleaned_data["line_total"]
                 updated_receipt.legacy_fee_total = line_total
-                updated_receipt.legacy_net_total = line_total + updated_receipt.late_fee_amount - updated_receipt.concession_amount
+                updated_receipt.legacy_net_total = (
+                    line_total + updated_receipt.previous_due_amount
+                    + updated_receipt.late_fee_amount - updated_receipt.concession_amount
+                )
                 updated_receipt.legacy_due_amount = max(
                     updated_receipt.legacy_net_total - updated_receipt.received_amount,
                     Decimal("0.00"),
@@ -946,14 +958,65 @@ def student_fee_defaults(request, pk):
         if structure.amount > Decimal("0.00")
     }
 
+    previous_due = _suggest_previous_due(student, session_id)
+
     return JsonResponse(
         {
             "student": student.full_name,
             "class": student.current_class.name if student.current_class else "",
             "section": student.current_section.name if student.current_section else "",
             "amounts": amounts,
+            "previous_due": f"{previous_due:.2f}",
         }
     )
+
+
+def _eligible_prior_due_receipts(student, session_id):
+    """Receipts that can legitimately feed a 'Previous Due' carry-forward for
+    this student: unpaid, not cancelled, not already carried forward into an
+    even earlier rollup, and (when session_id is known) strictly from a
+    session that started before the one being collected for. Shared by the
+    suggestion calculation and the marking step so both agree on what
+    counts as 'previous'."""
+    prior_receipts = FeeReceipt.objects.filter(
+        student=student,
+        is_cancelled=False,
+        carried_forward=False,
+    ).exclude(legacy_due_amount__lte=Decimal("0.00"))
+
+    if session_id:
+        prior_receipts = prior_receipts.exclude(session_id=session_id)
+        selected_session = AcademicSession.objects.filter(pk=session_id).first()
+        if selected_session and selected_session.starts_on:
+            prior_receipts = prior_receipts.filter(
+                Q(session__starts_on__lt=selected_session.starts_on) | Q(session__starts_on__isnull=True)
+            )
+
+    return prior_receipts
+
+
+def _suggest_previous_due(student, session_id):
+    """Auto-suggested 'Previous Due' figure for the Fee Collection form -
+    sum of the student's unpaid, not-yet-carried-forward receipts from
+    sessions strictly before the one being collected for. Office staff can
+    still override this in the form (needed while historical/legacy fee
+    data is incomplete); once receipts are consistently recorded session by
+    session this keeps working automatically without any manual step."""
+    total = _eligible_prior_due_receipts(student, session_id).aggregate(total=Sum("legacy_due_amount"))["total"]
+    return total or Decimal("0.00")
+
+
+def _mark_prior_receipts_carried_forward(receipt):
+    """Called after saving a new receipt whose previous_due_amount > 0: marks
+    the student's earlier eligible unpaid receipts as carried_forward=True so
+    the Due Report (and any future previous-due suggestion) stops counting
+    them separately - their balance now lives on this new receipt instead.
+    Note: this marks ALL eligible prior receipts regardless of whether the
+    office-entered previous_due_amount exactly matches their sum (the office
+    figure is treated as authoritative - see CODEX-HANDOFF.md for the
+    reasoning) - if it doesn't match, is_edited/remarks on this receipt is
+    the audit trail for why."""
+    _eligible_prior_due_receipts(receipt.student, str(receipt.session_id)).update(carried_forward=True)
 
 
 def next_manual_receipt_no():
@@ -1433,7 +1496,7 @@ def _class_label(student):
 
 def _student_due_total(student):
     return FeeReceipt.objects.filter(
-        student=student, is_cancelled=False, legacy_due_amount__gt=0
+        student=student, is_cancelled=False, carried_forward=False, legacy_due_amount__gt=0
     ).aggregate(total=Sum("legacy_due_amount"))["total"] or Decimal("0")
 
 

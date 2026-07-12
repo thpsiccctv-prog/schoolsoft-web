@@ -339,15 +339,37 @@ def build_fee_receipt_pdf(receipt, school_profile=None):
 
     story = []
     
+    # Clear, hard-to-miss payment-status badge - a plain number in a table
+    # row further down is easy to overlook, especially when the month range
+    # looks like a full-session payment (e.g. Apr-Mar) but isn't fully paid.
+    if receipt.is_cancelled:
+        status_badge = None
+    elif receipt.legacy_due_amount > 0:
+        status_badge = Paragraph(
+            f"DUE - Rs. {money(receipt.legacy_due_amount)}",
+            ParagraphStyle("StatusDue", alignment=2, fontName="Helvetica-Bold", fontSize=10,
+                          textColor=colors.white, backColor=colors.HexColor("#dc2626"), spaceBefore=2 * mm),
+        )
+    else:
+        status_badge = Paragraph(
+            "FULLY PAID",
+            ParagraphStyle("StatusPaid", alignment=2, fontName="Helvetica-Bold", fontSize=10,
+                          textColor=colors.white, backColor=colors.HexColor("#15803d"), spaceBefore=2 * mm),
+        )
+
+    receipt_no_cell = [Paragraph(f"<b>Receipt No.</b><br/><font size=13>{receipt.receipt_no}</font>",
+                                 ParagraphStyle("RNo", alignment=2, leading=15, textColor=text_color))]
+    if status_badge is not None:
+        receipt_no_cell.append(status_badge)
+
     # Header Table (School Info Left, Receipt No Right)
     header_data = [
         [
-            [Paragraph(school_name.upper(), title_style), 
-             Paragraph(school_address, small_style), 
+            [Paragraph(school_name.upper(), title_style),
+             Paragraph(school_address, small_style),
              Paragraph(school_contact, small_style),
              Paragraph(" FEE RECEIPT ", badge_style)],
-            [Paragraph(f"<b>Receipt No.</b><br/><font size=13>{receipt.receipt_no}</font>",
-                      ParagraphStyle("RNo", alignment=2, leading=15, textColor=text_color))]
+            receipt_no_cell
         ]
     ]
     header_table = Table(header_data, colWidths=[112 * mm, 62 * mm])
@@ -401,7 +423,12 @@ def build_fee_receipt_pdf(receipt, school_profile=None):
     body_last_idx = len(line_rows) - 1
     total_start_idx = len(line_rows)
     line_rows.append(["Fee Total", money(receipt.legacy_fee_total)])
-    
+
+    previous_due_idx = None
+    if receipt.previous_due_amount > 0:
+        previous_due_idx = len(line_rows)
+        line_rows.append(["Previous Due (carried forward)", f"+ {money(receipt.previous_due_amount)}"])
+
     if receipt.concession_amount > 0:
         line_rows.append(["Concession / Discount", f"- {money(receipt.concession_amount)}"])
     if receipt.late_fee_amount > 0:
@@ -450,7 +477,11 @@ def build_fee_receipt_pdf(receipt, school_profile=None):
     
     if due_idx:
         ts.append(("TEXTCOLOR", (0, due_idx), (-1, due_idx), colors.HexColor("#dc2626")))
-        
+
+    if previous_due_idx is not None:
+        ts.append(("TEXTCOLOR", (0, previous_due_idx), (-1, previous_due_idx), colors.HexColor("#7c3aed")))
+        ts.append(("FONTNAME", (0, previous_due_idx), (-1, previous_due_idx), "Helvetica-Bold"))
+
     fee_table.setStyle(TableStyle(ts))
     story.append(fee_table)
 
@@ -1699,7 +1730,13 @@ def build_character_certificate_pdf(student, school_profile=None):
     else:
         subj, poss, obj, rel = "he", "his", "him", "son"
 
-    class_label = _class_section_label(student)
+    # Character Certificate deliberately shows only the class, not the
+    # section - section is an internal administrative grouping (which room/
+    # group), irrelevant to what this certificate is attesting (bona fide
+    # status and good conduct). _class_section_label (which includes the
+    # section) stays reserved for documents like the Marksheet where the
+    # exact section is administratively meaningful.
+    class_label = student.current_class.name if student.current_class else ""
     parents = []
     if student.father_name:
         parents.append(f"{rel} of <b>Mr. {student.father_name}</b>")

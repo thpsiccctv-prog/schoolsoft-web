@@ -321,6 +321,18 @@ class FeeReceipt(TimeStampedModel):
     legacy_fee_total = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
     legacy_net_total = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
     legacy_due_amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
+    # Previous-session (or pre-system) outstanding balance rolled into this
+    # receipt's payable total. Auto-suggested by summing the student's unpaid,
+    # not-yet-carried-forward receipts from earlier sessions, but the office
+    # can override it (needed while historical data is still being migrated).
+    # When a receipt is saved with previous_due_amount > 0, the SOURCE prior
+    # receipts get carried_forward=True so their due is not double-counted in
+    # the Due Report - the balance now lives on this new receipt instead.
+    previous_due_amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
+    carried_forward = models.BooleanField(
+        default=False,
+        help_text="True if this receipt's outstanding due was rolled into a later receipt as Previous Due - excluded from Due Report totals to avoid double-counting.",
+    )
     remarks = models.CharField(max_length=255, blank=True)
     is_cancelled = models.BooleanField(default=False)
     cancelled_at = models.DateTimeField(null=True, blank=True)

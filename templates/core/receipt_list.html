@@ -103,6 +103,11 @@
                             {% elif receipt.is_edited %}
                                 <br><span style="font-size: 11px; background: #fef3c7; color: #b45309; padding: 2px 6px; border-radius: 4px; font-weight: 700;">EDITED</span>
                             {% endif %}
+                            {% if receipt.carried_forward %}
+                                <br><span style="font-size: 11px; background: #e0e7ff; color: #3730a3; padding: 2px 6px; border-radius: 4px; font-weight: 700;">CARRIED FORWARD</span>
+                            {% elif not receipt.is_cancelled and receipt.legacy_due_amount > 0 %}
+                                <br><span style="font-size: 11px; background: #fee2e2; color: #b91c1c; padding: 2px 6px; border-radius: 4px; font-weight: 700;">⚠ DUE</span>
+                            {% endif %}
                         </td>
                         <td data-label="Date" {% if receipt.is_cancelled %}style="text-decoration: line-through;"{% endif %}>{{ receipt.receipt_date|date:"d M Y" }}</td>
                         <td data-label="Student" {% if receipt.is_cancelled %}style="text-decoration: line-through;"{% endif %}>
