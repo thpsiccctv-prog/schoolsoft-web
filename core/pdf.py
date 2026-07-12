@@ -970,13 +970,17 @@ def build_transfer_certificate_pdf(tc, school_profile=None):
 _SCHOLAR_REGISTER_CLASS_ROWS = ["NUR", "LKG", "UKG", "I", "II", "III", "IV", "V", "VI", "VII", "VIII"]
 
 
-def _scholar_register_page_flowables(student, school_profile=None):
+def _scholar_register_page_flowables(student, school_profile=None, content_width_mm=189):
     """Builds the flowables for ONE student's Scholar Register page. Shared by
     the single-student PDF (build_scholar_register_pdf) and the full physical
     register book PDF (build_scholar_register_book_pdf) so the two documents
     always render identically."""
     styles = getSampleStyleSheet()
     story = []
+    width_scale = content_width_mm / 189
+
+    def scaled_widths(widths):
+        return [width * width_scale * mm for width in widths]
 
     brand_color = colors.HexColor("#0f766e")
     title_style = ParagraphStyle(
@@ -1002,10 +1006,10 @@ def _scholar_register_page_flowables(student, school_profile=None):
     if contact_parts:
         school_heading.append(Paragraph(" | ".join(contact_parts), small_style))
     logo = Image(logo_path, 20 * mm, 20 * mm) if os.path.exists(logo_path) else ""
-    header = Table([[logo, school_heading, ""]], colWidths=[25 * mm, 139 * mm, 25 * mm])
+    header = Table([[logo, school_heading, ""]], colWidths=scaled_widths([25, 139, 25]))
     header.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("ALIGN", (1, 0), (1, 0), "CENTER")]))
     story.append(header)
-    story.append(Table([[""]], colWidths=[189 * mm], rowHeights=[1.2 * mm], style=TableStyle([("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#b58a2a"))])))
+    story.append(Table([[""]], colWidths=[content_width_mm * mm], rowHeights=[1.2 * mm], style=TableStyle([("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#b58a2a"))])))
     story.append(Spacer(1, 2.5 * mm))
     story.append(Paragraph("SCHOLAR'S REGISTER &amp; TRANSFER CERTIFICATE FORM", title_style))
     story.append(_devanagari_flowable("छात्र पंजिका तथा स्थानान्तरण प्रमाण-पत्र - कार्यालय प्रति", 9, align=1))
@@ -1018,7 +1022,7 @@ def _scholar_register_page_flowables(student, school_profile=None):
         f"Transfer Certificate No.: {tc.tc_number if tc else ''}",
         f"Register Book No.: {student.scholar_register_no or ''}",
     ]]
-    meta_t = Table(top_meta, colWidths=[63 * mm, 63 * mm, 63 * mm])
+    meta_t = Table(top_meta, colWidths=scaled_widths([63, 63, 63]))
     meta_t.setStyle(TableStyle([
         ("FONTNAME", (0, 0), (-1, -1), "Helvetica"),
         ("FONTSIZE", (0, 0), (-1, -1), 8.4),
@@ -1056,7 +1060,7 @@ def _scholar_register_page_flowables(student, school_profile=None):
         [bilingual_label("Parent occupation", "व्यवसाय"), Paragraph("________________", value_style),
          bilingual_label("Address", "पता"), Paragraph(address, value_style)],
     ]
-    info_t = Table(info_rows, colWidths=[32 * mm, 62 * mm, 32 * mm, 63 * mm])
+    info_t = Table(info_rows, colWidths=scaled_widths([32, 62, 32, 63]))
     info_t.setStyle(TableStyle([
         ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#9aa5b1")),
         ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f7f8f8")),
@@ -1108,7 +1112,7 @@ def _scholar_register_page_flowables(student, school_profile=None):
 
     grid_t = Table(
         grid_data,
-        colWidths=[14 * mm, 11 * mm, 20 * mm, 20 * mm, 20 * mm, 43 * mm, 12 * mm, 18 * mm, 17 * mm, 14 * mm],
+        colWidths=scaled_widths([14, 11, 20, 20, 20, 43, 12, 18, 17, 14]),
         repeatRows=1,
     )
     grid_t.setStyle(TableStyle([
@@ -1149,7 +1153,7 @@ def _scholar_register_page_flowables(student, school_profile=None):
             [Paragraph("II - Certified that the above student's Register has been posted up to the last of the student's leaving as required by the Department Rules & T.C. Issued.", cert_style)],
             ["Prepared by: ______________________          Date: ____________          Head of Institute: ______________________"],
         ],
-        colWidths=[189 * mm],
+        colWidths=[content_width_mm * mm],
     )
     cert_t.setStyle(TableStyle([
         ("FONTSIZE", (0, 0), (-1, -1), 8.2),
@@ -1175,6 +1179,23 @@ def _draw_scholar_register_border(canvas, doc):
     margin = 5 * mm
     page_width, page_height = A4
     canvas.rect(margin, margin, page_width - 2 * margin, page_height - 2 * margin)
+    canvas.restoreState()
+
+
+def _draw_bound_register_border(canvas, doc):
+    """Border for pages that will be sewn/stapled into a physical book.
+
+    The left edge stays well clear of the binding gutter so neither the
+    border nor printed fields disappear when a thick register is opened.
+    """
+    canvas.saveState()
+    canvas.setStrokeColor(colors.HexColor("#17202a"))
+    canvas.setLineWidth(0.9)
+    left = 18 * mm
+    right = 5 * mm
+    vertical = 5 * mm
+    page_width, page_height = A4
+    canvas.rect(left, vertical, page_width - left - right, page_height - 2 * vertical)
     canvas.restoreState()
 
 
@@ -1254,7 +1275,9 @@ def _scholar_register_cover_flowables(book_no, from_no, to_no, entries, school_p
     return story
 
 
-def _scholar_register_index_flowables(entries, book_no, from_no, to_no, school_profile=None, standalone=False):
+def _scholar_register_index_flowables(
+    entries, book_no, from_no, to_no, school_profile=None, standalone=False, content_width_mm=189
+):
     """Index table: one row per number in the range, whether or not a
     student record exists for it. standalone=True adds a school header on
     top (used by build_scholar_register_index_pdf, which has no cover page
@@ -1262,6 +1285,7 @@ def _scholar_register_index_flowables(entries, book_no, from_no, to_no, school_p
     styles = getSampleStyleSheet()
     story = []
     brand_color = colors.HexColor("#0f766e")
+    width_scale = content_width_mm / 189
 
     title_style = ParagraphStyle(
         "SrIndexTitle", parent=styles["Title"], fontSize=14, leading=17, alignment=1,
@@ -1279,10 +1303,13 @@ def _scholar_register_index_flowables(entries, book_no, from_no, to_no, school_p
             addr = f"{school_profile.address_line1}, {school_profile.address_line2}".strip(", ")
             school_heading.append(Paragraph(addr, small_style))
         logo = Image(logo_path, 20 * mm, 20 * mm) if os.path.exists(logo_path) else ""
-        header = Table([[logo, school_heading, ""]], colWidths=[25 * mm, 139 * mm, 25 * mm])
+        header = Table(
+            [[logo, school_heading, ""]],
+            colWidths=[25 * width_scale * mm, 139 * width_scale * mm, 25 * width_scale * mm],
+        )
         header.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("ALIGN", (1, 0), (1, 0), "CENTER")]))
         story.append(header)
-        story.append(Table([[""]], colWidths=[189 * mm], rowHeights=[1 * mm], style=TableStyle([("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#b58a2a"))])))
+        story.append(Table([[""]], colWidths=[content_width_mm * mm], rowHeights=[1 * mm], style=TableStyle([("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#b58a2a"))])))
         story.append(Spacer(1, 3 * mm))
 
     book_label = f"Book No. {book_no}" if book_no else "Custom Range"
@@ -1312,7 +1339,11 @@ def _scholar_register_index_flowables(entries, book_no, from_no, to_no, school_p
             status,
         ])
 
-    index_t = Table(table_data, colWidths=[25 * mm, 85 * mm, 40 * mm, 39 * mm], repeatRows=1)
+    index_t = Table(
+        table_data,
+        colWidths=[width * width_scale * mm for width in [25, 85, 40, 39]],
+        repeatRows=1,
+    )
     index_t.setStyle(TableStyle([
         ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#9aa4b2")),
         ("BACKGROUND", (0, 0), (-1, 0), brand_color),
@@ -1340,8 +1371,8 @@ def build_scholar_register_book_pdf(entries, book_no, from_no, to_no, school_pro
     document = SimpleDocTemplate(
         buffer,
         pagesize=A4,
-        rightMargin=10 * mm,
-        leftMargin=10 * mm,
+        rightMargin=8 * mm,
+        leftMargin=22 * mm,
         topMargin=9 * mm,
         bottomMargin=9 * mm,
         title=f"Scholar Register Book {book_no or f'{from_no}-{to_no}'}",
@@ -1349,15 +1380,19 @@ def build_scholar_register_book_pdf(entries, book_no, from_no, to_no, school_pro
     story = []
     story.extend(_scholar_register_cover_flowables(book_no, from_no, to_no, entries, school_profile))
     story.append(PageBreak())
-    story.extend(_scholar_register_index_flowables(entries, book_no, from_no, to_no, school_profile, standalone=False))
+    story.extend(
+        _scholar_register_index_flowables(
+            entries, book_no, from_no, to_no, school_profile, standalone=False, content_width_mm=180
+        )
+    )
 
     for _sid, student in entries:
         if student is None:
             continue
         story.append(PageBreak())
-        story.extend(_scholar_register_page_flowables(student, school_profile))
+        story.extend(_scholar_register_page_flowables(student, school_profile, content_width_mm=180))
 
-    document.build(story, onFirstPage=_draw_scholar_register_border, onLaterPages=_draw_scholar_register_border)
+    document.build(story, onFirstPage=_draw_bound_register_border, onLaterPages=_draw_bound_register_border)
     buffer.seek(0)
     return buffer.getvalue()
 
@@ -1369,14 +1404,16 @@ def build_scholar_register_index_pdf(entries, book_no, from_no, to_no, school_pr
     document = SimpleDocTemplate(
         buffer,
         pagesize=A4,
-        rightMargin=10 * mm,
-        leftMargin=10 * mm,
+        rightMargin=8 * mm,
+        leftMargin=22 * mm,
         topMargin=9 * mm,
         bottomMargin=9 * mm,
         title=f"Scholar Register Index {book_no or f'{from_no}-{to_no}'}",
     )
-    story = _scholar_register_index_flowables(entries, book_no, from_no, to_no, school_profile, standalone=True)
-    document.build(story, onFirstPage=_draw_scholar_register_border, onLaterPages=_draw_scholar_register_border)
+    story = _scholar_register_index_flowables(
+        entries, book_no, from_no, to_no, school_profile, standalone=True, content_width_mm=180
+    )
+    document.build(story, onFirstPage=_draw_bound_register_border, onLaterPages=_draw_bound_register_border)
     buffer.seek(0)
     return buffer.getvalue()
 

@@ -2258,3 +2258,17 @@ Not done / next session should be aware of:
   page for the individual register and exactly three pages for a one-student full book (cover,
   index, student).
 - Poppler visual QA confirms the long record is complete and legible on one bordered A4 page.
+
+## Scholar Register binding gutter (July 12, 2026)
+
+- Owner clarified that the 104-page print will be stapled/sewn into a physical register from the
+  left, so the original centered 10mm margin risked hiding print and the border near the binding.
+- Full Register Book and Index-only PDFs now reserve a fixed 22mm left frame margin and 8mm right
+  margin. Their outer border starts 18mm from the left edge, safely outside the sewing area.
+- Register tables scale proportionally from 189mm to 180mm content width; no columns or data were
+  removed. Individual single-student Scholar Register PDFs retain the original centered layout.
+- This is intentionally a fixed left gutter, not mirrored duplex margins, because the owner will
+  bind every printed sheet from its left edge.
+- Visual QA confirmed the left gutter, complete border, readable columns, and one-page long record.
+  The representative full book remains exactly three pages (cover + index + student); targeted
+  Scholar Register Book tests passed 8/8.
