@@ -2272,3 +2272,17 @@ Not done / next session should be aware of:
 - Visual QA confirmed the left gutter, complete border, readable columns, and one-page long record.
   The representative full book remains exactly three pages (cover + index + student); targeted
   Scholar Register Book tests passed 8/8.
+
+## 2026-07-12 Checkpoint - Scholar Register Index Old-Register Columns
+
+- Updated the Scholar Register index PDF to match the older physical register index pattern requested by the school office.
+- Index columns are now: `S.No`, `SR. No.`, `Student Name`, `Father Name`, `Address`.
+- Removed `Class` and `Status` from the index because the index is used for register lookup/identification, not as a status report.
+- Kept the fixed left binding gutter from the prior checkpoint: full register book and index-only PDF still use left-side sewing/stapling space.
+- Compact index typography so a 100-number book prints as:
+  - Cover page
+  - Index page 1: serials 1-52 in the tested Book 23 data
+  - Index page 2: serials 53-100
+  - Then individual Scholar Register pages for allotted students only
+- Visual QA rendered `tmp/pdfs/full-book23-old-style-index-v2.pdf` and confirmed SR 2300 appears on the second index page, not on a spillover page.
+- Note: Book 23 address cells are blank where student `address_permanent` and `address_local` are blank in the database. The PDF will print addresses automatically where those fields are filled.

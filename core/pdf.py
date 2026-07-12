@@ -1288,12 +1288,13 @@ def _scholar_register_index_flowables(
     width_scale = content_width_mm / 189
 
     title_style = ParagraphStyle(
-        "SrIndexTitle", parent=styles["Title"], fontSize=14, leading=17, alignment=1,
+        "SrIndexTitle", parent=styles["Title"], fontSize=13, leading=15, alignment=1,
         textColor=brand_color, fontName="Helvetica-Bold", spaceAfter=1 * mm,
     )
-    subtitle_style = ParagraphStyle("SrIndexSubtitle", parent=styles["Normal"], fontSize=9, leading=11, alignment=1)
+    subtitle_style = ParagraphStyle("SrIndexSubtitle", parent=styles["Normal"], fontSize=8, leading=9, alignment=1)
     small_style = ParagraphStyle("SrIndexSmall", parent=styles["Normal"], fontSize=8, leading=10, alignment=1)
-    cell_style = ParagraphStyle("SrIndexCell", parent=styles["Normal"], fontSize=8, leading=10)
+    cell_style = ParagraphStyle("SrIndexCell", parent=styles["Normal"], fontSize=6.3, leading=6.9)
+    address_style = ParagraphStyle("SrIndexAddress", parent=cell_style, fontSize=5.8, leading=6.4)
 
     if standalone:
         school_name = school_profile.name if school_profile else "SCHOOLSOFT"
@@ -1315,33 +1316,26 @@ def _scholar_register_index_flowables(
     book_label = f"Book No. {book_no}" if book_no else "Custom Range"
     story.append(Paragraph("SCHOLAR'S REGISTER - INDEX", title_style))
     story.append(Paragraph(f"{book_label}  |  Numbers {from_no} to {to_no}", subtitle_style))
-    story.append(Spacer(1, 4 * mm))
+    story.append(Spacer(1, 2.5 * mm))
 
-    header_row = ["S.R. / SID No.", "Name", "Class", "Status"]
+    header_row = ["S.No", "SR. No.", "Student Name", "Father Name", "Address"]
     table_data = [header_row]
-    for sid, student in entries:
+    for index, (sid, student) in enumerate(entries, start=1):
         if student is None:
-            table_data.append([str(sid), "-", "-", "Not Allotted"])
+            table_data.append([str(index), str(sid), "Not Allotted", "", ""])
             continue
-        class_label = student.current_class.name if student.current_class else ""
-        if student.current_section:
-            class_label = f"{class_label}-{student.current_section.name}" if class_label else student.current_section.name
-        if student.is_active:
-            status = "Active"
-        elif getattr(student, "transfer_certificate", None) is not None:
-            status = "TC Issued"
-        else:
-            status = "Inactive"
+        address = student.address_permanent or student.address_local or ""
         table_data.append([
+            str(index),
             str(sid),
             Paragraph(student.full_name, cell_style),
-            class_label,
-            status,
+            Paragraph(student.father_name or "", cell_style),
+            Paragraph(address, address_style),
         ])
 
     index_t = Table(
         table_data,
-        colWidths=[width * width_scale * mm for width in [25, 85, 40, 39]],
+        colWidths=[width * width_scale * mm for width in [12, 18, 52, 45, 53]],
         repeatRows=1,
     )
     index_t.setStyle(TableStyle([
@@ -1349,12 +1343,13 @@ def _scholar_register_index_flowables(
         ("BACKGROUND", (0, 0), (-1, 0), brand_color),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 0), (-1, -1), 8),
-        ("ALIGN", (0, 0), (0, -1), "CENTER"),
-        ("ALIGN", (3, 0), (3, -1), "CENTER"),
+        ("FONTSIZE", (0, 0), (-1, -1), 6.3),
+        ("ALIGN", (0, 0), (1, -1), "CENTER"),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("TOPPADDING", (0, 0), (-1, -1), 3),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ("TOPPADDING", (0, 0), (-1, -1), 1.0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 1.0),
+        ("LEFTPADDING", (0, 0), (-1, -1), 1.6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 1.6),
     ]))
     story.append(index_t)
 
