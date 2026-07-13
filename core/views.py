@@ -6,7 +6,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required, permission_required
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Count, ProtectedError, Q, Sum
+from django.db.models import Count, F, ProtectedError, Q, Sum
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -118,18 +118,45 @@ def dashboard(request):
             "prev_days_ago": prev_days_ago,
         })
 
-    if user_can_access(user, "accounts"):
-        today_expenses = Voucher.objects.filter(
-            voucher_date=today,
-            is_cancelled=False,
-            voucher_type=Voucher.VoucherType.CASH_PAYMENT,
-        ).aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+    # "Today's Expense" is cash-basis, matching the Cash Book: Daily Expense
+    # vouchers + today's cash salary payments. Salary IS kharcha for the
+    # office - showing only diesel Rs 1,000 while a Rs 5,000 salary slip went
+    # out the same day makes the card misleading. Each half is gated on its
+    # own module permission so a user only ever sees numbers they could reach
+    # via the corresponding pages (accounts -> vouchers, staff -> salary).
+    can_see_vouchers = user_can_access(user, "accounts")
+    can_see_salary = user_can_access(user, "staff")
+    if can_see_vouchers or can_see_salary:
+        today_expenses = Decimal("0.00")
+        if can_see_vouchers:
+            today_expenses += Voucher.objects.filter(
+                voucher_date=today,
+                is_cancelled=False,
+                voucher_type=Voucher.VoucherType.CASH_PAYMENT,
+            ).aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+        if can_see_salary:
+            # Net pay (gross - deductions - advance recovery) and CASH mode
+            # only - the same amount/filters the Cash Book uses for salary
+            # rows, so the card and the Cash Book never disagree. Non-cash
+            # salary (bank transfer/cheque) is deliberately excluded.
+            today_expenses += SalaryPayment.objects.filter(
+                payment_date=today,
+                is_cancelled=False,
+                payment_mode=SalaryPayment.PaymentMode.CASH,
+            ).aggregate(
+                total=Sum(
+                    F("basic_pay") + F("da") + F("other_allowances")
+                    - F("pf_deduction") - F("esi_deduction")
+                    - F("other_deduction") - F("advance_recovery")
+                )
+            )["total"] or Decimal("0.00")
         kpis.append({
             "label": "Today's Expense",
             "value": today_expenses,
             "tone": "outflow",
             "icon": "expense",
             "currency": True,
+            "caption": "Salary payments included" if can_see_salary else None,
         })
 
     if user_can_access(user, "dues"):

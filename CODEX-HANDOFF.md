@@ -2989,3 +2989,180 @@ earlier report isn't reliable production data. Both sessions now aligned. This s
   backfill but would be tedious if this ever needs to happen again. Not built now since the owner's decision
   makes this a one-time historical catch-up, not a recurring need.
 - Did not touch `core/views.py`'s `cash_book` view itself - it was already correct, nothing to fix there.
+
+---
+
+# Stable Checkpoint - Desktop cash book repaired + dashboard salary KPI aligned (2026-07-13)
+
+## Current stability status
+
+The software is now at a practical stable checkpoint for daily desktop use. Do not make broad refactors
+without a fresh backup and a clear user-approved scope. The owner is actively using the Desktop EXE, so
+cash/fee/salary behavior should be treated as production data, not test data.
+
+Latest verified automated test result before this checkpoint:
+
+```text
+python manage.py test core
+Found 110 test(s).
+Ran 110 tests in 203.606s
+OK
+```
+
+## Critical database repair completed
+
+Antigravity previously corrupted the local Desktop database by copying a development SQLite database into
+`%LOCALAPPDATA%\SchoolSoft\db.sqlite3` and manually setting Cash in Hand opening balance with the wrong
+sign. Symptoms were:
+
+- Student count fell to 1192 instead of the correct 1215.
+- June-July fee total in the Desktop DB showed only Rs. 5,700 instead of the real Rs. 44,801.
+- Cash Book closing became a large incorrect negative figure.
+
+Repair was done by building a verified repair database from a known Desktop backup plus fresh legacy MDB
+exports:
+
+1. Used `C:\Users\Admin\AppData\Local\SchoolSoft\db.backup-20260712.sqlite3` as the clean base.
+2. Exported fresh `StuFee` from `D:\english medium\9\SCHOOL7.mdb` using 32-bit PowerShell/OLEDB because
+   64-bit PowerShell could not open the MDB provider.
+3. Imported fresh `2026-27` fee rows via `import_yearly_fees` so active-session receipt numbers stay in the
+   existing `2026-27/SF-...` format. Do NOT use the old `import_legacy_fees` command for this current
+   session, because it creates plain `SF-...` numbers and would create a second naming pattern.
+4. Imported fresh `LEDGER.csv`/`SubGroup.csv` vouchers and salaries via `sync_recent_vouchers`.
+5. Set `Cash in Hand` opening to `-6509` at `2026-06-01`. This is intentional: in the new T-shape Cash
+   Book, the old software's opening deficit of Rs. 6,509 must be represented as a negative cash opening.
+6. Replaced the live Desktop DB only after the repair-test DB matched the old cash book.
+
+Corrupt DB backup was preserved at:
+
+```text
+C:\Users\Admin\AppData\Local\SchoolSoft\db.corrupt-before-repair-20260712-231017.sqlite3
+```
+
+Final live Desktop DB verification after restore:
+
+```text
+students: 1215
+fee receipts: 11167
+fee sum 2026-06-01..2026-07-12: 44801
+valid vouchers 2026-06-01..2026-07-12: 16
+valid salaries 2026-06-01..2026-07-12: 8
+cash opening: -6509 @ 2026-06-01
+receipt side: 95301
+payment side: 78425
+closing: 10367
+```
+
+Daily fee totals verified:
+
+```text
+2026-06-17: 5100
+2026-07-07: 39700
+2026-07-09: 1
+```
+
+PDF reconciliation completed against:
+
+- `C:\Users\Admin\Downloads\new Cash Book _ SchoolSoft3.pdf`
+- `C:\Users\Admin\Downloads\old cash book2.pdf`
+
+Result: New Cash Book final closing is Rs. 10,367 and matches the old Sun Software cash book. Page 7 of the
+new PDF showed 2026-07-12 with Pragati loan receipt Rs. 20,500, Rishika Miss payment Rs. 20,500, and
+closing Rs. 10,367.
+
+## Dashboard Today's Expense fix
+
+Owner entered two same-day transactions on 2026-07-13:
+
+- Bus diesel via Daily Expense: Rs. 1,000
+- Neelu Miss old salary arrear via Salary Register: Rs. 5,000
+
+Dashboard showed only Rs. 1,000 because `dashboard()` counted only `Voucher` cash payments in the
+`Today's Expense` KPI. This confused the owner because salary paid today is also cash outflow.
+
+Implemented fix:
+
+- `core/views.py` dashboard now computes Today's Expense as:
+  - today's non-cancelled `Voucher` rows with `voucher_type=CASH_PAYMENT`, when the user has `accounts`
+    access; plus
+  - today's non-cancelled cash `SalaryPayment` rows, using net pay
+    (`basic_pay + da + other_allowances - pf_deduction - esi_deduction - other_deduction -
+    advance_recovery`), when the user has `staff` access.
+- The card is visible if the user has either `accounts` or `staff` access.
+- Admin sees the combined value.
+- Accounts-only user sees voucher expense only.
+- Staff-only user sees salary payment only.
+- Fee-only user still does not see the card.
+- `templates/core/dashboard.html` gained generic KPI `caption` rendering.
+- Salary-inclusive card shows caption: `Salary payments included`.
+
+Tests added in `core/tests.py`:
+
+- voucher Rs. 1,000 + salary Rs. 5,000 = dashboard Rs. 6,000.
+- cancelled salary is excluded.
+- non-cash salary is excluded.
+- net pay is used, not gross pay.
+- accounts-only and staff-only permission split behaves correctly.
+- fee-only user does not see the expense KPI.
+
+Verification:
+
+```text
+python manage.py test core.tests.DashboardExpenseKpiTests
+Found 6 test(s).
+Ran 6 tests in 16.052s
+OK
+
+python manage.py test core
+Found 110 test(s).
+Ran 110 tests in 203.606s
+OK
+```
+
+## Production-use guidance after this checkpoint
+
+Use these entry screens going forward:
+
+- Fee received from students: `Fee Collection`.
+- Bus diesel, tea/snacks, stationary, repairs, normal cash expenses: `Daily Expense`.
+- Staff salary paid now, including old salary arrears paid today: `Salary Register`.
+- Money received by the school that is not a fee, such as Pragati personal loan/advance: `Other Receipt`.
+- Loan/advance repayment by the school: `Daily Expense` against the relevant Liability ledger.
+
+Important accounting note for old staff salary arrears:
+
+- A payment like "Neelu Miss previous session salary arrear Rs. 25,000, paid Rs. 5,000 today, Rs. 20,000
+  still due" should be entered through `Salary Register` with payment date today and remarks explaining
+  the old arrear balance.
+- Current system records the Rs. 5,000 paid and shows it in Dashboard/Cash Book, but it does NOT yet
+  automatically track the remaining staff-wise arrear of Rs. 20,000 as a payable balance. If the owner
+  wants proper staff arrear tracking, build a future `Staff Salary Opening Arrear / Payable Balance`
+  feature instead of relying on remarks.
+
+## Do not sync online until confirmed
+
+The Desktop DB was repaired and should be treated as source-of-truth only after the owner visually confirms
+the Desktop Cash Book screen for 2026-06-01 to 2026-07-12 with `include_salary=1` still closes at Rs.
+10,367. Only then should `sync-desktop-to-online.bat` be run.
+
+Do NOT run any desktop-to-online sync from an unverified DB. The previous corruption incident proves this
+can overwrite good online data with bad local data.
+
+## Temporary/untracked files to ignore
+
+During repair, several scratch/export files were created in the workspace (`scratch_*.py`,
+`scratch_export*.ps1`, `data.online-restore.json`, and a SQLite backup). They are intentionally NOT part of
+the application code and should not be committed. If cleaning the workspace later, delete/move them only
+after confirming no further forensic comparison is needed.
+
+## Ideas / future improvements
+
+1. Build a Staff Salary Arrear feature: opening payable per staff, payments reduce balance, arrear report.
+2. Add a one-click Cash Book reconciliation report that compares day totals against an uploaded old cash
+   book export/CSV.
+3. Wrap `sync_recent_vouchers` in `transaction.atomic()` so a failed import cannot leave partial data.
+4. Add an import preview page in the UI for MDB/CSV backfills, with unresolved ledger/staff warnings before
+   any write.
+5. Add a "Last verified backup" panel in Admin/Settings so the owner can see the latest DB backup time.
+6. Add a small dashboard card for "Today's Salary Paid" separately if the owner later wants expense and
+   salary split visually. For now, the combined Today's Expense card is correct for cash-out awareness.

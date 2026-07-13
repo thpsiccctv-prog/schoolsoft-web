@@ -50,6 +50,9 @@
                 {% if kpi.empty_caption and not kpi.value %}
                 <span class="dash-kpi-context">{{ kpi.empty_caption }}</span>
                 {% endif %}
+                {% if kpi.caption %}
+                <span class="dash-kpi-context">{{ kpi.caption }}</span>
+                {% endif %}
                 {% if kpi.prev_date %}
                     {% if kpi.prev_total is not None %}
                     <span class="dash-kpi-context">Pichhla collection day ({{ kpi.prev_date|date:"d M" }}): &#8377;{{ kpi.prev_total|indian_number }}</span>

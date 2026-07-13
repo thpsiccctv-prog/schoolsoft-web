@@ -260,6 +260,7 @@ class DashboardPermissionTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertNotIn("core_feereceipt", sql)
         self.assertNotIn("core_voucher", sql)
+        self.assertNotIn("core_salarypayment", sql)
 
     def test_readonly_user_does_not_see_write_only_fee_collection_actions(self):
         user = get_user_model().objects.create_user(username="viewer_user", password="pw12345")
@@ -302,6 +303,144 @@ class DashboardPermissionTests(TestCase):
         response = self.client.get(reverse("core:dashboard"))
 
         self.assertEqual(response.status_code, 403)
+
+
+class DashboardExpenseKpiTests(TestCase):
+    """Today's Expense = today's Daily Expense vouchers + today's CASH salary
+    (net pay), each half gated on its own module permission - so the card
+    matches what the Cash Book (with 'Include salary') shows for today."""
+
+    def setUp(self):
+        self.session = AcademicSession.objects.create(name="2026-27", is_active=True)
+        group = AccountGroup.objects.create(
+            name="Expenses", group_type=AccountGroup.GroupType.EXPENSE
+        )
+        self.cash = LedgerAccount.objects.create(
+            name="Cash in Hand", group=group, is_cash_or_bank=True
+        )
+        self.diesel = LedgerAccount.objects.create(name="Diesel", group=group)
+        self.staff = Staff.objects.create(
+            full_name="Neelu Miss", designation="Teacher", basic_pay=Decimal("5000.00")
+        )
+        self.today = timezone.localdate()
+
+    def _voucher(self, voucher_no, amount, **overrides):
+        defaults = dict(
+            voucher_no=voucher_no,
+            voucher_type=Voucher.VoucherType.CASH_PAYMENT,
+            session=self.session,
+            voucher_date=self.today,
+            debit_account=self.diesel,
+            credit_account=self.cash,
+            amount=Decimal(amount),
+            payment_mode=Voucher.PaymentMode.CASH,
+        )
+        defaults.update(overrides)
+        return Voucher.objects.create(**defaults)
+
+    def _salary(self, slip_no, basic, **overrides):
+        defaults = dict(
+            slip_no=slip_no,
+            staff=self.staff,
+            pay_month=self.today.replace(day=1),
+            payment_date=self.today,
+            payment_mode=SalaryPayment.PaymentMode.CASH,
+            basic_pay=Decimal(basic),
+        )
+        defaults.update(overrides)
+        return SalaryPayment.objects.create(**defaults)
+
+    def _expense_kpi(self):
+        response = self.client.get(reverse("core:dashboard"))
+        self.assertEqual(response.status_code, 200)
+        for kpi in response.context["dashboard_kpis"]:
+            if kpi["label"] == "Today's Expense":
+                return kpi
+        return None
+
+    def _login_with(self, username, *codenames):
+        user = get_user_model().objects.create_user(username=username, password="pw12345")
+        _grant_module_permissions(user, "access_dashboard", *codenames)
+        self.client.force_login(user)
+        return user
+
+    def test_admin_sees_voucher_plus_salary_combined(self):
+        admin = get_user_model().objects.create_superuser(
+            username="expense_admin", email="a@example.com", password="pw12345"
+        )
+        self.client.force_login(admin)
+        self._voucher("EXP-1", "1000.00")
+        self._salary("SAL-T1", "5000.00")
+
+        kpi = self._expense_kpi()
+        self.assertEqual(kpi["value"], Decimal("6000.00"))
+        self.assertEqual(kpi["caption"], "Salary payments included")
+
+    def test_cancelled_and_non_cash_salary_excluded(self):
+        admin = get_user_model().objects.create_superuser(
+            username="expense_admin2", email="b@example.com", password="pw12345"
+        )
+        self.client.force_login(admin)
+        self._voucher("EXP-2", "1000.00")
+        self._voucher("EXP-3", "700.00", is_cancelled=True)
+        # Distinct staff / pay_month per slip - the unique_active_salary
+        # constraint allows only one non-cancelled slip per staff per month.
+        bank_staff = Staff.objects.create(
+            full_name="Bank Teacher", designation="Teacher", basic_pay=Decimal("3000.00")
+        )
+        self._salary("SAL-T2", "5000.00", is_cancelled=True)
+        self._salary(
+            "SAL-T3", "3000.00", staff=bank_staff,
+            payment_mode=SalaryPayment.PaymentMode.BANK_TRANSFER,
+        )
+        # Yesterday's salary must not leak into today's card.
+        prev_month = (self.today.replace(day=1) - timedelta(days=1)).replace(day=1)
+        self._salary(
+            "SAL-T4", "2000.00",
+            payment_date=self.today - timedelta(days=1), pay_month=prev_month,
+        )
+
+        kpi = self._expense_kpi()
+        self.assertEqual(kpi["value"], Decimal("1000.00"))
+
+    def test_salary_counts_net_pay_not_gross(self):
+        admin = get_user_model().objects.create_superuser(
+            username="expense_admin3", email="c@example.com", password="pw12345"
+        )
+        self.client.force_login(admin)
+        self._salary(
+            "SAL-T5", "5000.00",
+            da=Decimal("500.00"), pf_deduction=Decimal("600.00"),
+            advance_recovery=Decimal("400.00"),
+        )
+
+        kpi = self._expense_kpi()
+        self.assertEqual(kpi["value"], Decimal("4500.00"))
+
+    def test_accounts_only_user_sees_vouchers_without_salary(self):
+        self._login_with("accounts_only", "access_accounts")
+        self._voucher("EXP-4", "1000.00")
+        self._salary("SAL-T6", "5000.00")
+
+        kpi = self._expense_kpi()
+        self.assertEqual(kpi["value"], Decimal("1000.00"))
+        self.assertIsNone(kpi["caption"])
+
+    def test_staff_only_user_sees_salary_without_vouchers(self):
+        self._login_with("staff_only", "access_staff")
+        self._voucher("EXP-5", "1000.00")
+        self._salary("SAL-T7", "5000.00")
+
+        kpi = self._expense_kpi()
+        self.assertEqual(kpi["value"], Decimal("5000.00"))
+        self.assertEqual(kpi["caption"], "Salary payments included")
+
+    def test_fee_only_user_has_no_expense_card(self):
+        self._login_with("fee_only", "access_fee_collection")
+        self._voucher("EXP-6", "1000.00")
+        self._salary("SAL-T8", "5000.00")
+
+        self.assertIsNone(self._expense_kpi())
 
 
 class PreviousCollectionDayTests(AuthenticatedClientMixin, TestCase):
