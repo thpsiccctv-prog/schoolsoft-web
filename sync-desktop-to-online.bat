@@ -46,6 +46,10 @@ echo   Online Render database ko Desktop DB ki fresh copy se replace kiya jayega
 echo   Daily entry hamesha Desktop EXE me honi chahiye.
 echo   Sync ke dauran SchoolSoft EXE band rakhiye.
 echo.
+echo SAFETY CHECK:
+echo   Script pehle Desktop DB verify karega. Agar DB dev/corrupt hua
+echo   to online sync automatically rok diya jayega.
+echo.
 choice /C YN /M "Kya aap online database ko Desktop data se update karna chahte hain"
 if errorlevel 2 goto :cancel
 
@@ -86,7 +90,25 @@ if /I "%PREFIX_11%"=="postgres://" goto :valid_url
 set "RENDER_DATABASE_URL=%DATABASE_URL%"
 
 echo.
-echo [1/5] Desktop DB backup ban raha hai...
+echo [1/6] Desktop DB safety check chal raha hai...
+set "DATABASE_URL="
+set "SCHOOLSOFT_SQLITE_PATH=%SOURCE_DB%"
+"%PYTHON_EXE%" verify_desktop_sync_db.py >>"%SYNC_LOG%" 2>&1
+if errorlevel 1 (
+    echo ERROR: Desktop DB safety check fail hua.
+    echo.
+    echo Details:
+    type "%SYNC_LOG%"
+    echo.
+    echo Online sync rok diya gaya hai. Pehle Desktop DB/Cash Book verify kijiye.
+    goto :fail
+)
+set "SCHOOLSOFT_SQLITE_PATH="
+echo     Safety check OK.
+>>"%SYNC_LOG%" echo Safety check OK.
+
+echo.
+echo [2/6] Desktop DB backup ban raha hai...
 set "BACKUP_FILE=sync-backups\db.before_online_sync_%DATE:/=-%_%TIME::=-%.sqlite3"
 set "BACKUP_FILE=%BACKUP_FILE: =0%"
 copy "%SOURCE_DB%" "%BACKUP_FILE%" >nul
@@ -98,7 +120,7 @@ echo     Backup: %BACKUP_FILE%
 >>"%SYNC_LOG%" echo Backup: %BACKUP_FILE%
 
 echo.
-echo [2/5] Desktop DB se fresh export ho raha hai...
+echo [3/6] Desktop DB se fresh export ho raha hai...
 set "DATABASE_URL="
 set "SCHOOLSOFT_SQLITE_PATH=%SOURCE_DB%"
 "%PYTHON_EXE%" manage.py dumpdata -e contenttypes -e auth.permission -e sessions -e admin.logentry -e core.moduleaccess -o data.json >>"%SYNC_LOG%" 2>&1
@@ -109,7 +131,7 @@ if errorlevel 1 (
 set "SCHOOLSOFT_SQLITE_PATH="
 
 echo.
-echo [3/5] PostgreSQL driver check ho raha hai...
+echo [4/6] PostgreSQL driver check ho raha hai...
 "%PYTHON_EXE%" -c "import psycopg2" >>"%SYNC_LOG%" 2>&1 || "%PYTHON_EXE%" -m pip install psycopg2-binary --quiet >>"%SYNC_LOG%" 2>&1
 if errorlevel 1 (
     echo ERROR: PostgreSQL driver install/check fail hua. Details: %SYNC_LOG%
@@ -117,7 +139,7 @@ if errorlevel 1 (
 )
 
 echo.
-echo [4/5] Online Render DB me fast batch load ho raha hai...
+echo [5/6] Online Render DB me fast batch load ho raha hai...
 set "DATABASE_URL=%RENDER_DATABASE_URL%"
 "%PYTHON_EXE%" fast_load_data.py data.json >>"%SYNC_LOG%" 2>&1
 if errorlevel 1 (
@@ -126,12 +148,14 @@ if errorlevel 1 (
 )
 
 echo.
-echo [5/5] Sync complete.
+echo [6/6] Sync complete.
 >>"%SYNC_LOG%" echo Sync complete at %DATE% %TIME%
 echo Online website refresh karke dashboard verify kijiye:
 echo   https://schoolsoft-english-medium.onrender.com
 echo.
-echo Expected: Online dashboard Desktop dashboard se match kare.
+echo Expected:
+echo   - Online dashboard Desktop dashboard se match kare.
+echo   - Cash Book 01/06/2026 to 12/07/2026, Include salary ON, closing Rs. 10,367 rahe.
 pause
 exit /b 0
 

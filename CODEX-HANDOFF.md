@@ -3148,6 +3148,38 @@ the Desktop Cash Book screen for 2026-06-01 to 2026-07-12 with `include_salary=1
 Do NOT run any desktop-to-online sync from an unverified DB. The previous corruption incident proves this
 can overwrite good online data with bad local data.
 
+Update after owner confirmed they rebuilt the EXE and verified the dashboard salary KPI in the desktop app:
+`sync-desktop-to-online.bat` has been hardened with a pre-flight safety gate. It now calls
+`verify_desktop_sync_db.py` before taking a backup/exporting/loading Render. The verifier blocks sync unless
+the Desktop DB still has the known-good repair markers:
+
+```text
+students >= 1215
+fee receipts >= 11167
+June-July fee total = 44801
+June-July valid vouchers >= 16
+June-July valid salaries >= 8
+Cash in Hand opening = -6509 @ 2026-06-01
+Cash Book closing 2026-06-01..2026-07-12 = 10367
+```
+
+Manual verifier run after adding the guard:
+
+```text
+Desktop DB safety snapshot:
+  Students: 1215
+  Fee receipts: 11169
+  June-July fee total: 44801
+  June-July valid vouchers: 16
+  June-July valid salaries: 8
+  Cash opening: -6509 @ 2026-06-01
+  Cash Book closing 2026-06-01..2026-07-12: 10367
+Safety check OK.
+```
+
+This means the owner can double-click `sync-desktop-to-online.bat` themselves; if the DB ever looks like the
+bad/dev/corrupt DB again, the script should stop before overwriting online data.
+
 ## Temporary/untracked files to ignore
 
 During repair, several scratch/export files were created in the workspace (`scratch_*.py`,
