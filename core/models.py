@@ -6,6 +6,23 @@ from django.db import models
 from django.utils import timezone
 
 
+ACADEMIC_MONTHS = (
+    "APR",
+    "MAY",
+    "JUN",
+    "JUL",
+    "AUG",
+    "SEP",
+    "OCT",
+    "NOV",
+    "DEC",
+    "JAN",
+    "FEB",
+    "MAR",
+)
+ACADEMIC_MONTH_CHOICES = tuple((month, month) for month in ACADEMIC_MONTHS)
+
+
 class TimeStampedModel(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -265,13 +282,38 @@ class FeeHead(TimeStampedModel):
     class Frequency(models.TextChoices):
         ONE_TIME = "one_time", "One time"
         MONTHLY = "monthly", "Monthly"
+        INSTALLMENT = "installment", "Installment"
         QUARTERLY = "quarterly", "Quarterly"
         ANNUAL = "annual", "Annual"
         OPTIONAL = "optional", "Optional"
 
+    class AppliesTo(models.TextChoices):
+        BOTH = "both", "New and old"
+        NEW = "new", "New only"
+        OLD = "old", "Old only"
+
+    class ChargeRule(models.TextChoices):
+        MONTHLY = "monthly", "Every academic month"
+        ADMISSION_MONTH = "admission_month", "Admission month"
+        FIXED_MONTHS = "fixed_months", "Configured months"
+        NOT_APPLICABLE = "not_applicable", "Not applicable"
+
     name = models.CharField(max_length=80, unique=True)
     legacy_column = models.CharField(max_length=80, blank=True)
     frequency = models.CharField(max_length=20, choices=Frequency.choices, default=Frequency.MONTHLY)
+    applies_to = models.CharField(max_length=10, choices=AppliesTo.choices, default=AppliesTo.BOTH)
+    new_student_charge_rule = models.CharField(
+        max_length=20,
+        choices=ChargeRule.choices,
+        default=ChargeRule.NOT_APPLICABLE,
+    )
+    old_student_charge_rule = models.CharField(
+        max_length=20,
+        choices=ChargeRule.choices,
+        default=ChargeRule.NOT_APPLICABLE,
+    )
+    new_student_charge_months = models.JSONField(default=list, blank=True)
+    old_student_charge_months = models.JSONField(default=list, blank=True)
     is_transport = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
 
@@ -283,38 +325,121 @@ class FeeHead(TimeStampedModel):
 
     def clean(self):
         super().clean()
-        # "Previous Due" / "Old Due" etc. must never exist as a regular Fee Head line item.
-        # Receipts already have a dedicated "Previous Due" field (FeeReceipt.previous_due_amount)
-        # that is auto-suggested from the student's earlier unpaid receipts. Allowing a Fee Head
-        # with this name lets staff double-enter the old due (once as a normal fee-head amount,
-        # once in the dedicated field), which silently doubles the receipt total. See
-        # CODEX-HANDOFF.md for the incident this guards against.
+        errors = {}
+
+        for cohort in ("new", "old"):
+            rule_field = f"{cohort}_student_charge_rule"
+            months_field = f"{cohort}_student_charge_months"
+            rule = getattr(self, rule_field)
+            raw_months = getattr(self, months_field)
+
+            if not isinstance(raw_months, list):
+                errors[months_field] = "Charge months must be a list."
+                continue
+
+            months = [str(month).strip().upper() for month in raw_months]
+            setattr(self, months_field, months)
+            invalid = [month for month in months if month not in ACADEMIC_MONTHS]
+            if invalid:
+                errors[months_field] = f"Invalid academic month(s): {', '.join(invalid)}."
+            elif len(months) != len(set(months)):
+                errors[months_field] = "Charge months cannot contain duplicates."
+            elif rule == self.ChargeRule.FIXED_MONTHS and not months:
+                errors[months_field] = "At least one month is required for a fixed-month rule."
+            elif rule != self.ChargeRule.FIXED_MONTHS and months:
+                errors[months_field] = "Charge months are allowed only for a fixed-month rule."
+
+        if self.applies_to == self.AppliesTo.NEW and self.old_student_charge_rule != self.ChargeRule.NOT_APPLICABLE:
+            errors["old_student_charge_rule"] = "Old-student rule must be Not applicable for a New-only head."
+        if self.applies_to == self.AppliesTo.OLD and self.new_student_charge_rule != self.ChargeRule.NOT_APPLICABLE:
+            errors["new_student_charge_rule"] = "New-student rule must be Not applicable for an Old-only head."
+
+        if self.is_transport:
+            configured = any(
+                (
+                    self.new_student_charge_rule != self.ChargeRule.NOT_APPLICABLE,
+                    self.old_student_charge_rule != self.ChargeRule.NOT_APPLICABLE,
+                    self.new_student_charge_months,
+                    self.old_student_charge_months,
+                )
+            )
+            if configured:
+                errors["is_transport"] = "Transport billing is configured per student, not as a FeeHead schedule."
+
+        # Previous-session balances belong only in StudentOpeningBalance for the new engine.
         normalized = (self.name or "").strip().lower()
         blocked_names = {"previous due", "prev due", "old due", "old dues", "previous dues", "past due"}
         if normalized in blocked_names:
-            raise ValidationError(
-                {
-                    "name": (
-                        "'Previous Due' cannot be created as a Fee Head. Use the dedicated "
-                        "'Previous Due' field on the Fee Collection form instead - it is "
-                        "filled in automatically from the student's earlier unpaid receipts."
-                    )
-                }
-            )
+            errors["name"] = "Previous-session balances cannot be created as a Fee Head."
+
+        if errors:
+            raise ValidationError(errors)
 
 
 class FeeStructure(TimeStampedModel):
+    class Source(models.TextChoices):
+        EXISTING = "existing", "Pre-Phase-B existing row"
+        LEGACY = "legacy", "Legacy import"
+        FINAL_SHEET = "final_sheet", "Verified FINAL workbook"
+        MANUAL = "manual", "Manual"
+        BOOTSTRAP = "bootstrap", "Bootstrap"
+
     session = models.ForeignKey(AcademicSession, on_delete=models.PROTECT, related_name="fee_structures")
     school_class = models.ForeignKey(SchoolClass, on_delete=models.PROTECT, related_name="fee_structures")
     fee_head = models.ForeignKey(FeeHead, on_delete=models.PROTECT, related_name="fee_structures")
     amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
+    is_active = models.BooleanField(default=False)
+    source = models.CharField(max_length=20, choices=Source.choices, default=Source.EXISTING)
+    source_reference = models.CharField(max_length=120, blank=True)
 
     class Meta:
         ordering = ["session__name", "school_class__display_order", "fee_head__name"]
         unique_together = [("session", "school_class", "fee_head")]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(amount__gte=0),
+                name="fee_structure_amount_nonnegative",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.session} / {self.school_class} / {self.fee_head}"
+
+
+class StudentOpeningBalance(TimeStampedModel):
+    student = models.ForeignKey(Student, on_delete=models.PROTECT, related_name="opening_balances")
+    session = models.ForeignKey(
+        AcademicSession,
+        on_delete=models.PROTECT,
+        related_name="student_opening_balances",
+    )
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    as_of_date = models.DateField()
+    source_reference = models.CharField(max_length=120)
+    note = models.TextField(blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="created_student_opening_balances",
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        ordering = ["session__name", "student__full_name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["student", "session"],
+                name="unique_student_opening_balance_per_session",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(amount__gte=0),
+                name="student_opening_balance_nonnegative",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.student} / {self.session} / {self.amount}"
 
 
 class FeeReceipt(TimeStampedModel):
@@ -343,17 +468,22 @@ class FeeReceipt(TimeStampedModel):
     legacy_fee_total = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
     legacy_net_total = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
     legacy_due_amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
-    # Previous-session (or pre-system) outstanding balance rolled into this
-    # receipt's payable total. Auto-suggested by summing the student's unpaid,
-    # not-yet-carried-forward receipts from earlier sessions, but the office
-    # can override it (needed while historical data is still being migrated).
-    # When a receipt is saved with previous_due_amount > 0, the SOURCE prior
-    # receipts get carried_forward=True so their due is not double-counted in
-    # the Due Report - the balance now lives on this new receipt instead.
-    previous_due_amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
+    # DEPRECATED for the new fee engine. Kept operational through Phase B so
+    # the stabilized legacy receipt workflow does not change before Phase D.
+    previous_due_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        help_text=(
+            "DEPRECATED for the new fee engine; retained temporarily for the legacy receipt workflow. "
+            "New-engine opening balances use StudentOpeningBalance."
+        ),
+    )
     carried_forward = models.BooleanField(
         default=False,
-        help_text="True if this receipt's outstanding due was rolled into a later receipt as Previous Due - excluded from Due Report totals to avoid double-counting.",
+        help_text=(
+            "DEPRECATED for the new fee engine; retained temporarily for the legacy receipt-based Due Report."
+        ),
     )
     remarks = models.CharField(max_length=255, blank=True)
     is_cancelled = models.BooleanField(default=False)
@@ -893,6 +1023,13 @@ class TransportRoute(TimeStampedModel):
 
 class StudentTransport(TimeStampedModel):
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name="transport_assignments")
+    session = models.ForeignKey(
+        AcademicSession,
+        on_delete=models.PROTECT,
+        related_name="student_transport_assignments",
+        null=True,
+        blank=True,
+    )
     route = models.ForeignKey(
         TransportRoute,
         on_delete=models.SET_NULL,
@@ -916,6 +1053,11 @@ class StudentTransport(TimeStampedModel):
     applied_on = models.DateField(null=True, blank=True)
     charge_month = models.CharField(max_length=30, blank=True)
     due_month = models.CharField(max_length=30, blank=True)
+    monthly_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    start_month = models.CharField(max_length=3, choices=ACADEMIC_MONTH_CHOICES, blank=True)
+    end_month = models.CharField(max_length=3, choices=ACADEMIC_MONTH_CHOICES, blank=True)
+    billing_confirmed = models.BooleanField(default=False)
+    note = models.TextField(blank=True)
     is_transport_enabled = models.BooleanField(default=True)
     is_active = models.BooleanField(default=True)
 
@@ -925,10 +1067,74 @@ class StudentTransport(TimeStampedModel):
             "student__current_section__name",
             "student__full_name",
         ]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(monthly_amount__isnull=True) | models.Q(monthly_amount__gte=0),
+                name="student_transport_monthly_amount_nonnegative",
+            ),
+        ]
 
     def __str__(self):
         route = self.route or self.legacy_route_name or "No route"
         return f"{self.student} - {route}"
+
+    def clean(self):
+        super().clean()
+        errors = {}
+
+        if self.monthly_amount is not None and self.monthly_amount < 0:
+            errors["monthly_amount"] = "Monthly transport amount cannot be negative."
+
+        if self.billing_confirmed:
+            if not self.session_id:
+                errors["session"] = "Session is required for confirmed transport billing."
+            if self.monthly_amount is None:
+                errors["monthly_amount"] = "Monthly amount is required for confirmed transport billing."
+            if not self.start_month:
+                errors["start_month"] = "Start month is required for confirmed transport billing."
+
+        start_index = ACADEMIC_MONTHS.index(self.start_month) if self.start_month in ACADEMIC_MONTHS else None
+        end_index = (
+            ACADEMIC_MONTHS.index(self.end_month)
+            if self.end_month in ACADEMIC_MONTHS
+            else len(ACADEMIC_MONTHS) - 1
+        )
+        if self.start_month and start_index is None:
+            errors["start_month"] = "Invalid academic start month."
+        if self.end_month and self.end_month not in ACADEMIC_MONTHS:
+            errors["end_month"] = "Invalid academic end month."
+        if start_index is not None and end_index < start_index:
+            errors["end_month"] = "End month cannot be before start month in the APR-to-MAR session."
+
+        if (
+            self.billing_confirmed
+            and self.is_active
+            and self.student_id
+            and self.session_id
+            and start_index is not None
+            and not errors
+        ):
+            overlapping = StudentTransport.objects.filter(
+                student_id=self.student_id,
+                session_id=self.session_id,
+                billing_confirmed=True,
+                is_active=True,
+            ).exclude(pk=self.pk)
+            for assignment in overlapping:
+                if assignment.start_month not in ACADEMIC_MONTHS:
+                    continue
+                other_start = ACADEMIC_MONTHS.index(assignment.start_month)
+                other_end = (
+                    ACADEMIC_MONTHS.index(assignment.end_month)
+                    if assignment.end_month in ACADEMIC_MONTHS
+                    else len(ACADEMIC_MONTHS) - 1
+                )
+                if max(start_index, other_start) <= min(end_index, other_end):
+                    errors["start_month"] = "Confirmed transport billing windows cannot overlap."
+                    break
+
+        if errors:
+            raise ValidationError(errors)
 
 
 class LegacyImportBatch(TimeStampedModel):

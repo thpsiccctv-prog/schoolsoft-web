@@ -16,7 +16,7 @@
         </div>
     </div>
 
-    <form class="entry-form classic-fee-form" method="post" data-fee-defaults-url-template="/api/students/__student__/fee-defaults/">
+    <form class="entry-form classic-fee-form" method="post" data-fee-defaults-url-template="/api/students/__student__/fee-defaults/" data-locked-legacy-balance="{{ receipt.previous_due_amount }}">
         {% csrf_token %}
 
         {% if receipt_form.non_field_errors or line_form.non_field_errors %}
@@ -109,12 +109,13 @@
                     <span>Fees</span>
                     <strong data-fee-total>0.00</strong>
                 </div>
-                <label>
-                    <span>{{ receipt_form.previous_due_amount.label|default:"Previous Due" }}</span>
-                    {{ receipt_form.previous_due_amount }}
-                    <small data-previous-due-hint style="display:block;color:#64748b;margin-top:2px;"></small>
-                    {% if receipt_form.previous_due_amount.errors %}<small>{{ receipt_form.previous_due_amount.errors|striptags }}</small>{% endif %}
-                </label>
+                {% if receipt.previous_due_amount > 0 %}
+                <div class="legacy-value-note">
+                    <span>Historical Previous Due</span>
+                    <strong>{{ receipt.previous_due_amount }}</strong>
+                    <small>Locked audit value. It cannot be changed from this form.</small>
+                </div>
+                {% endif %}
                 <label>
                     <span>{{ receipt_form.concession_amount.label }}</span>
                     {{ receipt_form.concession_amount }}

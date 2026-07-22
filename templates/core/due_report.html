@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% load schoolsoft_extras %}
 
-{% block title %}Due Report | SchoolSoft Modernization{% endblock %}
+{% block title %}Receipt Due (Legacy) | SchoolSoft{% endblock %}
 
 {% block content %}
 <section class="dashboard-page">
@@ -11,12 +11,13 @@
         <div class="dash-header-left">
             <span class="dash-badge">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
-                Fee Dues Register
+                Receipt-based register
             </span>
-            <h1 class="dash-title">Due Report</h1>
-            <p class="dash-subtitle">{{ total_students }} students with pending dues.</p>
+            <h1 class="dash-title">Receipt Due (Legacy)</h1>
+            <p class="dash-subtitle">Historical receipt balances only. Use Due up to Month for current demand.</p>
         </div>
         <div class="dash-header-actions no-print">
+            <a class="dash-action-btn dash-action-outline" href="{% url 'core:due_up_to_month_report' %}">Due up to Month</a>
             <a class="dash-action-btn dash-action-primary" href="{% url 'core:due_report_pdf' %}{% if request.GET.urlencode %}?{{ request.GET.urlencode }}{% endif %}">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
                 Download PDF

@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+{% load schoolsoft_extras %}
+
+{% block title %}Due up to Month | SchoolSoft{% endblock %}
+
+{% block content %}
+<section class="dashboard-page due-month-page">
+    <div class="dash-header">
+        <div class="dash-header-left">
+            <span class="dash-badge">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+                Demand-based fee register
+            </span>
+            <h1 class="dash-title">Due up to Month</h1>
+            <p class="dash-subtitle">{{ target_label }}{% if selected_session_object %} &middot; Session {{ selected_session_object.name }}{% endif %}</p>
+        </div>
+        <div class="dash-header-actions no-print">
+            <a class="dash-action-btn dash-action-outline" href="{% url 'core:due_report' %}">Receipt Due (Legacy)</a>
+            <a class="dash-action-btn dash-action-outline" href="{% url 'core:due_up_to_month_report_pdf' %}?{{ export_query }}">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>
+                Report PDF
+            </a>
+            <a class="dash-action-btn dash-action-primary" href="{% url 'core:due_slip_pdf' %}?{{ export_query }}">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V2h12v7"/><rect x="4" y="9" width="16" height="9" rx="2"/><path d="M7 15h10v7H7z"/></svg>
+                Due Slips (8/A4)
+            </a>
+        </div>
+    </div>
+
+    {% if filter_errors %}
+    <div class="due-alert due-alert-danger" role="alert">
+        <strong>Filter check:</strong>
+        {% for error in filter_errors %}<span>{{ error }}</span>{% endfor %}
+    </div>
+    {% endif %}
+
+    <form class="due-month-filter no-print" method="get">
+        <label class="due-filter-search">
+            <span>Search</span>
+            <input type="search" name="q" value="{{ query }}" placeholder="Student, father, SID, admission no">
+        </label>
+        <label>
+            <span>Session</span>
+            <select name="session">
+                {% for sess in sessions %}
+                <option value="{{ sess.id }}" {% if selected_session == sess.id|stringformat:"s" %}selected{% endif %}>{{ sess.name }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label>
+            <span>Class</span>
+            <select name="class" id="due-class-filter">
+                <option value="">All classes</option>
+                {% for class in classes %}
+                <option value="{{ class.id }}" {% if selected_class == class.id|stringformat:"s" %}selected{% endif %}>{{ class.name }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label>
+            <span>Section</span>
+            <select name="section" id="due-section-filter">
+                <option value="">All sections</option>
+                {% for section in sections %}
+                <option value="{{ section.id }}" data-class="{{ section.school_class_id }}" {% if selected_section == section.id|stringformat:"s" %}selected{% endif %}>{{ section.school_class.name }}-{{ section.name }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label>
+            <span>Up to Month</span>
+            <select name="month">
+                {% for month in months %}
+                <option value="{{ month }}" {% if selected_month == month %}selected{% endif %}>{{ month }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label>
+            <span>Students</span>
+            <select aria-label="Student scope" disabled>
+                <option selected>Active only</option>
+            </select>
+            <input type="hidden" name="status" value="active">
+        </label>
+        <label>
+            <span>Balance</span>
+            <select name="balance">
+                <option value="all" {% if selected_balance == 'all' %}selected{% endif %}>All balances</option>
+                <option value="due" {% if selected_balance == 'due' %}selected{% endif %}>Only due</option>
+                <option value="settled" {% if selected_balance == 'settled' %}selected{% endif %}>Settled only</option>
+                <option value="credit" {% if selected_balance == 'credit' %}selected{% endif %}>Credit only</option>
+            </select>
+        </label>
+        <div class="due-filter-actions">
+            <button class="button action-primary" type="submit">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v4H4zM7 12h10M9 16h6M11 20h2"/></svg>
+                Refresh
+            </button>
+            <a class="button secondary action-secondary" href="{% url 'core:due_up_to_month_report' %}">Reset</a>
+        </div>
+    </form>
+
+    <div class="dash-kpi-strip dash-kpi-count-5 due-month-summary">
+        <article class="dash-kpi dash-kpi-neutral">
+            <div class="dash-kpi-body"><span class="dash-kpi-label">Students</span><strong class="dash-kpi-value">{{ totals.students }}</strong><span class="dash-kpi-context">{{ totals.due_students }} with due</span></div>
+        </article>
+        <article class="dash-kpi dash-kpi-info">
+            <div class="dash-kpi-body"><span class="dash-kpi-label">Gross Demand</span><strong class="dash-kpi-value dash-money">&#8377;{{ totals.gross_demand|indian_number }}</strong><span class="dash-kpi-context">School + transport + opening + late</span></div>
+        </article>
+        <article class="dash-kpi dash-kpi-success">
+            <div class="dash-kpi-body"><span class="dash-kpi-label">Paid</span><strong class="dash-kpi-value dash-money">&#8377;{{ totals.received_amount|indian_number }}</strong><span class="dash-kpi-context">Concession &#8377;{{ totals.concession_amount|indian_number }}</span></div>
+        </article>
+        <article class="dash-kpi dash-kpi-danger">
+            <div class="dash-kpi-body"><span class="dash-kpi-label">Final Due</span><strong class="dash-kpi-value dash-money">&#8377;{{ totals.due_amount|indian_number }}</strong><span class="dash-kpi-context">Payable through {{ selected_month }}</span></div>
+        </article>
+        <article class="dash-kpi dash-kpi-neutral">
+            <div class="dash-kpi-body"><span class="dash-kpi-label">Final Credit</span><strong class="dash-kpi-value dash-money">&#8377;{{ totals.credit_amount|indian_number }}</strong><span class="dash-kpi-context">{{ totals.credit_students }} students</span></div>
+        </article>
+    </div>
+
+    {% if skipped %}
+    <details class="due-alert due-alert-warn">
+        <summary>{{ skipped|length }} student record(s) skipped because required fee data is incomplete.</summary>
+        <div class="due-skip-list">
+            {% for item in skipped|slice:":12" %}<span>{{ item.student.full_name }}: {{ item.reason }}</span>{% endfor %}
+            {% if skipped|length > 12 %}<span>And {{ skipped|length|add:"-12" }} more.</span>{% endif %}
+        </div>
+    </details>
+    {% endif %}
+
+    <div class="due-calculation-note">
+        {{ calculated_count }} of {{ candidate_count }} candidate records calculated. Amounts use active fee structures, confirmed transport, explicit opening balance and non-cancelled receipts through {{ target_label }}.
+    </div>
+
+    <div class="table-wrap due-month-table-wrap">
+        <table class="due-month-table">
+            <thead>
+                <tr>
+                    <th rowspan="2">SID / Admission</th>
+                    <th rowspan="2">Student / Father</th>
+                    <th rowspan="2">Class</th>
+                    <th rowspan="2">Type</th>
+                    <th colspan="5" class="amount due-group-heading">Demand</th>
+                    <th colspan="2" class="amount due-group-heading">Credits Applied</th>
+                    <th rowspan="2" class="amount">Final Due</th>
+                    <th rowspan="2" class="amount">Final Credit</th>
+                </tr>
+                <tr>
+                    <th class="amount">School</th>
+                    <th class="amount">Transport</th>
+                    <th class="amount">Opening</th>
+                    <th class="amount">Late</th>
+                    <th class="amount">Gross</th>
+                    <th class="amount">Paid</th>
+                    <th class="amount">Concession</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in page.object_list %}
+                <tr>
+                    <td><strong>{{ row.student.legacy_sid|default:"-" }}</strong><span class="due-cell-sub">{{ row.student.admission_no|default:"No admission no." }}</span></td>
+                    <td><strong>{{ row.student.full_name }}</strong><span class="due-cell-sub">{{ row.student.father_name|default:"Father/guardian not set" }}</span></td>
+                    <td><span class="status-badge status-active">{{ row.class_label|default:"-" }}</span></td>
+                    <td><span class="due-type-badge">{{ row.student_type }}</span></td>
+                    <td class="amount">{{ row.result.scheduled_fee_demand|indian_number }}</td>
+                    <td class="amount">{{ row.result.transport_demand|indian_number }}</td>
+                    <td class="amount">{{ row.result.opening_balance_amount|indian_number }}</td>
+                    <td class="amount">{{ row.result.late_fee_amount|indian_number }}</td>
+                    <td class="amount font-medium">{{ row.result.gross_demand|indian_number }}</td>
+                    <td class="amount text-success">{{ row.result.received_amount|indian_number }}</td>
+                    <td class="amount text-success">{{ row.result.concession_amount|indian_number }}</td>
+                    <td class="amount due-amount">{{ row.result.due_amount|indian_number }}</td>
+                    <td class="amount due-credit-amount">{{ row.result.credit_amount|indian_number }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="13" class="due-empty-state">No student balances match these filters.</td></tr>
+                {% endfor %}
+            </tbody>
+            {% if page.object_list %}
+            <tfoot>
+                <tr>
+                    <th colspan="4">Filtered Total ({{ total_students }} students)</th>
+                    <th class="amount">{{ totals.scheduled_fee_demand|indian_number }}</th>
+                    <th class="amount">{{ totals.transport_demand|indian_number }}</th>
+                    <th class="amount">{{ totals.opening_balance_amount|indian_number }}</th>
+                    <th class="amount">{{ totals.late_fee_amount|indian_number }}</th>
+                    <th class="amount">{{ totals.gross_demand|indian_number }}</th>
+                    <th class="amount">{{ totals.received_amount|indian_number }}</th>
+                    <th class="amount">{{ totals.concession_amount|indian_number }}</th>
+                    <th class="amount due-amount">{{ totals.due_amount|indian_number }}</th>
+                    <th class="amount due-credit-amount">{{ totals.credit_amount|indian_number }}</th>
+                </tr>
+            </tfoot>
+            {% endif %}
+        </table>
+    </div>
+
+    {% include "core/includes/pagination.html" with page=page %}
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    var classSelect = document.getElementById("due-class-filter");
+    var sectionSelect = document.getElementById("due-section-filter");
+    if (!classSelect || !sectionSelect) return;
+
+    function syncSections() {
+        var classId = classSelect.value;
+        Array.from(sectionSelect.options).forEach(function (option) {
+            if (!option.value) return;
+            option.hidden = Boolean(classId && option.dataset.class !== classId);
+        });
+        var selected = sectionSelect.options[sectionSelect.selectedIndex];
+        if (selected && selected.hidden) sectionSelect.value = "";
+    }
+
+    classSelect.addEventListener("change", syncSections);
+    syncSections();
+})();
+</script>
+{% endblock %}

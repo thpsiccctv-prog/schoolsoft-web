@@ -163,7 +163,6 @@ class FeeReceiptEntryForm(forms.ModelForm):
             "from_month",
             "to_month",
             "payment_mode",
-            "previous_due_amount",
             "concession_amount",
             "late_fee_amount",
             "received_amount",
@@ -213,10 +212,9 @@ class FeeReceiptEditForm(FeeReceiptEntryForm):
 class FeeReceiptLineEntryForm(forms.Form):
     def __init__(self, *args, require_positive_total=True, **kwargs):
         self.fee_heads = list(FeeHead.objects.filter(is_active=True).order_by("name"))
-        # A receipt that ONLY collects an old/previous due (all fee-head boxes left
-        # at 0.00) is a legitimate real-world case now that Previous Due is a
-        # dedicated field - the view is responsible for checking line_total +
-        # previous_due_amount together in that scenario, so it passes False here.
+        # New receipts require a fee-head amount. Receipt correction can pass
+        # False only for a historical previous-due-only receipt whose deprecated
+        # value remains stored but is no longer editable.
         self.require_positive_total = require_positive_total
         super().__init__(*args, **kwargs)
 

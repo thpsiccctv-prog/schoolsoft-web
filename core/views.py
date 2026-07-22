@@ -1,20 +1,30 @@
 import csv
+import os
+import shutil
+import sqlite3
+import subprocess
+from datetime import date, datetime, time
+from pathlib import Path
 from decimal import Decimal
+from urllib.parse import urlencode
 
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, permission_required
+from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
-from django.db import transaction
+from django.db import connection, transaction
 from django.db.models import Count, F, ProtectedError, Q, Sum
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 
-from .access import user_can_access, user_is_readonly
+from .access import user_can_access, user_can_manage_users, user_is_readonly
+from .fee_engine import calculate_student_due
 from .forms import DisciplineRecordForm, FamilyForm, FeeReceiptEditForm, FeeReceiptEntryForm, FeeReceiptLineEntryForm, InventoryIssueForm, InventoryItemForm, SalaryPaymentForm, StudentForm, TransferCertificateForm
 from .models import (
+    ACADEMIC_MONTHS,
     AcademicSession,
     DisciplineRecord,
     ExamMark,
@@ -46,6 +56,8 @@ from .pdf import (
     build_character_certificate_pdf,
     build_discipline_summary_pdf,
     build_due_report_pdf,
+    build_due_slip_pdf,
+    build_due_up_to_month_report_pdf,
     build_fee_receipt_pdf,
     build_id_card_batch_pdf,
     build_id_card_pdf,
@@ -69,6 +81,231 @@ def apply_receipt_student_snapshot(receipt):
     receipt.class_snapshot = student.current_class.name if student.current_class else ""
     receipt.section_snapshot = student.current_section.name if student.current_section else ""
 
+
+
+def _format_file_mtime(path):
+    try:
+        return datetime.fromtimestamp(Path(path).stat().st_mtime).strftime("%d/%m/%Y %I:%M %p")
+    except OSError:
+        return None
+
+
+
+
+def _format_sync_complete_value(raw_value):
+    raw_value = (raw_value or "").strip()
+    for fmt in ("%d/%m/%Y %H:%M:%S.%f", "%d/%m/%Y %H:%M:%S", "%d-%m-%Y %H:%M:%S.%f", "%d-%m-%Y %H:%M:%S"):
+        try:
+            return datetime.strptime(raw_value, fmt).strftime("%d/%m/%Y %I:%M %p")
+        except ValueError:
+            pass
+    return raw_value
+
+def _sync_complete_time_from_lines(lines):
+    for line in reversed(lines):
+        if line.startswith("Sync complete at "):
+            return _format_sync_complete_value(line.replace("Sync complete at ", "", 1).strip())
+    return None
+
+
+def _sync_marker_paths():
+    paths = []
+    local_appdata = os.environ.get("LOCALAPPDATA")
+    if local_appdata:
+        paths.append(Path(local_appdata) / "SchoolSoft" / "sync-success.marker")
+    paths.append(Path(settings.BASE_DIR) / "sync-backups" / "sync-success.marker")
+    return paths
+
+
+def _read_last_sync_success(sync_log):
+    marker_paths = _sync_marker_paths()
+    for marker in marker_paths:
+        try:
+            marker_time = _sync_complete_time_from_lines(marker.read_text(encoding="utf-8", errors="ignore").splitlines())
+        except OSError:
+            marker_time = None
+        if marker_time:
+            return marker_time, str(marker)
+
+    try:
+        log_time = _sync_complete_time_from_lines(sync_log.read_text(encoding="utf-8", errors="ignore").splitlines())
+    except OSError:
+        log_time = None
+    if log_time:
+        return log_time, str(sync_log)
+    return None, str(marker_paths[0] if marker_paths else sync_log)
+
+def _latest_backup_info():
+    backup_root = Path(os.environ.get("SCHOOLSOFT_BACKUP_ROOT", "E:/SchoolSoft-Daily-Backups"))
+    try:
+        backups = [item for item in backup_root.iterdir() if item.is_dir()]
+    except OSError:
+        backups = []
+    if not backups:
+        return {
+            "label": "Last Backup",
+            "value": "No backup found",
+            "detail": str(backup_root),
+            "tone": "danger",
+            "warning": "Database backup nahi mila!",
+        }
+
+    latest = max(backups, key=lambda item: item.stat().st_mtime)
+    backup_time = datetime.fromtimestamp(latest.stat().st_mtime)
+    elapsed = datetime.now() - backup_time
+    elapsed_days = max(0, elapsed.days)
+    tone = "ok"
+    warning = None
+    if elapsed_days >= 3:
+        tone = "danger"
+        warning = f"Backup {elapsed_days} din se nahi hua!"
+    elif elapsed_days >= 1:
+        tone = "warn"
+        warning = f"Backup {elapsed_days} din se nahi hua"
+
+    return {
+        "label": "Last Backup",
+        "value": _format_file_mtime(latest) or latest.name,
+        "detail": str(latest),
+        "tone": tone,
+        "warning": warning,
+    }
+
+def _backup_root():
+    return Path(os.environ.get("SCHOOLSOFT_BACKUP_ROOT", "E:/SchoolSoft-Daily-Backups"))
+
+
+def _new_backup_dir(root):
+    stamp = timezone.localtime().strftime("%Y%m%d-%H%M%S")
+    candidate = root / stamp
+    if not candidate.exists():
+        return candidate
+    for index in range(1, 100):
+        candidate = root / f"{stamp}-{index:02d}"
+        if not candidate.exists():
+            return candidate
+    raise OSError("Backup folder name available nahi mila.")
+
+
+def _active_sqlite_db_path():
+    if connection.vendor != "sqlite":
+        raise ValueError("Backup Now sirf Desktop/SQLite database ke liye available hai.")
+    db_name = connection.settings_dict.get("NAME")
+    if not db_name:
+        raise ValueError("Active database path nahi mila.")
+    return Path(db_name)
+
+
+def _restore_note_text(db_path, backup_dir):
+    return (
+        "SchoolSoft Backup Restore Note\n"
+        "==============================\n\n"
+        f"Backup folder: {backup_dir}\n"
+        f"Source DB: {db_path}\n\n"
+        "Restore rule:\n"
+        "1. SchoolSoft EXE ko poori tarah band karein.\n"
+        "2. Current live DB ka alag dated backup banaye bina overwrite na karein.\n"
+        "3. Is folder ke db.sqlite3 ko %LOCALAPPDATA%\\SchoolSoft\\db.sqlite3 par copy karein.\n"
+        "4. Agar media folder hai to use %LOCALAPPDATA%\\SchoolSoft\\media me restore karein.\n"
+        "5. Restore ke baad dashboard counts aur cash book verify karein.\n"
+    )
+
+
+def _perform_backup_now():
+    db_path = _active_sqlite_db_path()
+    backup_root = _backup_root()
+    backup_dir = _new_backup_dir(backup_root)
+
+    backup_root.mkdir(parents=True, exist_ok=True)
+    backup_dir.mkdir()
+
+    with connection.cursor() as cursor:
+        cursor.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+
+    backup_db = backup_dir / "db.sqlite3"
+    if db_path.exists():
+        shutil.copy2(db_path, backup_db)
+    else:
+        connection.ensure_connection()
+        backup_connection = sqlite3.connect(backup_db)
+        try:
+            connection.connection.backup(backup_connection)
+        finally:
+            backup_connection.close()
+
+    media_root = Path(settings.MEDIA_ROOT)
+    if media_root.exists() and media_root.is_dir():
+        shutil.copytree(media_root, backup_dir / "media")
+
+    (backup_dir / "RESTORE-NOTE.txt").write_text(
+        _restore_note_text(db_path, backup_dir),
+        encoding="utf-8",
+    )
+    return backup_dir
+
+def _dashboard_system_status():
+    sync_log = Path(settings.BASE_DIR) / "sync-backups" / "sync-last.log"
+    sync_time, sync_detail = _read_last_sync_success(sync_log)
+    sync_status = {
+        "label": "Last Online Sync",
+        "value": sync_time or "No successful sync found",
+        "detail": sync_detail,
+        "tone": "ok" if sync_time else "warn",
+    }
+    return [_latest_backup_info(), sync_status]
+
+
+
+def _sync_batch_candidates():
+    base_dir = Path(settings.BASE_DIR).resolve()
+    candidates = [base_dir / "sync-desktop-to-online.bat"]
+    for parent in [base_dir, *base_dir.parents]:
+        candidates.append(parent / "01-source-code" / "schoolsoft_web" / "sync-desktop-to-online.bat")
+    return candidates
+
+
+def _find_sync_batch_file():
+    for candidate in _sync_batch_candidates():
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def online_sync_start(request):
+    if request.method != "POST":
+        return redirect("core:dashboard")
+
+    sync_bat = _find_sync_batch_file()
+    if not sync_bat:
+        messages.error(request, "Online sync script nahi mila. Source folder check kijiye.")
+        return redirect("core:dashboard")
+
+    try:
+        subprocess.Popen(
+            ["cmd.exe", "/k", "call", sync_bat.name, "/auto"],
+            cwd=str(sync_bat.parent),
+            creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0),
+        )
+    except OSError as exc:
+        messages.error(request, f"Online sync start nahi hua: {exc}")
+    else:
+        messages.success(
+            request,
+            "Online sync window start ho gaya. Sync complete hone tak data entry na karein.",
+        )
+    return redirect("core:dashboard")
+
+def backup_start(request):
+    if request.method != "POST":
+        return redirect("core:dashboard")
+
+    try:
+        backup_dir = _perform_backup_now()
+    except (OSError, ValueError) as exc:
+        messages.error(request, f"Backup nahi bana: {exc}")
+    else:
+        messages.success(request, f"Backup complete: {backup_dir}")
+    return redirect("core:dashboard")
 
 def dashboard(request):
     user = request.user
@@ -166,11 +403,12 @@ def dashboard(request):
                 is_cancelled=False, carried_forward=False, session=active_session, student__is_active=True
             ).aggregate(total=Sum("legacy_due_amount"))["total"] or Decimal("0.00")
         kpis.append({
-            "label": "Total Dues",
+            "label": "Receipt Dues (Legacy)",
             "value": total_dues,
             "tone": "attention",
             "icon": "dues",
             "currency": True,
+            "caption": "Old receipt-based balance",
         })
 
     student_total = 0
@@ -212,8 +450,8 @@ def dashboard(request):
         })
     if user_can_access(user, "dues"):
         tiles.append({
-            "url": reverse("core:due_report"), "color": "attention",
-            "label": "Dues", "sub": "Pending fee report", "icon": "clock",
+            "url": reverse("core:due_up_to_month_report"), "color": "attention",
+            "label": "Dues", "sub": "Due up to selected month", "icon": "clock",
         })
     if user_can_access(user, "marks"):
         tiles.append({
@@ -256,8 +494,11 @@ def dashboard(request):
         "active_session": active_session,
         "dashboard_kpis": kpis,
         "tiles": tiles,
+        "system_status": _dashboard_system_status(),
         "can_new_receipt": user_can_access(user, "fee_collection") and not readonly,
         "can_due_report": user_can_access(user, "dues"),
+        "can_online_sync": user_can_manage_users(user),
+        "can_backup": user_can_manage_users(user) and connection.vendor == "sqlite",
     }
     return render(request, "core/dashboard.html", context)
 
@@ -607,6 +848,244 @@ def receipt_list(request):
     return render(request, "core/receipt_list.html", context)
 
 
+
+_DUE_RESULT_MONEY_FIELDS = (
+    "scheduled_fee_demand",
+    "transport_demand",
+    "opening_balance_amount",
+    "late_fee_amount",
+    "gross_demand",
+    "received_amount",
+    "concession_amount",
+    "due_amount",
+    "credit_amount",
+)
+_ACADEMIC_MONTH_NUMBERS = {
+    "APR": 4,
+    "MAY": 5,
+    "JUN": 6,
+    "JUL": 7,
+    "AUG": 8,
+    "SEP": 9,
+    "OCT": 10,
+    "NOV": 11,
+    "DEC": 12,
+    "JAN": 1,
+    "FEB": 2,
+    "MAR": 3,
+}
+
+
+def _default_due_month(session):
+    today = timezone.localdate()
+    if session and session.starts_on and today < session.starts_on:
+        return ACADEMIC_MONTHS[0]
+    if session and session.ends_on and today > session.ends_on:
+        return ACADEMIC_MONTHS[-1]
+    return next(
+        (month for month, number in _ACADEMIC_MONTH_NUMBERS.items() if number == today.month),
+        ACADEMIC_MONTHS[0],
+    )
+
+
+def _due_month_label(session, through_month):
+    month_number = _ACADEMIC_MONTH_NUMBERS.get(through_month)
+    if not month_number:
+        return through_month
+    if session and session.starts_on and session.ends_on:
+        start_month = session.starts_on.replace(day=1)
+        end_month = session.ends_on.replace(day=1)
+        for year in range(session.starts_on.year, session.ends_on.year + 1):
+            candidate = date(year, month_number, 1)
+            if start_month <= candidate <= end_month:
+                return candidate.strftime("%B %Y")
+    return through_month
+
+
+def _due_up_to_month_data(request):
+    sessions = AcademicSession.objects.order_by("-starts_on", "name")
+    active_session = sessions.filter(is_active=True).first() or sessions.first()
+    requested_session = request.GET.get("session", "").strip()
+    filter_errors = []
+
+    session = active_session
+    if requested_session:
+        session = sessions.filter(pk=requested_session).first() if requested_session.isdigit() else None
+        if session is None:
+            filter_errors.append("Selected academic session was not found.")
+
+    selected_month = request.GET.get("month", "").strip().upper() or _default_due_month(session)
+    if selected_month not in ACADEMIC_MONTHS:
+        filter_errors.append("Selected target month is invalid; the default month is shown instead.")
+        selected_month = _default_due_month(session)
+
+    selected_class = request.GET.get("class", "").strip()
+    selected_section = request.GET.get("section", "").strip()
+    requested_status = request.GET.get("status", "active").strip() or "active"
+    selected_status = "active"
+    selected_balance = request.GET.get("balance", "all").strip() or "all"
+    query = request.GET.get("q", "").strip()
+
+    if requested_status != "active":
+        filter_errors.append(
+            "Due report is restricted to active students; archived records were excluded."
+        )
+    if selected_balance not in {"all", "due", "settled", "credit"}:
+        filter_errors.append("Selected balance filter is invalid; All Balances is being used.")
+        selected_balance = "all"
+
+    invalid_id_filter = False
+    if selected_class and not selected_class.isdigit():
+        filter_errors.append("Selected class is invalid.")
+        invalid_id_filter = True
+    if selected_section and not selected_section.isdigit():
+        filter_errors.append("Selected section is invalid.")
+        invalid_id_filter = True
+
+    students = Student.objects.filter(is_active=True).select_related(
+        "current_class", "current_section"
+    ).order_by(
+        "current_class__display_order",
+        "current_section__name",
+        "roll_no",
+        "full_name",
+    )
+    if selected_class and not invalid_id_filter:
+        students = students.filter(current_class_id=selected_class)
+    if selected_section and not invalid_id_filter:
+        students = students.filter(current_section_id=selected_section)
+    if query:
+        students = students.filter(
+            Q(full_name__icontains=query)
+            | Q(father_name__icontains=query)
+            | Q(admission_no__icontains=query)
+            | Q(legacy_sid__icontains=query)
+            | Q(mobile_primary__icontains=query)
+        )
+
+    rows = []
+    skipped = []
+    calculated_count = 0
+    totals = {field: Decimal("0.00") for field in _DUE_RESULT_MONEY_FIELDS}
+    candidates = [] if session is None or invalid_id_filter else list(students)
+
+    for student in candidates:
+        try:
+            result = calculate_student_due(
+                student=student,
+                session=session,
+                through_month=selected_month,
+            )
+        except ValidationError as exc:
+            skipped.append({"student": student, "reason": "; ".join(exc.messages)})
+            continue
+
+        calculated_count += 1
+        if selected_balance == "due" and result.due_amount <= Decimal("0.00"):
+            continue
+        if selected_balance == "settled" and (
+            result.due_amount > Decimal("0.00") or result.credit_amount > Decimal("0.00")
+        ):
+            continue
+        if selected_balance == "credit" and result.credit_amount <= Decimal("0.00"):
+            continue
+
+        class_label = student.current_class.name if student.current_class else ""
+        if student.current_section:
+            class_label = f"{class_label}-{student.current_section.name}" if class_label else student.current_section.name
+        rows.append(
+            {
+                "student": student,
+                "result": result,
+                "class_label": class_label,
+                "student_type": "New" if result.is_new_student else "Old",
+            }
+        )
+        for field in _DUE_RESULT_MONEY_FIELDS:
+            totals[field] += getattr(result, field)
+
+    totals["students"] = len(rows)
+    totals["due_students"] = sum(1 for row in rows if row["result"].due_amount > Decimal("0.00"))
+    totals["credit_students"] = sum(1 for row in rows if row["result"].credit_amount > Decimal("0.00"))
+
+    export_params = {
+        "session": session.pk if session else "",
+        "class": selected_class,
+        "section": selected_section,
+        "month": selected_month,
+        "status": selected_status,
+        "balance": selected_balance,
+        "q": query,
+    }
+    export_query = urlencode({key: value for key, value in export_params.items() if value != ""})
+
+    return {
+        "rows": rows,
+        "totals": totals,
+        "query": query,
+        "sessions": sessions,
+        "classes": SchoolClass.objects.order_by("display_order", "name"),
+        "sections": Section.objects.select_related("school_class").order_by(
+            "school_class__display_order", "name"
+        ),
+        "months": ACADEMIC_MONTHS,
+        "selected_session": str(session.pk) if session else requested_session,
+        "selected_session_object": session,
+        "selected_class": selected_class,
+        "selected_section": selected_section,
+        "selected_month": selected_month,
+        "selected_status": selected_status,
+        "selected_balance": selected_balance,
+        "target_label": _due_month_label(session, selected_month),
+        "filter_errors": filter_errors,
+        "skipped": skipped,
+        "candidate_count": len(candidates),
+        "calculated_count": calculated_count,
+        "total_students": len(rows),
+        "export_query": export_query,
+        "school_name": (get_active_school_profile().name if get_active_school_profile() else ""),
+    }
+
+
+def due_up_to_month_report(request):
+    context = _due_up_to_month_data(request)
+    context["page"] = Paginator(context["rows"], 100).get_page(request.GET.get("page"))
+    return render(request, "core/due_up_to_month_report.html", context)
+
+
+def due_up_to_month_report_pdf(request):
+    context = _due_up_to_month_data(request)
+    pdf_bytes = build_due_up_to_month_report_pdf(
+        context["rows"],
+        context["totals"],
+        get_active_school_profile(),
+        context["selected_session_object"],
+        context["selected_month"],
+        context["target_label"],
+    )
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
+    response["Content-Disposition"] = (
+        f'attachment; filename="due-up-to-{context["selected_month"].lower()}.pdf"'
+    )
+    return response
+
+
+def due_slip_pdf(request):
+    context = _due_up_to_month_data(request)
+    pdf_bytes = build_due_slip_pdf(
+        context["rows"],
+        get_active_school_profile(),
+        context["selected_session_object"],
+        context["selected_month"],
+        context["target_label"],
+    )
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
+    response["Content-Disposition"] = (
+        f'attachment; filename="due-slips-{context["selected_month"].lower()}.pdf"'
+    )
+    return response
+
+
 def due_report(request):
     rows, totals = get_due_report_rows(request)
     paginator = Paginator(rows, 50)
@@ -719,42 +1198,30 @@ def receipt_create(request):
 
     if request.method == "POST":
         receipt_form = FeeReceiptEntryForm(request.POST)
-        # False: a receipt that only collects an old Previous Due (all fee-head
-        # boxes at 0.00) is valid now - checked together with previous_due_amount
-        # below instead of requiring a positive fee-head total on its own.
-        line_form = FeeReceiptLineEntryForm(request.POST, require_positive_total=False)
+        line_form = FeeReceiptLineEntryForm(request.POST)
 
         if receipt_form.is_valid() and line_form.is_valid():
             line_total = line_form.cleaned_data["line_total"]
-            previous_due = receipt_form.cleaned_data.get("previous_due_amount") or Decimal("0.00")
-            if line_total <= Decimal("0.00") and previous_due <= Decimal("0.00"):
-                line_form.add_error(
-                    None, "Enter at least one fee head amount, or a Previous Due amount, before saving."
+            with transaction.atomic():
+                receipt = receipt_form.save(commit=False)
+                receipt.receipt_no = next_manual_receipt_no()
+                receipt.legacy_fee_total = line_total
+                receipt.legacy_net_total = (
+                    line_total + receipt.late_fee_amount - receipt.concession_amount
                 )
-            else:
-                with transaction.atomic():
-                    receipt = receipt_form.save(commit=False)
-                    receipt.receipt_no = next_manual_receipt_no()
-                    receipt.legacy_fee_total = line_total
-                    receipt.legacy_net_total = (
-                        line_total + receipt.previous_due_amount + receipt.late_fee_amount - receipt.concession_amount
-                    )
-                    receipt.legacy_due_amount = max(
-                        receipt.legacy_net_total - receipt.received_amount,
-                        Decimal("0.00"),
-                    )
-                    apply_receipt_student_snapshot(receipt)
-                    receipt.save()
+                receipt.legacy_due_amount = max(
+                    receipt.legacy_net_total - receipt.received_amount,
+                    Decimal("0.00"),
+                )
+                apply_receipt_student_snapshot(receipt)
+                receipt.save()
 
-                    for fee_head, amount in line_form.amounts():
-                        receipt.lines.create(fee_head=fee_head, amount=amount)
+                for fee_head, amount in line_form.amounts():
+                    receipt.lines.create(fee_head=fee_head, amount=amount)
 
-                    if receipt.previous_due_amount > Decimal("0.00"):
-                        _mark_prior_receipts_carried_forward(receipt)
-
-                if request.POST.get("action") == "save_print":
-                    return redirect(f"{reverse('core:receipt_detail', kwargs={'pk': receipt.pk})}?autoprint=1")
-                return redirect("core:receipt_detail", pk=receipt.pk)
+            if request.POST.get("action") == "save_print":
+                return redirect(f"{reverse('core:receipt_detail', kwargs={'pk': receipt.pk})}?autoprint=1")
+            return redirect("core:receipt_detail", pk=receipt.pk)
     else:
         student_id = request.GET.get("student")
         initial_data = {}
@@ -834,14 +1301,16 @@ def receipt_edit(request, pk):
 
     if request.method == "POST":
         receipt_form = FeeReceiptEditForm(request.POST, instance=receipt)
-        line_form = FeeReceiptLineEntryForm(request.POST, require_positive_total=False)
+        line_form = FeeReceiptLineEntryForm(
+            request.POST,
+            require_positive_total=receipt.previous_due_amount <= Decimal("0.00"),
+        )
 
         if receipt_form.is_valid() and line_form.is_valid():
             line_total = line_form.cleaned_data["line_total"]
-            previous_due = receipt_form.cleaned_data.get("previous_due_amount") or Decimal("0.00")
-            if line_total <= Decimal("0.00") and previous_due <= Decimal("0.00"):
+            if line_total <= Decimal("0.00") and receipt.previous_due_amount <= Decimal("0.00"):
                 line_form.add_error(
-                    None, "Enter at least one fee head amount, or a Previous Due amount, before saving."
+                    None, "Enter at least one fee head amount before saving."
                 )
                 return render(
                     request,
@@ -993,13 +1462,16 @@ def receipt_pdf(request, pk):
 def student_fee_defaults(request, pk):
     student = get_object_or_404(Student.objects.select_related("current_class", "current_section"), pk=pk)
     session_id = request.GET.get("session")
-    structures = FeeStructure.objects.select_related("fee_head").filter(school_class=student.current_class)
-
+    structures = FeeStructure.objects.select_related("fee_head").filter(
+        school_class=student.current_class,
+        is_active=True,
+        fee_head__is_active=True,
+    )
     if session_id:
         structures = structures.filter(session_id=session_id)
-
-    if not structures.exists():
-        structures = FeeStructure.objects.select_related("fee_head").filter(school_class=student.current_class)
+    else:
+        active_session = AcademicSession.objects.filter(is_active=True).order_by("-starts_on").first()
+        structures = structures.filter(session=active_session) if active_session else structures.none()
 
     amounts = {
         f"fee_head_{structure.fee_head_id}": str(structure.amount)
@@ -1007,83 +1479,14 @@ def student_fee_defaults(request, pk):
         if structure.amount > Decimal("0.00")
     }
 
-    previous_due = _suggest_previous_due(student)
-
     return JsonResponse(
         {
             "student": student.full_name,
             "class": student.current_class.name if student.current_class else "",
             "section": student.current_section.name if student.current_section else "",
             "amounts": amounts,
-            "previous_due": f"{previous_due:.2f}",
         }
     )
-
-
-def _eligible_prior_due_receipts(student, exclude_pk=None):
-    """Receipts that can legitimately feed a 'Previous Due' carry-forward for
-    this student: unpaid, not cancelled, not already carried forward into an
-    even earlier rollup, and entered live in this system (not part of the old
-    legacy CSV bulk-import). Shared by the suggestion calculation and the
-    marking step so both agree on what counts as 'previous'.
-
-    Deliberately SESSION-AGNOSTIC (as of the July 2026 fix below) - due can
-    carry forward from an earlier receipt within the SAME session (e.g. an
-    April receipt's leftover balance should show up when collecting May's
-    fee) just as much as from an earlier academic session. `exclude_pk` is
-    used by the marking step to leave the just-saved receipt itself out of
-    its own "prior" set.
-
-    IMPORTANT: legacy bulk-imported receipts (from import_legacy_fees /
-    import_yearly_fees - identifiable by legacy_receipt_no being set) are
-    deliberately EXCLUDED here. Their stored legacy_due_amount is a stale
-    snapshot from the old pre-automation records and is frequently already
-    resolved through payments that were never entered into this system, so
-    summing it automatically produces inflated, unreliable figures (real
-    incident: a student's auto-suggested previous due came out to ~Rs
-    56,950 - far more than a full year's fees - because it silently summed
-    years of legacy receipts). Per the owner's original request, old/legacy
-    due must be entered MANUALLY by office staff who know the correct
-    figure; only receipts created going forward inside this app (which have
-    no legacy_receipt_no) are trustworthy enough to auto carry-forward."""
-    prior_receipts = FeeReceipt.objects.filter(
-        student=student,
-        is_cancelled=False,
-        carried_forward=False,
-        legacy_receipt_no__isnull=True,
-    ).exclude(legacy_due_amount__lte=Decimal("0.00"))
-
-    if exclude_pk:
-        prior_receipts = prior_receipts.exclude(pk=exclude_pk)
-
-    return prior_receipts
-
-
-def _suggest_previous_due(student):
-    """Auto-suggested 'Previous Due' figure for the Fee Collection form - sum
-    of the student's unpaid, not-yet-carried-forward, live-system receipts
-    (any earlier receipt, same session or an earlier one). Office staff can
-    still override this in the form (needed while historical/legacy fee data
-    is incomplete); once receipts are consistently recorded this keeps
-    working automatically without any manual step."""
-    total = _eligible_prior_due_receipts(student).aggregate(total=Sum("legacy_due_amount"))["total"]
-    return total or Decimal("0.00")
-
-
-def _mark_prior_receipts_carried_forward(receipt):
-    """Called after saving a new receipt whose previous_due_amount > 0: marks
-    the student's earlier eligible unpaid receipts as carried_forward=True so
-    the Due Report (and any future previous-due suggestion) stops counting
-    them separately - their balance now lives on this new receipt instead.
-    Excludes the receipt itself (exclude_pk) so a receipt that still has its
-    own leftover due after this save doesn't get marked as carrying its own
-    balance forward into itself.
-    Note: this marks ALL eligible prior receipts regardless of whether the
-    office-entered previous_due_amount exactly matches their sum (the office
-    figure is treated as authoritative - see CODEX-HANDOFF.md for the
-    reasoning) - if it doesn't match, is_edited/remarks on this receipt is
-    the audit trail for why."""
-    _eligible_prior_due_receipts(receipt.student, exclude_pk=receipt.pk).update(carried_forward=True)
 
 
 def next_manual_receipt_no():
@@ -1099,7 +1502,7 @@ def next_manual_receipt_no():
     return receipt_no
 
 def get_collection_report_rows(request):
-    from datetime import datetime
+    from datetime import datetime, time
     date_from_str = request.GET.get('date_from', '')
     date_to_str = request.GET.get('date_to', '')
     
@@ -2102,7 +2505,7 @@ def student_delete(request, pk):
 # ---------------------------------------------------------------------------
 
 def _generate_voucher_no(session, voucher_type):
-    from django.db import transaction
+    from django.db import connection, transaction
     from .models import VoucherCounter
     year_str = session.name
     if not year_str and session.starts_on and session.ends_on:
@@ -2129,7 +2532,7 @@ def expense_create(request):
     from .forms import VoucherForm
     from .models import AcademicSession, Voucher, VoucherAuditLog, AccountGroup, Staff
     from django.utils import timezone
-    from django.db import transaction
+    from django.db import connection, transaction
     
     session = AcademicSession.objects.filter(is_active=True).first()
     if not session:
@@ -2184,7 +2587,7 @@ def receipt_other_create(request):
     from .forms import VoucherForm
     from .models import AcademicSession, Voucher, VoucherAuditLog, AccountGroup
     from django.utils import timezone
-    from django.db import transaction
+    from django.db import connection, transaction
     
     session = AcademicSession.objects.filter(is_active=True).first()
     if not session:
@@ -2315,7 +2718,7 @@ def voucher_detail(request, pk):
 def voucher_edit(request, pk):
     from .models import Voucher, VoucherAuditLog
     from .forms import VoucherEditForm
-    from django.db import transaction
+    from django.db import connection, transaction
     from django.forms.models import model_to_dict
     
     voucher = get_object_or_404(Voucher, pk=pk)
@@ -2369,7 +2772,7 @@ def voucher_edit(request, pk):
 @permission_required('core.access_accounts', raise_exception=True)
 def voucher_cancel(request, pk):
     from .models import Voucher, VoucherAuditLog
-    from django.db import transaction
+    from django.db import connection, transaction
     
     voucher = get_object_or_404(Voucher, pk=pk)
     if voucher.is_cancelled:

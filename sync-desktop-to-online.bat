@@ -17,8 +17,13 @@ setlocal EnableExtensions
 cd /d "%~dp0"
 title SchoolSoft Desktop to Online Sync
 
+set "AUTO_SYNC=0"
+if /I "%~1"=="/auto" set "AUTO_SYNC=1"
+
 if not exist "sync-backups" mkdir "sync-backups"
 set "SYNC_LOG=sync-backups\sync-last.log"
+set "SYNC_SUCCESS_MARKER=sync-backups\sync-success.marker"
+set "APPDATA_SYNC_SUCCESS_MARKER=%LOCALAPPDATA%\SchoolSoft\sync-success.marker"
 >"%SYNC_LOG%" echo SchoolSoft sync started at %DATE% %TIME%
 
 set "PYTHON_EXE=%cd%\.venv\Scripts\python.exe"
@@ -50,8 +55,13 @@ echo SAFETY CHECK:
 echo   Script pehle Desktop DB verify karega. Agar DB dev/corrupt hua
 echo   to online sync automatically rok diya jayega.
 echo.
-choice /C YN /M "Kya aap online database ko Desktop data se update karna chahte hain"
-if errorlevel 2 goto :cancel
+if "%AUTO_SYNC%"=="1" (
+    echo Auto mode: admin dashboard se online sync start hua hai.
+    echo Safety check phir bhi chalega.
+) else (
+    choice /C YN /M "Kya aap online database ko Desktop data se update karna chahte hain"
+    if errorlevel 2 goto :cancel
+)
 
 if exist "render-db-url.txt" goto :read_url
 
@@ -150,6 +160,8 @@ if errorlevel 1 (
 echo.
 echo [6/6] Sync complete.
 >>"%SYNC_LOG%" echo Sync complete at %DATE% %TIME%
+>"%SYNC_SUCCESS_MARKER%" echo Sync complete at %DATE% %TIME%
+>"%APPDATA_SYNC_SUCCESS_MARKER%" echo Sync complete at %DATE% %TIME%
 echo Online website refresh karke dashboard verify kijiye:
 echo   https://schoolsoft-english-medium.onrender.com
 echo.

@@ -6,7 +6,7 @@
 {% block content %}
 <section class="dashboard-page">
 
-    <!-- ─── HERO HEADER ─── -->
+    <!-- â”€â”€â”€ HERO HEADER â”€â”€â”€ -->
     <div class="dash-header">
         <div class="dash-header-left">
             <span class="dash-badge">
@@ -17,6 +17,22 @@
             <p class="dash-subtitle">Today&apos;s work, fee desk and school records.</p>
         </div>
         <div class="dash-header-actions">
+            {% if can_online_sync %}
+            <form class="dash-action-form" method="post" action="{% url 'core:online_sync_start' %}">
+                {% csrf_token %}
+                <button class="dash-action-btn dash-action-outline" type="submit" onclick="return confirm('Online sync start karna hai? Sync complete hone tak data entry na karein.');">
+                    Online Sync
+                </button>
+            </form>
+            {% endif %}
+            {% if can_backup %}
+            <form class="dash-action-form" method="post" action="{% url 'core:backup_start' %}">
+                {% csrf_token %}
+                <button class="dash-action-btn dash-action-outline" type="submit" onclick="return confirm('Daily backup banana hai?');">
+                    Backup Now
+                </button>
+            </form>
+            {% endif %}
             {% if can_new_receipt %}
             <a class="dash-action-btn dash-action-primary" href="{% url 'core:receipt_create' %}">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14"/></svg>
@@ -24,12 +40,12 @@
             </a>
             {% endif %}
             {% if can_due_report %}
-            <a class="dash-action-btn dash-action-outline" href="{% url 'core:due_report' %}">Due Report</a>
+            <a class="dash-action-btn dash-action-outline" href="{% url 'core:due_up_to_month_report' %}">Due up to Month</a>
             {% endif %}
         </div>
     </div>
 
-    <!-- ─── KPI STRIP ─── -->
+    <!-- â”€â”€â”€ KPI STRIP â”€â”€â”€ -->
     <div class="dash-kpi-strip dash-kpi-count-{{ dashboard_kpis|length }}" aria-label="Today's overview">
         {% for kpi in dashboard_kpis %}
         <article class="dash-kpi dash-kpi-{{ kpi.tone }}{% if kpi.empty_caption and not kpi.value %} dash-kpi-empty{% endif %}" aria-label="{{ kpi.label }}">
@@ -65,7 +81,19 @@
         {% endfor %}
     </div>
 
-    <!-- ─── QUICK ACCESS TILES ─── -->
+
+    {% if system_status %}
+    <div class="dash-system-status" aria-label="System safety status">
+        {% for item in system_status %}
+        <div class="dash-system-card dash-system-{{ item.tone }}" title="{{ item.detail }}">
+            <span class="dash-system-label">{{ item.label }}</span>
+            <strong class="dash-system-value">{{ item.value }}</strong>
+            {% if item.warning %}<span class="dash-system-warning-text">{{ item.warning }}</span>{% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    <!-- â”€â”€â”€ QUICK ACCESS TILES â”€â”€â”€ -->
     {% if tiles %}
     <div class="dash-section-label">Quick Access</div>
     <div class="dash-tiles">

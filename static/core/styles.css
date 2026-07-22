@@ -3147,7 +3147,7 @@ th.amount,
 
 
 /* ============================================================
-   PREMIUM COLOR LAYER — admission entry (appended override)
+   PREMIUM COLOR LAYER - admission entry (appended override)
    Harmonises the form with the deep-green sidebar. v3-color
    ============================================================ */
 .student-entry {
@@ -3159,7 +3159,7 @@ th.amount,
         linear-gradient(180deg, #eef5f1 0%, #e7f1ec 100%);
 }
 
-/* Hero header — soft green wash + gradient kicker chip */
+/* Hero header - soft green wash + gradient kicker chip */
 .student-entry .student-entry-header {
     background:
         linear-gradient(135deg, rgba(15, 118, 110, 0.12), rgba(20, 52, 42, 0.04)),
@@ -3174,7 +3174,7 @@ th.amount,
     box-shadow: 0 3px 8px rgba(11, 79, 74, 0.28);
 }
 
-/* Section cards — thin colored top edge + faint gradient body */
+/* Section cards - thin colored top edge + faint gradient body */
 .student-entry .entry-card {
     position: relative;
     overflow: hidden;
@@ -3198,7 +3198,7 @@ th.amount,
     box-shadow: 0 2px 6px rgba(15, 118, 110, 0.4);
 }
 
-/* Inputs — gentle tint so fields read as clear zones */
+/* Inputs - gentle tint so fields read as clear zones */
 .student-entry .entry-field input,
 .student-entry .entry-field select,
 .student-entry .entry-field textarea {
@@ -3213,7 +3213,7 @@ th.amount,
     box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.18);
 }
 
-/* Right rail cards — same premium tint */
+/* Right rail cards - same premium tint */
 .student-entry .student-photo-card,
 .student-entry .student-command-card {
     background: linear-gradient(180deg, #ffffff, #f5fbf8);
@@ -3221,7 +3221,7 @@ th.amount,
     box-shadow: 0 16px 34px rgba(15, 52, 42, 0.07);
 }
 
-/* Save button — deeper, richer green gradient */
+/* Save button - deeper, richer green gradient */
 .student-entry .entry-btn-primary {
     background: linear-gradient(135deg, #0f766e 0%, #0b5f57 55%, #14342a 100%);
     box-shadow: 0 6px 16px rgba(11, 79, 74, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.15);
@@ -3232,7 +3232,7 @@ th.amount,
     box-shadow: 0 8px 20px rgba(11, 79, 74, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.18);
 }
 
-/* Recent Admissions — tinted green header band */
+/* Recent Admissions - tinted green header band */
 .student-entry .recent-admissions-table thead th {
     background: linear-gradient(180deg, #eef6f2, #e3f0ea);
     color: var(--entry-accent-dark);
@@ -3379,7 +3379,7 @@ th.amount,
 }
 
 /* ============================================================
-   FEE COLLECTION — layout fixes (overlap + sticky payable) v1
+   FEE COLLECTION - layout fixes (overlap + sticky payable) v1
    ============================================================ */
 /* Fee heads: stop label/input overlap, keep compact 3-col */
 .fee-desk .classic-fee-heads{
@@ -3408,11 +3408,11 @@ th.amount,
 
 
 /* ============================================================
-   DASHBOARD — PREMIUM REDESIGN
+   DASHBOARD - PREMIUM REDESIGN
    Cohesive with the dark-green sidebar + entry-* design tokens
    ============================================================ */
 
-/* ─── Header ─── */
+/* â”€â”€â”€ Header â”€â”€â”€ */
 .dash-header {
     display: flex;
     align-items: flex-start;
@@ -3463,6 +3463,16 @@ th.amount,
     margin-top: 12px;
 }
 
+.dash-action-form {
+    display: inline-flex;
+    margin: 0;
+}
+
+.dash-action-form .dash-action-btn {
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    font-family: inherit;
+    cursor: pointer;
+}
 .dash-action-btn {
     display: inline-flex;
     align-items: center;
@@ -3498,7 +3508,7 @@ th.amount,
     border-color: rgba(255,255,255,0.4);
 }
 
-/* ─── KPI Strip ─── */
+/* â”€â”€â”€ KPI Strip â”€â”€â”€ */
 .dash-kpi-strip {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -3586,7 +3596,7 @@ th.amount,
 }
 .dash-kpi-neutral .dash-kpi-value { color: #14342a; }
 
-/* ─── Section Label ─── */
+/* â”€â”€â”€ Section Label â”€â”€â”€ */
 .dash-section-label {
     font-size: 13px;
     font-weight: 700;
@@ -3597,7 +3607,7 @@ th.amount,
     padding-left: 2px;
 }
 
-/* ─── Quick Access Tiles ─── */
+/* â”€â”€â”€ Quick Access Tiles â”€â”€â”€ */
 .dash-tiles {
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -3679,7 +3689,7 @@ th.amount,
     margin-top: 4px;
 }
 
-/* ─── Responsive ─── */
+/* â”€â”€â”€ Responsive â”€â”€â”€ */
 @media (max-width: 1100px) {
     .dash-tiles {
         grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -3696,7 +3706,7 @@ th.amount,
         width: 100%;
         margin-top: 16px;
     }
-    .dash-action-btn {
+.dash-action-btn {
         flex: 1;
         justify-content: center;
     }
@@ -3729,7 +3739,7 @@ th.amount,
 }
 
 /* ============================================================
-   RECEIPT PRINT — PREMIUM REDESIGN (A5/A4 Invoice Style)
+   RECEIPT PRINT - PREMIUM REDESIGN (A5/A4 Invoice Style)
    ============================================================ */
 
 .receipt-paper {
@@ -3945,7 +3955,7 @@ th.amount,
 }
 
 /* ============================================================
-   FEE DESK — PREMIUM POLISH
+   FEE DESK - PREMIUM POLISH
    ============================================================ */
 
 .fee-desk .classic-titlebar {
@@ -4682,7 +4692,6 @@ body.dashboard-page .page {
 .dash-header-actions {
     margin-top: 8px;
 }
-
 .dash-action-btn {
     height: 40px;
     transition: background-color 0.15s ease, border-color 0.15s ease,
@@ -5193,7 +5202,7 @@ body.dashboard-page .page {
 }
 
 /* ============================================================
-   STUDENT PROFILE — PREMIUM DASHBOARD
+   STUDENT PROFILE - PREMIUM DASHBOARD
    ============================================================ */
 
 .student-profile-page {
@@ -5377,7 +5386,7 @@ body.dashboard-page .page {
 }
 
 /* ============================================================
-   STUDENT LIST — PREMIUM DASHBOARD
+   STUDENT LIST - PREMIUM DASHBOARD
    ============================================================ */
 
 .student-list-page .premium-filterbar {
@@ -5476,7 +5485,7 @@ body.dashboard-page .page {
 }
 
 /* ============================================================
-   STUDENT ADMISSION FORM — COMPACT & PREMIUM
+   STUDENT ADMISSION FORM - COMPACT & PREMIUM
    ============================================================ */
 
 .student-entry .student-admission-shell {
@@ -5619,4 +5628,304 @@ body.dashboard-page .page {
 .student-entry .student-active-toggle input[type="checkbox"] {
     width: 18px;
     height: 18px;
+}
+
+.dash-system-status {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    margin: -10px 0 22px;
+}
+
+.dash-system-card {
+    min-height: 64px;
+    padding: 12px 14px;
+    background: #ffffff;
+    border: 1px solid #d9e4df;
+    border-left-width: 4px;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(16, 40, 32, 0.04), 0 4px 10px rgba(16, 40, 32, 0.04);
+}
+
+.dash-system-ok {
+    border-left-color: #059669;
+}
+
+.dash-system-warn {
+    border-left-color: #d97706;
+}
+.dash-system-danger {
+    border-left-color: #dc2626;
+}
+
+.dash-system-label {
+    display: block;
+    color: #52615b;
+    font-size: 11.5px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    line-height: 1.2;
+    text-transform: uppercase;
+}
+
+.dash-system-value {
+    display: block;
+    margin-top: 6px;
+    color: #12342a;
+    font-size: 15px;
+    font-weight: 800;
+    line-height: 1.25;
+}
+.dash-system-warning-text {
+    display: block;
+    margin-top: 6px;
+    color: #dc2626;
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 1.2;
+}
+
+.dash-system-card.dash-system-warn .dash-system-warning-text {
+    color: #d97706;
+}
+
+/* ================= Due up to Month report ================= */
+.due-month-filter {
+    display: grid;
+    grid-template-columns: minmax(220px, 1.4fr) repeat(6, minmax(118px, 0.8fr)) auto;
+    gap: 10px;
+    align-items: end;
+    margin-bottom: 18px;
+    padding: 14px;
+    background: #ffffff;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+}
+
+.due-month-filter label span {
+    display: block;
+    margin-bottom: 5px;
+    color: #52615b;
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.due-month-filter input,
+.due-month-filter select {
+    width: 100%;
+    min-height: 42px;
+    padding: 0 10px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: #ffffff;
+    color: var(--text);
+    font: inherit;
+}
+
+.due-filter-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.due-filter-actions .button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 42px;
+    white-space: nowrap;
+}
+
+.due-month-summary {
+    grid-template-columns: repeat(5, minmax(150px, 1fr));
+}
+
+.due-month-summary .dash-kpi {
+    min-width: 0;
+}
+
+.due-month-summary .dash-kpi-value {
+    font-size: 22px;
+}
+
+.due-alert {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin-bottom: 14px;
+    padding: 11px 13px;
+    border: 1px solid;
+    border-radius: 7px;
+    font-size: 12.5px;
+    line-height: 1.45;
+}
+
+.due-alert-danger {
+    border-color: #fecaca;
+    background: #fff7f7;
+    color: #991b1b;
+}
+
+.due-alert-warn {
+    border-color: #f3d58b;
+    background: #fffbeb;
+    color: #854d0e;
+}
+
+.due-alert-warn summary {
+    cursor: pointer;
+    font-weight: 800;
+}
+
+.due-skip-list {
+    display: grid;
+    gap: 3px;
+    margin-top: 7px;
+}
+
+.due-calculation-note {
+    margin: 0 0 10px;
+    color: #607068;
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.due-month-table-wrap {
+    border-radius: 8px;
+}
+
+.due-month-table {
+    min-width: 1320px;
+    font-variant-numeric: tabular-nums;
+}
+
+.due-month-table th,
+.due-month-table td {
+    padding: 9px 10px;
+    font-size: 11.5px;
+    vertical-align: middle;
+}
+
+.due-month-table thead tr:first-child th {
+    top: 0;
+    background: #edf5f2;
+    color: #314a42;
+}
+
+.due-month-table thead tr:nth-child(2) th {
+    top: 35px;
+    background: #f7faf9;
+}
+
+.due-month-table .due-group-heading {
+    text-align: center;
+    border-left: 1px solid #d5e2dd;
+}
+
+.due-month-table tfoot th {
+    position: static;
+    border-top: 2px solid #9fb7ae;
+    background: #edf5f2;
+    color: #18372d;
+}
+
+.due-cell-sub {
+    display: block;
+    max-width: 220px;
+    margin-top: 3px;
+    overflow: hidden;
+    color: #718078;
+    font-size: 10.5px;
+    text-overflow: ellipsis;
+}
+
+.due-type-badge {
+    display: inline-flex;
+    min-width: 38px;
+    justify-content: center;
+    padding: 3px 7px;
+    border-radius: 999px;
+    background: #eef3f6;
+    color: #47616e;
+    font-size: 10px;
+    font-weight: 800;
+}
+
+.due-credit-amount {
+    color: #1d4ed8;
+    font-weight: 800;
+}
+
+.due-empty-state {
+    padding: 34px 16px !important;
+    color: var(--muted);
+    text-align: center;
+}
+
+.legacy-value-note {
+    display: grid;
+    gap: 4px;
+    padding: 10px 12px;
+    border-left: 3px solid #d97706;
+    border-radius: 6px;
+    background: #fffbeb;
+}
+
+.legacy-value-note span,
+.legacy-value-note small {
+    color: #7c5a13;
+}
+
+.legacy-value-note strong {
+    font-size: 18px;
+}
+
+@media (max-width: 1500px) {
+    .due-month-filter {
+        grid-template-columns: repeat(4, minmax(150px, 1fr));
+    }
+    .due-filter-search {
+        grid-column: span 2;
+    }
+    .due-month-summary {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 760px) {
+    .due-month-filter {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .due-filter-search,
+    .due-filter-actions {
+        grid-column: 1 / -1;
+    }
+    .due-filter-actions .button {
+        flex: 1;
+    }
+    .due-month-summary {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 440px) {
+    .due-month-filter,
+    .due-month-summary {
+        grid-template-columns: 1fr;
+    }
+    .due-filter-search,
+    .due-filter-actions {
+        grid-column: auto;
+    }
+}
+
+@media print {
+    .due-month-page .dash-header-actions,
+    .due-month-filter,
+    .due-alert,
+    .due-calculation-note,
+    .due-month-page .pagination-wrapper {
+        display: none !important;
+    }
 }

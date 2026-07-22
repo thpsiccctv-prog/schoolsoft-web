@@ -229,8 +229,9 @@
     }
 
     function setupTotals() {
+        var form = document.querySelector(".classic-fee-form");
         var amountInputs = Array.from(document.querySelectorAll(".amount-input"));
-        var previousDueInput = document.querySelector("#id_previous_due_amount");
+        var lockedLegacyBalance = toNumber(form && form.dataset.lockedLegacyBalance);
         var concessionInput = document.querySelector("#id_concession_amount");
         var lateFeeInput = document.querySelector("#id_late_fee_amount");
         var receivedInput = document.querySelector("#id_received_amount");
@@ -248,19 +249,10 @@
             var feeTotal = amountInputs.reduce(function (sum, input) {
                 return sum + toNumber(input.value);
             }, 0);
-            var previousDue = toNumber(previousDueInput && previousDueInput.value);
             var concession = toNumber(concessionInput && concessionInput.value);
             var lateFee = toNumber(lateFeeInput && lateFeeInput.value);
             var received = toNumber(receivedInput && receivedInput.value);
-            var netTotal = feeTotal + previousDue + lateFee - concession;
-            // Not clamped to 0 here on purpose (owner request, July 2026): if Received
-            // Amount is entered higher than Net Total - almost always a typo (e.g. an
-            // extra digit) rather than a genuine advance payment - show the shortfall
-            // as a negative number instead of silently displaying "0.00", so office
-            // staff spot the mistake immediately instead of it looking like a normal
-            // fully-paid receipt. This is purely a live on-screen warning: the amount
-            // actually SAVED to the receipt (legacy_due_amount) still clamps at 0, as
-            // before - no change to stored/reported due totals.
+            var netTotal = feeTotal + lockedLegacyBalance + lateFee - concession;
             var rawDue = netTotal - received;
 
             feeTotalOutput.textContent = formatMoney(feeTotal);
@@ -279,7 +271,7 @@
             }
         }
 
-        amountInputs.concat([previousDueInput, concessionInput, lateFeeInput, receivedInput]).forEach(function (input) {
+        amountInputs.concat([concessionInput, lateFeeInput, receivedInput]).forEach(function (input) {
             if (input) {
                 input.addEventListener("input", recalculate);
             }
@@ -310,31 +302,24 @@
                     return response.json();
                 })
                 .then(function (data) {
+                    var amountInputs = Array.from(document.querySelectorAll(".amount-input"));
+                    amountInputs.forEach(function (input) {
+                        input.value = "0.00";
+                    });
                     Object.keys(data.amounts || {}).forEach(function (fieldName) {
                         var input = document.querySelector("[name='" + fieldName + "']");
                         if (input) {
                             input.value = data.amounts[fieldName];
-                            input.dispatchEvent(new Event("input", {bubbles: true}));
                         }
                     });
-
-                    var previousDueInput = document.querySelector("#id_previous_due_amount");
-                    var previousDueHint = document.querySelector("[data-previous-due-hint]");
-                    if (previousDueInput) {
-                        var suggested = toNumber(data.previous_due);
-                        previousDueInput.value = formatMoney(suggested);
-                        previousDueInput.dispatchEvent(new Event("input", {bubbles: true}));
-                        if (previousDueHint) {
-                            previousDueHint.textContent = suggested > 0
-                                ? "Auto-filled from earlier unpaid receipts - adjust if this figure looks wrong."
-                                : "No earlier unpaid receipts found for this student. Enter manually if an old due exists outside the system.";
-                        }
-                    }
+                    amountInputs.forEach(function (input) {
+                        input.dispatchEvent(new Event("input", {bubbles: true}));
+                    });
 
                     var summary = document.querySelector("[data-student-summary]");
                     if (summary && data.student) {
                         var section = data.section ? "-" + data.section : "";
-                        summary.innerHTML = "<strong>" + data.student + "</strong><span>Class " + (data.class || "") + section + "</span><em>Fee loaded</em>";
+                        summary.innerHTML = "<strong>" + data.student + "</strong><span>Class " + (data.class || "") + section + "</span><em>Active fee structure loaded</em>";
                     }
                 })
                 .catch(function () {});

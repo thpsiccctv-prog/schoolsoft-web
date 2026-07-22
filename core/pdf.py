@@ -2,16 +2,18 @@ from decimal import Decimal
 import math
 import os
 from io import BytesIO
+from xml.sax.saxutils import escape
 
 from django.conf import settings
 from django.utils import timezone
 from PIL import Image as PILImage
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib.pagesizes import A4, A5, landscape
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfgen import canvas as pdf_canvas
 from reportlab.platypus import Image, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 try:
@@ -281,11 +283,11 @@ def build_fee_receipt_pdf(receipt, school_profile=None):
     buffer = BytesIO()
     document = SimpleDocTemplate(
         buffer,
-        pagesize=A4,
-        rightMargin=12 * mm,
-        leftMargin=12 * mm,
-        topMargin=8 * mm,
-        bottomMargin=8 * mm,
+        pagesize=A5,
+        rightMargin=8 * mm,
+        leftMargin=8 * mm,
+        topMargin=6 * mm,
+        bottomMargin=7 * mm,
         title=f"Fee Receipt {receipt.receipt_no}",
     )
 
@@ -300,8 +302,8 @@ def build_fee_receipt_pdf(receipt, school_profile=None):
     title_style = ParagraphStyle(
         "ReceiptTitle",
         parent=styles["Title"],
-        fontSize=16,
-        leading=18,
+        fontSize=14,
+        leading=16,
         alignment=0, # Left align
         textColor=brand_color,
         fontName="Helvetica-Bold",
@@ -310,15 +312,15 @@ def build_fee_receipt_pdf(receipt, school_profile=None):
     small_style = ParagraphStyle(
         "Small",
         parent=styles["Normal"],
-        fontSize=7,
-        leading=8,
+        fontSize=6.5,
+        leading=7.5,
         textColor=colors.HexColor("#64748b"),
     )
     badge_style = ParagraphStyle(
         "Badge",
         parent=styles["Normal"],
-        fontSize=8,
-        leading=9,
+        fontSize=7,
+        leading=8,
         fontName="Helvetica-Bold",
         textColor=brand_color,
         backColor=colors.HexColor("#ecfdf5"),
@@ -347,18 +349,18 @@ def build_fee_receipt_pdf(receipt, school_profile=None):
     elif receipt.legacy_due_amount > 0:
         status_badge = Paragraph(
             f"DUE - Rs. {money(receipt.legacy_due_amount)}",
-            ParagraphStyle("StatusDue", alignment=2, fontName="Helvetica-Bold", fontSize=10,
+            ParagraphStyle("StatusDue", alignment=2, fontName="Helvetica-Bold", fontSize=8.5,
                           textColor=colors.white, backColor=colors.HexColor("#dc2626"), spaceBefore=2 * mm),
         )
     else:
         status_badge = Paragraph(
             "FULLY PAID",
-            ParagraphStyle("StatusPaid", alignment=2, fontName="Helvetica-Bold", fontSize=10,
+            ParagraphStyle("StatusPaid", alignment=2, fontName="Helvetica-Bold", fontSize=8.5,
                           textColor=colors.white, backColor=colors.HexColor("#15803d"), spaceBefore=2 * mm),
         )
 
-    receipt_no_cell = [Paragraph(f"<b>Receipt No.</b><br/><font size=13>{receipt.receipt_no}</font>",
-                                 ParagraphStyle("RNo", alignment=2, leading=15, textColor=text_color))]
+    receipt_no_cell = [Paragraph(f"<b>Receipt No.</b><br/><font size=11>{receipt.receipt_no}</font>",
+                                 ParagraphStyle("RNo", alignment=2, leading=13, textColor=text_color))]
     if status_badge is not None:
         receipt_no_cell.append(status_badge)
 
@@ -372,15 +374,15 @@ def build_fee_receipt_pdf(receipt, school_profile=None):
             receipt_no_cell
         ]
     ]
-    header_table = Table(header_data, colWidths=[112 * mm, 62 * mm])
+    header_table = Table(header_data, colWidths=[83 * mm, 49 * mm])
     header_table.setStyle(TableStyle([
         ('VALIGN', (0,0), (-1,-1), 'TOP'),
         ('ALIGN', (1,0), (1,0), 'RIGHT'),
         ('LINEBELOW', (0,0), (-1,-1), 1.5, border_color),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 7),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 5),
     ]))
     
-    story.extend([header_table, Spacer(1, 5 * mm)])
+    story.extend([header_table, Spacer(1, 3 * mm)])
 
     student = receipt.student
     class_label = receipt.display_class_section
@@ -389,12 +391,31 @@ def build_fee_receipt_pdf(receipt, school_profile=None):
     if receipt.to_month and receipt.to_month != receipt.from_month:
         month_label = f"{receipt.from_month} to {receipt.to_month}"
 
+    meta_label_style = ParagraphStyle(
+        "ReceiptMetaLabel",
+        parent=small_style,
+        fontName="Helvetica-Bold",
+        fontSize=7.2,
+        leading=8.2,
+        textColor=colors.HexColor("#475569"),
+    )
+    meta_value_style = ParagraphStyle(
+        "ReceiptMetaValue",
+        parent=small_style,
+        fontSize=7.2,
+        leading=8.2,
+        textColor=text_color,
+    )
+
+    def meta_cell(value, style):
+        return Paragraph(escape(str(value or "")), style)
+
     meta = [
-        ["Student Name", receipt.display_student_name, "Date", receipt.receipt_date.strftime("%d-%m-%Y")],
-        ["SID / Admn", f"{student.legacy_sid or ''} / {student.admission_no or ''}", "Class", class_label],
-        ["Fee Month", month_label, "Mode", receipt.get_payment_mode_display()],
+        [meta_cell("Student Name", meta_label_style), meta_cell(receipt.display_student_name, meta_value_style), meta_cell("Date", meta_label_style), meta_cell(receipt.receipt_date.strftime("%d-%m-%Y"), meta_value_style)],
+        [meta_cell("SID / Admn", meta_label_style), meta_cell(f"{student.legacy_sid or ''} / {student.admission_no or ''}", meta_value_style), meta_cell("Class", meta_label_style), meta_cell(class_label, meta_value_style)],
+        [meta_cell("Fee Month", meta_label_style), meta_cell(month_label, meta_value_style), meta_cell("Mode", meta_label_style), meta_cell(receipt.get_payment_mode_display(), meta_value_style)],
     ]
-    meta_table = Table(meta, colWidths=[34 * mm, 58 * mm, 30 * mm, 52 * mm])
+    meta_table = Table(meta, colWidths=[24 * mm, 42 * mm, 20 * mm, 46 * mm])
     meta_table.setStyle(
         TableStyle(
             [
@@ -407,14 +428,14 @@ def build_fee_receipt_pdf(receipt, school_profile=None):
                 ("TEXTCOLOR", (2, 0), (2, -1), colors.HexColor("#475569")),
                 ("TEXTCOLOR", (1, 0), (1, -1), text_color),
                 ("TEXTCOLOR", (3, 0), (3, -1), text_color),
-                ("FONTSIZE", (0, 0), (-1, -1), 8),
+                ("FONTSIZE", (0, 0), (-1, -1), 7.2),
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("TOPPADDING", (0, 0), (-1, -1), 4),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ("TOPPADDING", (0, 0), (-1, -1), 3),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
             ]
         )
     )
-    story.extend([meta_table, Spacer(1, 5 * mm)])
+    story.extend([meta_table, Spacer(1, 3 * mm)])
 
     line_rows = [["Fee Head Description", "Amount (Rs.)"]]
     for line in receipt.lines.select_related("fee_head").all():
@@ -443,7 +464,7 @@ def build_fee_receipt_pdf(receipt, school_profile=None):
         due_idx = len(line_rows)
         line_rows.append(["Balance Due", f"Rs. {money(receipt.legacy_due_amount)}"])
 
-    fee_table = Table(line_rows, colWidths=[124 * mm, 50 * mm], repeatRows=1)
+    fee_table = Table(line_rows, colWidths=[96 * mm, 36 * mm], repeatRows=1)
     
     ts = [
         # Header
@@ -454,10 +475,10 @@ def build_fee_receipt_pdf(receipt, school_profile=None):
         
         # Body Lines
         ("ALIGN", (1, 1), (1, -1), "RIGHT"),
-        ("FONTSIZE", (0, 0), (-1, -1), 8),
+        ("FONTSIZE", (0, 0), (-1, -1), 7.2),
         ("TEXTCOLOR", (0, 1), (-1, body_last_idx), text_color),
-        ("TOPPADDING", (0, 0), (-1, -1), 3),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ("TOPPADDING", (0, 0), (-1, -1), 2.2),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2.2),
         
         # Totals Section
         ("FONTNAME", (0, total_start_idx), (-1, -1), "Helvetica-Bold"),
@@ -469,7 +490,7 @@ def build_fee_receipt_pdf(receipt, school_profile=None):
         ("TEXTCOLOR", (0, net_idx), (-1, net_idx), text_color),
         ("LINEABOVE", (0, net_idx), (-1, net_idx), 1, border_color),
         ("LINEBELOW", (0, net_idx), (-1, net_idx), 1, border_color),
-        ("FONTSIZE", (0, net_idx), (-1, net_idx), 9),
+        ("FONTSIZE", (0, net_idx), (-1, net_idx), 8.2),
     ]
 
     if body_last_idx >= 1:
@@ -486,14 +507,14 @@ def build_fee_receipt_pdf(receipt, school_profile=None):
     story.append(fee_table)
 
     if receipt.remarks:
-        story.extend([Spacer(1, 3 * mm), Paragraph(f"<i>Remarks: {receipt.remarks}</i>", small_style)])
+        story.extend([Spacer(1, 2 * mm), Paragraph(f"<i>Remarks: {receipt.remarks}</i>", small_style)])
 
     story.extend(
         [
-            Spacer(1, 8 * mm),
+            Spacer(1, 6 * mm),
             Table(
                 [["Cashier's Signature", "Parent / Guardian"]],
-                colWidths=[70 * mm, 70 * mm],
+                colWidths=[60 * mm, 60 * mm],
                 style=TableStyle(
                     [
                         ("LINEABOVE", (0, 0), (0, 0), 1, border_color),
@@ -512,28 +533,28 @@ def build_fee_receipt_pdf(receipt, school_profile=None):
     def add_watermark(canvas, doc):
         canvas.saveState()
         if receipt.is_cancelled:
-            canvas.setFont('Helvetica-Bold', 90)
+            canvas.setFont('Helvetica-Bold', 60)
             canvas.setFillColor(colors.HexColor("#dc2626"), alpha=0.2)
-            canvas.translate(105*mm, 148*mm)
+            canvas.translate(A5[0] / 2, A5[1] / 2)
             canvas.rotate(45)
             canvas.drawCentredString(0, 0, "CANCELLED")
         elif receipt.is_edited:
-            canvas.setFont('Helvetica-Bold', 90)
+            canvas.setFont('Helvetica-Bold', 60)
             canvas.setFillColor(colors.HexColor("#f59e0b"), alpha=0.2) # Amber
-            canvas.translate(105*mm, 148*mm)
+            canvas.translate(A5[0] / 2, A5[1] / 2)
             canvas.rotate(45)
             canvas.drawCentredString(0, 0, "EDITED")
             # Also draw footer note
             canvas.restoreState()
             canvas.saveState()
-            canvas.setFont('Helvetica', 8)
+            canvas.setFont('Helvetica', 5.5)
             canvas.setFillColor(colors.HexColor("#b45309"))
             footer_text = f"Edited on {receipt.edited_at.strftime('%d-%m-%Y %H:%M')} by {receipt.edited_by.username if receipt.edited_by else 'System'}. Reason: {receipt.edit_reason}"
-            canvas.drawString(12*mm, 12*mm, footer_text)
+            canvas.drawCentredString(A5[0] / 2, 4 * mm, footer_text[:115])
         else:
-            canvas.setFont('Helvetica-Bold', 100)
+            canvas.setFont('Helvetica-Bold', 68)
             canvas.setFillColor(colors.HexColor("#0f766e"), alpha=0.04)
-            canvas.translate(105*mm, 148*mm)
+            canvas.translate(A5[0] / 2, A5[1] / 2)
             canvas.rotate(45)
             canvas.drawCentredString(0, 0, "SCHOOLSOFT")
         canvas.restoreState()
@@ -656,6 +677,535 @@ def build_due_report_pdf(rows, totals, school_profile=None):
     story.append(due_table)
 
     document.build(story, onFirstPage=draw_page_footer, onLaterPages=draw_page_footer)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+
+def _due_pdf_text(value, style):
+    return Paragraph(escape(str(value or "")), style)
+
+
+def _due_pdf_school_address(school_profile):
+    if not school_profile:
+        return ""
+    return getattr(school_profile, "address", "") or ""
+
+
+def build_due_up_to_month_report_pdf(
+    rows,
+    totals,
+    school_profile=None,
+    session=None,
+    through_month="",
+    target_label="",
+):
+    buffer = BytesIO()
+    document = SimpleDocTemplate(
+        buffer,
+        pagesize=landscape(A4),
+        rightMargin=8 * mm,
+        leftMargin=8 * mm,
+        topMargin=8 * mm,
+        bottomMargin=10 * mm,
+        title=f"Due up to {target_label or through_month}",
+    )
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        "DueMonthPdfTitle",
+        parent=styles["Title"],
+        fontName="Helvetica-Bold",
+        fontSize=14,
+        leading=17,
+        alignment=1,
+        textColor=colors.HexColor("#155e4b"),
+        spaceAfter=1 * mm,
+    )
+    subtitle_style = ParagraphStyle(
+        "DueMonthPdfSubtitle",
+        parent=styles["Normal"],
+        fontSize=7.5,
+        leading=9,
+        alignment=1,
+        textColor=colors.HexColor("#4b635b"),
+    )
+    header_style = ParagraphStyle(
+        "DueMonthPdfHeader",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=6.2,
+        leading=7.2,
+        alignment=1,
+        textColor=colors.HexColor("#173a30"),
+    )
+    cell_style = ParagraphStyle(
+        "DueMonthPdfCell",
+        parent=styles["Normal"],
+        fontSize=6.2,
+        leading=7.4,
+    )
+    small_cell_style = ParagraphStyle(
+        "DueMonthPdfSmallCell",
+        parent=cell_style,
+        fontSize=5.6,
+        leading=6.8,
+        textColor=colors.HexColor("#53665f"),
+    )
+
+    school_name = school_profile.name if school_profile else "SchoolSoft"
+    session_name = session.name if session else "Session not selected"
+    story = [
+        _due_pdf_text(school_name.upper(), title_style),
+        _due_pdf_text(_due_pdf_school_address(school_profile), subtitle_style),
+        _due_pdf_text(
+            f"DUE UP TO MONTH: {target_label or through_month} | Session {session_name}",
+            subtitle_style,
+        ),
+        Spacer(1, 2.5 * mm),
+    ]
+
+    summary_data = [
+        [
+            "Students",
+            str(totals.get("students", 0)),
+            "Gross Demand",
+            f"Rs. {money(totals.get('gross_demand') or 0)}",
+            "Paid",
+            f"Rs. {money(totals.get('received_amount') or 0)}",
+            "Final Due",
+            f"Rs. {money(totals.get('due_amount') or 0)}",
+            "Credit",
+            f"Rs. {money(totals.get('credit_amount') or 0)}",
+        ]
+    ]
+    summary = Table(
+        summary_data,
+        colWidths=[18 * mm, 17 * mm, 23 * mm, 28 * mm, 14 * mm, 27 * mm, 18 * mm, 27 * mm, 15 * mm, 27 * mm],
+    )
+    summary.setStyle(
+        TableStyle(
+            [
+                ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#a9bbb4")),
+                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#edf5f2")),
+                ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, -1), 6.8),
+                ("ALIGN", (1, 0), (1, 0), "RIGHT"),
+                ("ALIGN", (3, 0), (3, 0), "RIGHT"),
+                ("ALIGN", (5, 0), (5, 0), "RIGHT"),
+                ("ALIGN", (7, 0), (7, 0), "RIGHT"),
+                ("ALIGN", (9, 0), (9, 0), "RIGHT"),
+                ("TOPPADDING", (0, 0), (-1, -1), 4),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ]
+        )
+    )
+    story.extend([summary, Spacer(1, 2.5 * mm)])
+
+    table_rows = [
+        [
+            _due_pdf_text("SID / Adm", header_style),
+            _due_pdf_text("Student / Father", header_style),
+            _due_pdf_text("Class", header_style),
+            _due_pdf_text("Type", header_style),
+            _due_pdf_text("Demand", header_style),
+            "",
+            "",
+            "",
+            "",
+            _due_pdf_text("Credits Applied", header_style),
+            "",
+            _due_pdf_text("Final Due", header_style),
+            _due_pdf_text("Final Credit", header_style),
+        ],
+        [
+            "",
+            "",
+            "",
+            "",
+            _due_pdf_text("School", header_style),
+            _due_pdf_text("Transport", header_style),
+            _due_pdf_text("Opening", header_style),
+            _due_pdf_text("Late", header_style),
+            _due_pdf_text("Gross", header_style),
+            _due_pdf_text("Paid", header_style),
+            _due_pdf_text("Concession", header_style),
+            "",
+            "",
+        ],
+    ]
+
+    for row in rows:
+        student = row["student"]
+        result = row["result"]
+        sid = student.legacy_sid or "-"
+        admission = student.admission_no or "-"
+        student_text = escape(student.full_name or "")
+        father_text = escape(student.father_name or "Father/guardian not set")
+        table_rows.append(
+            [
+                Paragraph(f"<b>{escape(str(sid))}</b><br/><font size='5.4'>Adm: {escape(str(admission))}</font>", cell_style),
+                Paragraph(f"<b>{student_text}</b><br/><font size='5.4'>Father: {father_text}</font>", cell_style),
+                _due_pdf_text(row["class_label"], cell_style),
+                _due_pdf_text(row["student_type"], small_cell_style),
+                _due_pdf_text(money(result.scheduled_fee_demand), cell_style),
+                _due_pdf_text(money(result.transport_demand), cell_style),
+                _due_pdf_text(money(result.opening_balance_amount), cell_style),
+                _due_pdf_text(money(result.late_fee_amount), cell_style),
+                _due_pdf_text(money(result.gross_demand), cell_style),
+                _due_pdf_text(money(result.received_amount), cell_style),
+                _due_pdf_text(money(result.concession_amount), cell_style),
+                _due_pdf_text(money(result.due_amount), cell_style),
+                _due_pdf_text(money(result.credit_amount), cell_style),
+            ]
+        )
+
+    if not rows:
+        table_rows.append([_due_pdf_text("No student balances match the selected filters.", cell_style)] + [""] * 12)
+
+    widths = [24, 45, 17, 14, 20, 19, 18, 14, 20, 20, 18, 21, 20]
+    report_table = Table(
+        table_rows,
+        colWidths=[value * mm for value in widths],
+        repeatRows=2,
+    )
+    style_commands = [
+        ("SPAN", (0, 0), (0, 1)),
+        ("SPAN", (1, 0), (1, 1)),
+        ("SPAN", (2, 0), (2, 1)),
+        ("SPAN", (3, 0), (3, 1)),
+        ("SPAN", (4, 0), (8, 0)),
+        ("SPAN", (9, 0), (10, 0)),
+        ("SPAN", (11, 0), (11, 1)),
+        ("SPAN", (12, 0), (12, 1)),
+        ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#bdcac5")),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#dcece6")),
+        ("BACKGROUND", (0, 1), (-1, 1), colors.HexColor("#edf5f2")),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("ALIGN", (4, 2), (-1, -1), "RIGHT"),
+        ("FONTNAME", (11, 2), (12, -1), "Helvetica-Bold"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 3),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 3),
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+    ]
+    if not rows:
+        style_commands.append(("SPAN", (0, 2), (-1, 2)))
+        style_commands.append(("ALIGN", (0, 2), (-1, 2), "CENTER"))
+    report_table.setStyle(TableStyle(style_commands))
+    story.append(report_table)
+
+    document.build(story, onFirstPage=draw_page_footer, onLaterPages=draw_page_footer)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+def _draw_due_flowable(canvas, flowable, x, top, width, max_height=1000):
+    _, height = flowable.wrap(width, max_height)
+    flowable.drawOn(canvas, x, top - height)
+    return top - height
+
+
+def _draw_due_table(canvas, table, x, top, width):
+    _, height = table.wrap(width, 1000)
+    table.drawOn(canvas, x, top - height)
+    return top - height
+
+
+
+def _due_slip_public_fee_rows(result, target_label):
+    """Return the guardian-safe financial summary for a Due Slip.
+
+    Payment and concession details are deliberately office-only. Showing
+    those values on slips distributed to a class could disclose one child's
+    private concession to another family.
+    """
+    target = target_label or result.through_month
+    return [
+        (f"TOTAL FEE DEMAND (UP TO {target})", f"Rs. {money(result.gross_demand)}"),
+        ("AMOUNT DUE NOW", f"Rs. {money(result.due_amount)}"),
+    ]
+
+
+_DUE_SLIP_GUARDIAN_MESSAGE_LINES = (
+    "आपके बच्चे का उज्ज्वल भविष्य ही हमारा लक्ष्य है।",
+    "समय पर शुल्क जमा कर उनकी शिक्षा-यात्रा को निरंतर और सशक्त बनाएँ।",
+    "आपके विश्वास और सहयोग के लिए THPS परिवार हृदय से आभारी है।",
+)
+_DUE_SLIP_GUARDIAN_ENGLISH_NOTE = (
+    "Please deposit the amount due at the school office and collect the official receipt."
+)
+
+
+def _draw_due_slip_card(canvas, x, y, width, height, row, school_profile, session, target_label):
+    student = row["student"]
+    result = row["result"]
+    green = colors.HexColor("#176b57")
+    pale_green = colors.HexColor("#edf7f3")
+    pale_gold = colors.HexColor("#fff7dd")
+    grid = colors.HexColor("#b8c7c1")
+    gold = colors.HexColor("#c89316")
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        "DueSlipTitleCompact",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=7,
+        leading=8,
+        textColor=green,
+    )
+    header_name_style = ParagraphStyle(
+        "DueSlipSchoolCompact",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=8,
+        leading=8.8,
+        alignment=1,
+        textColor=colors.white,
+    )
+    header_detail_style = ParagraphStyle(
+        "DueSlipSchoolDetailCompact",
+        parent=styles["Normal"],
+        fontSize=4.8,
+        leading=5.5,
+        alignment=1,
+        textColor=colors.white,
+    )
+    text_style = ParagraphStyle(
+        "DueSlipTextCompact",
+        parent=styles["Normal"],
+        fontSize=5.7,
+        leading=6.7,
+    )
+    label_style = ParagraphStyle(
+        "DueSlipLabelCompact",
+        parent=text_style,
+        fontName="Helvetica-Bold",
+        textColor=colors.HexColor("#2d4940"),
+    )
+    right_style = ParagraphStyle(
+        "DueSlipRightCompact",
+        parent=text_style,
+        alignment=2,
+    )
+    due_style = ParagraphStyle(
+        "DueSlipDueCompact",
+        parent=text_style,
+        fontName="Helvetica-Bold",
+        fontSize=8,
+        leading=9,
+        textColor=colors.HexColor("#9f1d1d"),
+    )
+    due_right_style = ParagraphStyle(
+        "DueSlipDueRightCompact",
+        parent=due_style,
+        alignment=2,
+    )
+    note_style = ParagraphStyle(
+        "DueSlipNoteCompact",
+        parent=text_style,
+        fontSize=5.1,
+        leading=6,
+        alignment=1,
+        textColor=colors.HexColor("#4c5f58"),
+    )
+
+    canvas.saveState()
+    canvas.setStrokeColor(green)
+    canvas.setLineWidth(0.75)
+    canvas.roundRect(x, y, width, height, 1.8 * mm, stroke=1, fill=0)
+
+    header_height = 10.5 * mm
+    canvas.setFillColor(green)
+    canvas.roundRect(x, y + height - header_height, width, header_height, 1.8 * mm, stroke=0, fill=1)
+    canvas.rect(x, y + height - header_height, width, 1.8 * mm, stroke=0, fill=1)
+    inner_x = x + 3 * mm
+    inner_width = width - 6 * mm
+    header_top = y + height - 1.8 * mm
+    school_name = school_profile.name if school_profile else "SchoolSoft"
+    header_top = _draw_due_flowable(
+        canvas,
+        _due_pdf_text(school_name.upper(), header_name_style),
+        inner_x,
+        header_top,
+        inner_width,
+    )
+    details = _due_pdf_school_address(school_profile)
+    if school_profile and school_profile.phone:
+        details = f"{details} | Ph: {school_profile.phone}" if details else f"Ph: {school_profile.phone}"
+    _draw_due_flowable(
+        canvas,
+        _due_pdf_text(details, header_detail_style),
+        inner_x,
+        header_top - 0.1 * mm,
+        inner_width,
+    )
+
+    notice_sid = student.legacy_sid or student.pk
+    cursor = y + height - header_height - 1.2 * mm
+    title_row = Table(
+        [[
+            _due_pdf_text(f"FEE DUE NOTICE - UP TO {target_label or result.through_month}", title_style),
+            _due_pdf_text(f"DUE/{result.through_month}/{notice_sid}", right_style),
+        ]],
+        colWidths=[inner_width * 0.72, inner_width * 0.28],
+    )
+    title_row.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
+    ]))
+    cursor = _draw_due_table(canvas, title_row, inner_x, cursor, inner_width) - 0.5 * mm
+
+    session_name = session.name if session else "-"
+    student_info = Table(
+        [
+            [_due_pdf_text("Student", label_style), _due_pdf_text(student.full_name, text_style), _due_pdf_text("SID", label_style), _due_pdf_text(notice_sid, text_style)],
+            [_due_pdf_text("Father", label_style), _due_pdf_text(student.father_name or "-", text_style), _due_pdf_text("Class", label_style), _due_pdf_text(row["class_label"], text_style)],
+            [_due_pdf_text("Adm. No.", label_style), _due_pdf_text(student.admission_no or "-", text_style), _due_pdf_text("Session", label_style), _due_pdf_text(session_name, text_style)],
+        ],
+        colWidths=[12 * mm, inner_width - 12 * mm - 13 * mm - 23 * mm, 13 * mm, 23 * mm],
+    )
+    student_info.setStyle(TableStyle([
+        ("GRID", (0, 0), (-1, -1), 0.3, grid),
+        ("BACKGROUND", (0, 0), (0, -1), pale_green),
+        ("BACKGROUND", (2, 0), (2, -1), pale_green),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 2),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 2),
+        ("TOPPADDING", (0, 0), (-1, -1), 1.2),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 1.2),
+    ]))
+    cursor = _draw_due_table(canvas, student_info, inner_x, cursor, inner_width) - 0.8 * mm
+
+    public_rows = _due_slip_public_fee_rows(result, target_label)
+    fee_rows = [
+        [_due_pdf_text(public_rows[0][0], label_style), _due_pdf_text(public_rows[0][1], right_style)],
+        [_due_pdf_text(public_rows[1][0], due_style), _due_pdf_text(public_rows[1][1], due_right_style)],
+    ]
+    fee_table = Table(fee_rows, colWidths=[inner_width - 28 * mm, 28 * mm])
+    fee_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), pale_green),
+        ("BACKGROUND", (0, 1), (-1, 1), pale_gold),
+        ("BOX", (0, 0), (-1, -1), 0.65, gold),
+        ("LINEABOVE", (0, 1), (-1, 1), 0.65, gold),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 2),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 2),
+        ("TOPPADDING", (0, 0), (-1, 0), 1.8),
+        ("BOTTOMPADDING", (0, 0), (-1, 0), 1.8),
+        ("TOPPADDING", (0, 1), (-1, 1), 2.2),
+        ("BOTTOMPADDING", (0, 1), (-1, 1), 2.2),
+    ]))
+    cursor = _draw_due_table(canvas, fee_table, inner_x, cursor, inner_width) - 0.7 * mm
+
+    guardian_message = Table(
+        [
+            [
+                _devanagari_flowable(
+                    line,
+                    6.4,
+                    bold=True,
+                    align=1,
+                    color=(23, 107, 87, 255),
+                )
+            ]
+            for line in _DUE_SLIP_GUARDIAN_MESSAGE_LINES
+        ],
+        colWidths=[inner_width],
+    )
+    guardian_message.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), pale_green),
+        ("BOX", (0, 0), (-1, -1), 0.45, gold),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 2),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 2),
+        ("TOPPADDING", (0, 0), (-1, -1), 0.45),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0.45),
+        ("TOPPADDING", (0, 0), (0, 0), 1.2),
+        ("BOTTOMPADDING", (0, -1), (0, -1), 1.2),
+    ]))
+    cursor = _draw_due_table(canvas, guardian_message, inner_x, cursor, inner_width) - 0.45 * mm
+    _draw_due_flowable(
+        canvas,
+        _due_pdf_text(_DUE_SLIP_GUARDIAN_ENGLISH_NOTE, note_style),
+        inner_x,
+        cursor,
+        inner_width,
+    )
+
+    signature_y = y + 2.5 * mm
+    line_width = 20 * mm
+    canvas.setStrokeColor(grid)
+    canvas.setLineWidth(0.35)
+    canvas.line(inner_x, signature_y + 3.3 * mm, inner_x + line_width, signature_y + 3.3 * mm)
+    canvas.line(x + width - 3 * mm - line_width, signature_y + 3.3 * mm, x + width - 3 * mm, signature_y + 3.3 * mm)
+    canvas.setFont("Helvetica", 5)
+    canvas.setFillColor(colors.HexColor("#50635c"))
+    canvas.drawCentredString(inner_x + line_width / 2, signature_y + 1.2 * mm, "Accounts Clerk")
+    canvas.drawCentredString(x + width - 3 * mm - line_width / 2, signature_y + 1.2 * mm, "Principal / Seal")
+    canvas.restoreState()
+
+
+
+def build_due_slip_pdf(
+    rows,
+    school_profile=None,
+    session=None,
+    through_month="",
+    target_label="",
+):
+    notices = [row for row in rows if row["result"].due_amount > Decimal("0.00")]
+    buffer = BytesIO()
+    page_width, page_height = A4
+    margin = 5 * mm
+    horizontal_gap = 2 * mm
+    vertical_gap = 2 * mm
+    columns = 2
+    rows_per_page = 4
+    slips_per_page = columns * rows_per_page
+    card_width = (page_width - (2 * margin) - horizontal_gap) / columns
+    card_height = (page_height - (2 * margin) - ((rows_per_page - 1) * vertical_gap)) / rows_per_page
+    pdf = pdf_canvas.Canvas(buffer, pagesize=A4, pageCompression=1)
+    pdf.setTitle(f"Due slips up to {target_label or through_month}")
+    pdf.setAuthor(school_profile.name if school_profile else "SchoolSoft")
+
+    if not notices:
+        pdf.setFont("Helvetica-Bold", 14)
+        pdf.drawCentredString(page_width / 2, page_height / 2 + 8, "No positive due balances match these filters.")
+        pdf.setFont("Helvetica", 9)
+        pdf.drawCentredString(page_width / 2, page_height / 2 - 10, f"Target: {target_label or through_month}")
+        pdf.showPage()
+    else:
+        for page_start in range(0, len(notices), slips_per_page):
+            for slot, row in enumerate(notices[page_start:page_start + slips_per_page]):
+                column = slot % columns
+                row_index = slot // columns
+                card_x = margin + column * (card_width + horizontal_gap)
+                card_y = margin + (rows_per_page - 1 - row_index) * (card_height + vertical_gap)
+                _draw_due_slip_card(
+                    pdf,
+                    card_x,
+                    card_y,
+                    card_width,
+                    card_height,
+                    row,
+                    school_profile,
+                    session,
+                    target_label,
+                )
+
+            pdf.setStrokeColor(colors.HexColor("#8c948f"))
+            pdf.setDash(2, 2)
+            pdf.line(page_width / 2, margin, page_width / 2, page_height - margin)
+            for boundary in range(1, rows_per_page):
+                cut_y = margin + boundary * card_height + (boundary - 0.5) * vertical_gap
+                pdf.line(margin, cut_y, page_width - margin, cut_y)
+            pdf.setDash()
+            pdf.showPage()
+    pdf.save()
     buffer.seek(0)
     return buffer.getvalue()
 

@@ -25,6 +25,8 @@ urlpatterns = [
     path("service-worker.js", TemplateView.as_view(template_name="core/service-worker.js", content_type="application/javascript"), name="service_worker"),
 
     path("", module_required("dashboard")(views.dashboard), name="dashboard"),
+    path("admin/online-sync/start/", admin_only_required("Online Sync")(views.online_sync_start), name="online_sync_start"),
+    path("admin/backup/start/", admin_only_required("Backup Now")(views.backup_start), name="backup_start"),
     path("school-profile/", module_required("school_profile")(views.school_profile_detail), name="school_profile_detail"),
     path("fee-structure/", module_required("fee_setup")(views.fee_structure_report), name="fee_structure_report"),
     path("marks/", module_required("marks")(views.marks_report), name="marks_report"),
@@ -39,6 +41,9 @@ urlpatterns = [
     path("api/students/check-duplicate/", module_required("students")(views.check_student_duplicate), name="check_student_duplicate"),
     path("receipts/", module_required("receipts")(views.receipt_list), name="receipt_list"),
     path("receipts/new/", module_required("fee_collection", write=True)(views.receipt_create), name="receipt_create"),
+    path("dues-up-to-month/", module_required("dues")(views.due_up_to_month_report), name="due_up_to_month_report"),
+    path("dues-up-to-month/pdf/", module_required("dues")(views.due_up_to_month_report_pdf), name="due_up_to_month_report_pdf"),
+    path("dues-up-to-month/slips/", module_required("dues")(views.due_slip_pdf), name="due_slip_pdf"),
     path("dues/", module_required("dues")(views.due_report), name="due_report"),
     path("dues/pdf/", module_required("dues")(views.due_report_pdf), name="due_report_pdf"),
     path("receipts/<int:pk>/", module_required("receipts")(views.receipt_detail), name="receipt_detail"),
