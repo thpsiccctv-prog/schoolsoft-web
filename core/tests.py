@@ -1233,7 +1233,7 @@ class FeeReceiptTests(AuthenticatedClientMixin, TestCase):
         self.assertEqual(data["due_status"]["received_amount"], "1000.00")
         self.assertEqual(data["due_status"]["due_amount"], "1800.00")
 
-    def test_fee_defaults_prioritizes_latest_unpaid_receipt_balance(self):
+    def test_fee_defaults_uses_new_engine_even_when_legacy_receipt_due_differs(self):
         session = AcademicSession.objects.create(
             name="2026-27",
             starts_on=date(2026, 4, 1),
@@ -1281,8 +1281,7 @@ class FeeReceiptTests(AuthenticatedClientMixin, TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertEqual(data["due_status"]["due_amount"], "2250.00")
-        self.assertEqual(data["receipt_balance_due"]["amount"], "5400.00")
-        self.assertEqual(data["receipt_balance_due"]["receipt_no"], "MR-OLD-DUE")
+        self.assertNotIn("receipt_balance_due", data)
     def test_fee_collection_form_renders_balance_due_controls(self):
         response = self.client.get(reverse("core:receipt_create"))
 

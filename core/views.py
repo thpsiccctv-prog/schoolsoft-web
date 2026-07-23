@@ -1564,27 +1564,8 @@ def student_fee_defaults(request, pk):
     }
 
     balance_head = FeeHead.objects.filter(name="Balance Fee", is_active=True).first()
-    latest_unpaid_receipt = None
-    receipt_balance_due = None
-    if selected_session:
-        latest_unpaid_receipt = (
-            FeeReceipt.objects.filter(
-                student=student,
-                session=selected_session,
-                is_cancelled=False,
-                carried_forward=False,
-                legacy_due_amount__gt=Decimal("0.00"),
-            )
-            .order_by("-receipt_date", "-id")
-            .first()
-        )
-        if latest_unpaid_receipt:
-            receipt_balance_due = {
-                "amount": str(latest_unpaid_receipt.legacy_due_amount),
-                "receipt_no": latest_unpaid_receipt.receipt_no,
-                "receipt_date": latest_unpaid_receipt.receipt_date.strftime("%d/%m/%Y"),
-                "to_month": _normalise_academic_month(latest_unpaid_receipt.to_month),
-            }
+
+
     due_status = None
     target_month = _normalise_academic_month(request.GET.get("month")) or ACADEMIC_MONTHS[-1]
     if target_month not in ACADEMIC_MONTHS:
@@ -1620,7 +1601,6 @@ def student_fee_defaults(request, pk):
             "section": student.current_section.name if student.current_section else "",
             "amounts": amounts,
             "balance_fee_field": f"fee_head_{balance_head.id}" if balance_head else "",
-            "receipt_balance_due": receipt_balance_due,
             "due_status": due_status,
         }
     )

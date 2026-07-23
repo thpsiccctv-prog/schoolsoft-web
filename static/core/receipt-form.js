@@ -320,16 +320,9 @@
                 return;
             }
 
-            var receiptBalance = data.receipt_balance_due;
-            var receiptBalanceAmount = receiptBalance ? toNumber(receiptBalance.amount) : 0;
             var dueAmount = toNumber(status.due_amount);
             var creditAmount = toNumber(status.credit_amount);
-            if (receiptBalanceAmount > 0) {
-                dueCard.classList.add("is-due");
-                dueValue.textContent = "Rs. " + formatMoney(receiptBalanceAmount);
-                dueNote.textContent = "Receipt balance from " + receiptBalance.receipt_no + " (" + receiptBalance.receipt_date + ") will be used first. New setup due up to " + status.target_month + ": Rs. " + formatMoney(dueAmount) + ".";
-                if (fillBalanceButton) fillBalanceButton.disabled = !data.balance_fee_field;
-            } else if (dueAmount > 0) {
+            if (dueAmount > 0) {
                 dueCard.classList.add("is-due");
                 dueValue.textContent = "Rs. " + formatMoney(dueAmount);
                 dueNote.textContent = "Up to " + status.target_month + ": demand Rs. " + formatMoney(toNumber(status.gross_demand)) + ", paid Rs. " + formatMoney(toNumber(status.received_amount)) + ".";
@@ -404,9 +397,7 @@
             fillBalanceButton.addEventListener("click", function () {
                 var status = currentDefaults && currentDefaults.due_status;
                 var fieldName = currentDefaults && currentDefaults.balance_fee_field;
-                var receiptBalance = currentDefaults && currentDefaults.receipt_balance_due;
-                var receiptBalanceAmount = receiptBalance ? toNumber(receiptBalance.amount) : 0;
-                var dueAmount = receiptBalanceAmount > 0 ? receiptBalanceAmount : (status && status.available ? toNumber(status.due_amount) : 0);
+                var dueAmount = status && status.available ? toNumber(status.due_amount) : 0;
                 if (!fieldName || dueAmount <= 0) return;
 
                 var amountInputs = Array.from(document.querySelectorAll(".amount-input"));
