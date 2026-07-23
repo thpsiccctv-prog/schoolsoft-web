@@ -130,14 +130,16 @@ echo     Backup: %BACKUP_FILE%
 >>"%SYNC_LOG%" echo Backup: %BACKUP_FILE%
 
 echo.
-echo [3/6] Desktop DB se fresh export ho raha hai...
+echo [3/6] Desktop DB se fresh export ho raha hai (clean UTF-8, BOM-safe)...
 set "DATABASE_URL="
 set "SCHOOLSOFT_SQLITE_PATH=%SOURCE_DB%"
-"%PYTHON_EXE%" manage.py dumpdata -e contenttypes -e auth.permission -e sessions -e admin.logentry -e core.moduleaccess -o data.json >>"%SYNC_LOG%" 2>&1
+REM export_for_sync.py handles Windows-1252/BOM encoding — avoids UnicodeDecodeError in fast_load_data.py
+"%PYTHON_EXE%" export_for_sync.py >>"%SYNC_LOG%" 2>&1
 if errorlevel 1 (
     echo ERROR: Desktop DB export fail hua. Details: %SYNC_LOG%
     goto :fail
 )
+>"%SYNC_LOG%" echo Export complete.
 set "SCHOOLSOFT_SQLITE_PATH="
 
 echo.
