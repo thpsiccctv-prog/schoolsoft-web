@@ -283,18 +283,85 @@
         var form = document.querySelector("[data-fee-defaults-url-template]");
         var studentSelect = document.querySelector("#id_student");
         var sessionSelect = document.querySelector("#id_session");
+        var fromSelect = document.querySelector("#id_from_month");
+        var toSelect = document.querySelector("#id_to_month");
+        var receivedInput = document.querySelector("#id_received_amount");
+        var concessionInput = document.querySelector("#id_concession_amount");
+        var lateFeeInput = document.querySelector("#id_late_fee_amount");
+        var dueCard = document.querySelector("[data-student-due-card]");
+        var dueValue = document.querySelector("[data-student-current-due]");
+        var dueNote = document.querySelector("[data-student-due-note]");
+        var fillBalanceButton = document.querySelector("[data-fill-balance-fee]");
+        var currentDefaults = null;
+
         if (!form || !studentSelect) {
             return;
         }
 
+        function selectedTargetMonth() {
+            return (toSelect && toSelect.value) || (fromSelect && fromSelect.value) || "MAR";
+        }
+
+        function showDueStatus(data) {
+            currentDefaults = data;
+            if (!dueCard || !dueValue || !dueNote) return;
+            var status = data && data.due_status;
+            if (!status) {
+                dueCard.hidden = true;
+                return;
+            }
+            dueCard.hidden = false;
+            dueCard.classList.remove("is-clear", "is-due", "is-credit", "is-warning");
+            if (!status.available) {
+                dueCard.classList.add("is-warning");
+                dueValue.textContent = "-";
+                dueNote.textContent = status.error || "Due status not available.";
+                if (fillBalanceButton) fillBalanceButton.disabled = true;
+                return;
+            }
+
+            var receiptBalance = data.receipt_balance_due;
+            var receiptBalanceAmount = receiptBalance ? toNumber(receiptBalance.amount) : 0;
+            var dueAmount = toNumber(status.due_amount);
+            var creditAmount = toNumber(status.credit_amount);
+            if (receiptBalanceAmount > 0) {
+                dueCard.classList.add("is-due");
+                dueValue.textContent = "Rs. " + formatMoney(receiptBalanceAmount);
+                dueNote.textContent = "Receipt balance from " + receiptBalance.receipt_no + " (" + receiptBalance.receipt_date + ") will be used first. New setup due up to " + status.target_month + ": Rs. " + formatMoney(dueAmount) + ".";
+                if (fillBalanceButton) fillBalanceButton.disabled = !data.balance_fee_field;
+            } else if (dueAmount > 0) {
+                dueCard.classList.add("is-due");
+                dueValue.textContent = "Rs. " + formatMoney(dueAmount);
+                dueNote.textContent = "Up to " + status.target_month + ": demand Rs. " + formatMoney(toNumber(status.gross_demand)) + ", paid Rs. " + formatMoney(toNumber(status.received_amount)) + ".";
+                if (fillBalanceButton) fillBalanceButton.disabled = !data.balance_fee_field;
+            } else if (creditAmount > 0) {
+                dueCard.classList.add("is-credit");
+                dueValue.textContent = "Advance Rs. " + formatMoney(creditAmount);
+                dueNote.textContent = "Up to " + status.target_month + " no due. Advance/credit available.";
+                if (fillBalanceButton) fillBalanceButton.disabled = true;
+            } else {
+                dueCard.classList.add("is-clear");
+                dueValue.textContent = "Clear";
+                dueNote.textContent = "Up to " + status.target_month + " no due.";
+                if (fillBalanceButton) fillBalanceButton.disabled = true;
+            }
+        }
+
         function loadDefaults() {
             var studentId = studentSelect.value;
-            if (!studentId) return;
+            if (!studentId) {
+                if (dueCard) dueCard.hidden = true;
+                currentDefaults = null;
+                return;
+            }
 
             var url = form.dataset.feeDefaultsUrlTemplate.replace("__student__", studentId);
+            var query = [];
             if (sessionSelect && sessionSelect.value) {
-                url += "?session=" + encodeURIComponent(sessionSelect.value);
+                query.push("session=" + encodeURIComponent(sessionSelect.value));
             }
+            query.push("month=" + encodeURIComponent(selectedTargetMonth()));
+            url += "?" + query.join("&");
 
             fetch(url, {headers: {"X-Requested-With": "XMLHttpRequest"}})
                 .then(function (response) {
@@ -315,6 +382,7 @@
                     amountInputs.forEach(function (input) {
                         input.dispatchEvent(new Event("input", {bubbles: true}));
                     });
+                    showDueStatus(data);
 
                     var summary = document.querySelector("[data-student-summary]");
                     if (summary && data.student) {
@@ -322,15 +390,58 @@
                         summary.innerHTML = "<strong>" + data.student + "</strong><span>Class " + (data.class || "") + section + "</span><em>Active fee structure loaded</em>";
                     }
                 })
-                .catch(function () {});
+                .catch(function () {
+                    if (dueCard) {
+                        dueCard.hidden = false;
+                        dueCard.classList.add("is-warning");
+                    }
+                    if (dueValue) dueValue.textContent = "-";
+                    if (dueNote) dueNote.textContent = "Could not load due status.";
+                });
+        }
+
+        if (fillBalanceButton) {
+            fillBalanceButton.addEventListener("click", function () {
+                var status = currentDefaults && currentDefaults.due_status;
+                var fieldName = currentDefaults && currentDefaults.balance_fee_field;
+                var receiptBalance = currentDefaults && currentDefaults.receipt_balance_due;
+                var receiptBalanceAmount = receiptBalance ? toNumber(receiptBalance.amount) : 0;
+                var dueAmount = receiptBalanceAmount > 0 ? receiptBalanceAmount : (status && status.available ? toNumber(status.due_amount) : 0);
+                if (!fieldName || dueAmount <= 0) return;
+
+                var amountInputs = Array.from(document.querySelectorAll(".amount-input"));
+                amountInputs.forEach(function (input) {
+                    input.value = "0.00";
+                });
+                var balanceInput = document.querySelector("[name='" + fieldName + "']");
+                if (balanceInput) {
+                    balanceInput.value = formatMoney(dueAmount);
+                }
+                if (concessionInput) concessionInput.value = "0.00";
+                if (lateFeeInput) lateFeeInput.value = "0.00";
+                if (receivedInput) receivedInput.value = formatMoney(dueAmount);
+                amountInputs.forEach(function (input) {
+                    input.dispatchEvent(new Event("input", {bubbles: true}));
+                });
+                if (receivedInput) {
+                    receivedInput.dispatchEvent(new Event("input", {bubbles: true}));
+                    receivedInput.focus();
+                    receivedInput.select();
+                }
+            });
         }
 
         studentSelect.addEventListener("change", loadDefaults);
         if (sessionSelect) {
             sessionSelect.addEventListener("change", loadDefaults);
         }
+        if (fromSelect) {
+            fromSelect.addEventListener("change", loadDefaults);
+        }
+        if (toSelect) {
+            toSelect.addEventListener("change", loadDefaults);
+        }
     }
-
     document.addEventListener("DOMContentLoaded", function () {
         setupStudentCustomDropdown();
         setupMonthChips();

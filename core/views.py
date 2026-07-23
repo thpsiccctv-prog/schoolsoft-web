@@ -83,6 +83,80 @@ def apply_receipt_student_snapshot(receipt):
 
 
 
+def _normalise_academic_month(value):
+    value = str(value or "").strip().upper()
+    if not value:
+        return ""
+    if value in ACADEMIC_MONTHS:
+        return value
+    aliases = {
+        "APRIL": "APR",
+        "JUNE": "JUN",
+        "JULY": "JUL",
+        "SEPT": "SEP",
+        "SEPTEMBER": "SEP",
+        "MARCH": "MAR",
+    }
+    return aliases.get(value, value[:3])
+
+
+def _receipt_due_status(receipt):
+    if receipt.is_cancelled or not receipt.student_id or not receipt.session_id:
+        return None
+    target_month = _normalise_academic_month(receipt.to_month or receipt.from_month) or ACADEMIC_MONTHS[-1]
+    if target_month not in ACADEMIC_MONTHS:
+        target_month = ACADEMIC_MONTHS[-1]
+
+    try:
+        target_result = calculate_student_due(
+            student=receipt.student,
+            session=receipt.session,
+            through_month=target_month,
+        )
+    except (ValidationError, AttributeError) as exc:
+        return {
+            "available": False,
+            "target_month": target_month,
+            "error": str(exc),
+        }
+
+    receipt_month = _normalise_academic_month(receipt.from_month) or target_month
+    if receipt.receipt_date and receipt.session.starts_on and receipt.session.ends_on:
+        # Paid-through is judged from the receipt-date month onward. A July
+        # receipt for April dues should not be called April-unpaid only because
+        # it was entered after the April cutoff.
+        receipt_month = _normalise_academic_month(receipt.receipt_date.strftime("%b")) or receipt_month
+    if receipt_month not in ACADEMIC_MONTHS:
+        receipt_month = target_month
+
+    start_index = min(ACADEMIC_MONTHS.index(receipt_month), ACADEMIC_MONTHS.index(target_month))
+    target_index = ACADEMIC_MONTHS.index(target_month)
+    clear_through = ""
+    next_due_month = ""
+    for month in ACADEMIC_MONTHS[start_index : target_index + 1]:
+        try:
+            month_result = calculate_student_due(
+                student=receipt.student,
+                session=receipt.session,
+                through_month=month,
+            )
+        except ValidationError:
+            break
+        if month_result.due_amount <= Decimal("0.00"):
+            clear_through = month
+        elif not next_due_month:
+            next_due_month = month
+
+    return {
+        "available": True,
+        "target_month": target_month,
+        "result": target_result,
+        "clear_through": clear_through,
+        "next_due_month": next_due_month,
+        "has_due": target_result.due_amount > Decimal("0.00"),
+        "has_credit": target_result.credit_amount > Decimal("0.00"),
+    }
+
 def _format_file_mtime(path):
     try:
         return datetime.fromtimestamp(Path(path).stat().st_mtime).strftime("%d/%m/%Y %I:%M %p")
@@ -190,11 +264,16 @@ def _new_backup_dir(root):
 def _active_sqlite_db_path():
     if connection.vendor != "sqlite":
         raise ValueError("Backup Now sirf Desktop/SQLite database ke liye available hai.")
+    explicit_path = os.environ.get("SCHOOLSOFT_SQLITE_PATH")
+    if explicit_path:
+        return Path(explicit_path)
+    live_desktop_path = Path(os.environ.get("LOCALAPPDATA", "")) / "SchoolSoft" / "db.sqlite3"
+    if live_desktop_path.exists():
+        return live_desktop_path
     db_name = connection.settings_dict.get("NAME")
     if not db_name:
         raise ValueError("Active database path nahi mila.")
     return Path(db_name)
-
 
 def _restore_note_text(db_path, backup_dir):
     return (
@@ -1258,6 +1337,7 @@ def receipt_detail(request, pk):
         {
             "receipt": receipt,
             "school_profile": get_active_school_profile(),
+            "receipt_due_status": _receipt_due_status(receipt),
         },
     )
 
@@ -1462,16 +1542,20 @@ def receipt_pdf(request, pk):
 def student_fee_defaults(request, pk):
     student = get_object_or_404(Student.objects.select_related("current_class", "current_section"), pk=pk)
     session_id = request.GET.get("session")
+    active_session = AcademicSession.objects.filter(is_active=True).order_by("-starts_on").first()
+    selected_session = active_session
+    if session_id:
+        selected_session = AcademicSession.objects.filter(pk=session_id).first() or active_session
+
     structures = FeeStructure.objects.select_related("fee_head").filter(
         school_class=student.current_class,
         is_active=True,
         fee_head__is_active=True,
     )
-    if session_id:
-        structures = structures.filter(session_id=session_id)
+    if selected_session:
+        structures = structures.filter(session=selected_session)
     else:
-        active_session = AcademicSession.objects.filter(is_active=True).order_by("-starts_on").first()
-        structures = structures.filter(session=active_session) if active_session else structures.none()
+        structures = structures.none()
 
     amounts = {
         f"fee_head_{structure.fee_head_id}": str(structure.amount)
@@ -1479,15 +1563,67 @@ def student_fee_defaults(request, pk):
         if structure.amount > Decimal("0.00")
     }
 
+    balance_head = FeeHead.objects.filter(name="Balance Fee", is_active=True).first()
+    latest_unpaid_receipt = None
+    receipt_balance_due = None
+    if selected_session:
+        latest_unpaid_receipt = (
+            FeeReceipt.objects.filter(
+                student=student,
+                session=selected_session,
+                is_cancelled=False,
+                carried_forward=False,
+                legacy_due_amount__gt=Decimal("0.00"),
+            )
+            .order_by("-receipt_date", "-id")
+            .first()
+        )
+        if latest_unpaid_receipt:
+            receipt_balance_due = {
+                "amount": str(latest_unpaid_receipt.legacy_due_amount),
+                "receipt_no": latest_unpaid_receipt.receipt_no,
+                "receipt_date": latest_unpaid_receipt.receipt_date.strftime("%d/%m/%Y"),
+                "to_month": _normalise_academic_month(latest_unpaid_receipt.to_month),
+            }
+    due_status = None
+    target_month = _normalise_academic_month(request.GET.get("month")) or ACADEMIC_MONTHS[-1]
+    if target_month not in ACADEMIC_MONTHS:
+        target_month = ACADEMIC_MONTHS[-1]
+    if selected_session:
+        try:
+            result = calculate_student_due(
+                student=student,
+                session=selected_session,
+                through_month=target_month,
+            )
+            due_status = {
+                "available": True,
+                "target_month": target_month,
+                "gross_demand": str(result.gross_demand),
+                "received_amount": str(result.received_amount),
+                "due_amount": str(result.due_amount),
+                "credit_amount": str(result.credit_amount),
+                "has_due": result.due_amount > Decimal("0.00"),
+                "has_credit": result.credit_amount > Decimal("0.00"),
+            }
+        except (ValidationError, AttributeError) as exc:
+            due_status = {
+                "available": False,
+                "target_month": target_month,
+                "error": str(exc),
+            }
+
     return JsonResponse(
         {
             "student": student.full_name,
             "class": student.current_class.name if student.current_class else "",
             "section": student.current_section.name if student.current_section else "",
             "amounts": amounts,
+            "balance_fee_field": f"fee_head_{balance_head.id}" if balance_head else "",
+            "receipt_balance_due": receipt_balance_due,
+            "due_status": due_status,
         }
     )
-
 
 def next_manual_receipt_no():
     timestamp = timezone.localtime().strftime("%Y%m%d%H%M%S")

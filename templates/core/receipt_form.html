@@ -87,6 +87,15 @@
                         <strong>Select a student</strong>
                         <span>Fee structure will load automatically after selection.</span>
                     </div>
+
+                    <div class="student-due-card" data-student-due-card hidden>
+                        <div>
+                            <span>Balance / current due</span>
+                            <strong data-student-current-due>0.00</strong>
+                            <small data-student-due-note>Select student and month range.</small>
+                        </div>
+                        <button type="button" class="button secondary" data-fill-balance-fee>Balance / Due Fee</button>
+                    </div>
                 </section>
 
                 <section class="classic-panel">
@@ -139,7 +148,7 @@
                 </label>
                 
                 <div id="duplicate-warning" class="warning-banner" style="display: none; background: #fff3cd; color: #856404; padding: 10px; border-radius: 4px; margin-bottom: 15px; border: 1px solid #ffeeba;">
-                    <strong>⚠️ Warning:</strong> <span id="duplicate-warning-text"></span>
+                    <strong>âš ï¸ Warning:</strong> <span id="duplicate-warning-text"></span>
                 </div>
 
                 <div class="form-actions" style="display: flex; gap: 10px; margin-bottom: 10px;">

@@ -69,6 +69,54 @@
 </section>
 {% endif %}
 
+{% if receipt_due_status %}
+<section class="section no-print" style="margin-bottom: 20px;">
+    <div style="background: #ffffff; border-left: 4px solid {% if receipt_due_status.has_due %}#dc2626{% elif receipt_due_status.has_credit %}#2563eb{% else %}#059669{% endif %}; padding: 16px 20px; border-radius: 8px; border-top: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);">
+        <h3 style="margin: 0 0 12px 0; color: #0f172a; font-size: 15px; font-weight: 800;">Current fee status after this receipt</h3>
+        {% if receipt_due_status.available %}
+        <div style="display: grid; grid-template-columns: repeat(4, minmax(150px, 1fr)); gap: 12px;">
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px;">
+                <span style="display: block; color: #64748b; font-size: 11px; font-weight: 800; text-transform: uppercase;">Up to month</span>
+                <strong style="display: block; color: #0f172a; font-size: 18px; margin-top: 4px;">{{ receipt_due_status.target_month }}</strong>
+            </div>
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px;">
+                <span style="display: block; color: #64748b; font-size: 11px; font-weight: 800; text-transform: uppercase;">Total demand</span>
+                <strong style="display: block; color: #0f172a; font-size: 18px; margin-top: 4px;">Rs. {{ receipt_due_status.result.gross_demand|indian_number }}</strong>
+            </div>
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px;">
+                <span style="display: block; color: #64748b; font-size: 11px; font-weight: 800; text-transform: uppercase;">Paid in session</span>
+                <strong style="display: block; color: #0f172a; font-size: 18px; margin-top: 4px;">Rs. {{ receipt_due_status.result.received_amount|indian_number }}</strong>
+            </div>
+            <div style="background: {% if receipt_due_status.has_due %}#fef2f2{% elif receipt_due_status.has_credit %}#eff6ff{% else %}#ecfdf5{% endif %}; border: 1px solid {% if receipt_due_status.has_due %}#fecaca{% elif receipt_due_status.has_credit %}#bfdbfe{% else %}#a7f3d0{% endif %}; border-radius: 8px; padding: 10px 12px;">
+                <span style="display: block; color: #64748b; font-size: 11px; font-weight: 800; text-transform: uppercase;">Current balance</span>
+                {% if receipt_due_status.has_due %}
+                    <strong style="display: block; color: #b91c1c; font-size: 18px; margin-top: 4px;">Due Rs. {{ receipt_due_status.result.due_amount|indian_number }}</strong>
+                {% elif receipt_due_status.has_credit %}
+                    <strong style="display: block; color: #1d4ed8; font-size: 18px; margin-top: 4px;">Advance Rs. {{ receipt_due_status.result.credit_amount|indian_number }}</strong>
+                {% else %}
+                    <strong style="display: block; color: #047857; font-size: 18px; margin-top: 4px;">Clear</strong>
+                {% endif %}
+            </div>
+        </div>
+        <p style="margin: 12px 0 0; color: #475569; font-size: 13px;">
+            {% if receipt_due_status.clear_through %}
+                Paid/clear through: <strong>{{ receipt_due_status.clear_through }}</strong>.
+            {% else %}
+                Not fully clear from this receipt month.
+            {% endif %}
+            {% if receipt_due_status.next_due_month %}
+                Next due month: <strong>{{ receipt_due_status.next_due_month }}</strong>.
+            {% endif %}
+            Use <strong>Dues up to Month</strong> for class-wise slips/reports.
+        </p>
+        {% else %}
+        <p style="margin: 0; color: #b45309; font-size: 13px;">
+            Fee engine status could not be calculated: {{ receipt_due_status.error }}
+        </p>
+        {% endif %}
+    </div>
+</section>
+{% endif %}
 <section class="receipt-paper">
     <header class="receipt-header">
         <div>

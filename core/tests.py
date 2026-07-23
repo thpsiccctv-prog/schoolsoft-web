@@ -246,7 +246,11 @@ class DashboardBackupTests(AuthenticatedClientMixin, TransactionTestCase):
         Student.objects.create(full_name="Backup Content Student", legacy_sid=987654)
 
         with tempfile.TemporaryDirectory() as tmpdir, patch.dict(
-            os.environ, {"SCHOOLSOFT_BACKUP_ROOT": tmpdir}
+            os.environ,
+            {
+                "SCHOOLSOFT_BACKUP_ROOT": tmpdir,
+                "SCHOOLSOFT_SQLITE_PATH": connection.settings_dict["NAME"],
+            },
         ):
             response = self.client.post(reverse("core:backup_start"), follow=True)
 
@@ -1130,6 +1134,173 @@ class FeeReceiptTests(AuthenticatedClientMixin, TestCase):
         # feature was built to prevent. Must appear in both surfaces.
         self.assertContains(detail_response, "Previous Due (carried forward)")
 
+    def test_receipt_detail_shows_current_due_status_from_fee_engine(self):
+        session = AcademicSession.objects.create(
+            name="2026-27",
+            starts_on=date(2026, 4, 1),
+            ends_on=date(2027, 3, 31),
+        )
+        school_class = SchoolClass.objects.create(name="V", display_order=5)
+        student = Student.objects.create(
+            full_name="Current Due Student",
+            current_class=school_class,
+            admission_date=date(2025, 4, 1),
+        )
+        tuition = FeeHead.objects.create(
+            name="Tuition Fee",
+            frequency=FeeHead.Frequency.MONTHLY,
+            new_student_charge_rule=FeeHead.ChargeRule.MONTHLY,
+            old_student_charge_rule=FeeHead.ChargeRule.MONTHLY,
+        )
+        FeeStructure.objects.create(
+            session=session,
+            school_class=school_class,
+            fee_head=tuition,
+            amount=Decimal("700.00"),
+            is_active=True,
+        )
+        receipt = FeeReceipt.objects.create(
+            receipt_no="STATUS-1",
+            student=student,
+            session=session,
+            receipt_date=date(2026, 7, 13),
+            from_month="APR",
+            to_month="MAR",
+            received_amount=Decimal("2000.00"),
+            legacy_fee_total=Decimal("8400.00"),
+            legacy_net_total=Decimal("8400.00"),
+            legacy_due_amount=Decimal("6400.00"),
+        )
+        FeeReceiptLine.objects.create(receipt=receipt, fee_head=tuition, amount=Decimal("8400.00"))
+
+        response = self.client.get(reverse("core:receipt_detail", args=[receipt.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Current fee status after this receipt")
+        self.assertContains(response, "Up to month")
+        self.assertContains(response, "MAR")
+        self.assertContains(response, "Total demand")
+        self.assertContains(response, "Rs. 8,400")
+        self.assertContains(response, "Paid in session")
+        self.assertContains(response, "Rs. 2,000")
+        self.assertContains(response, "Due Rs. 6,400")
+        self.assertContains(response, "Dues up to Month")
+    def test_fee_collection_defaults_include_due_status_and_balance_fee_field(self):
+        session = AcademicSession.objects.create(
+            name="2026-27",
+            starts_on=date(2026, 4, 1),
+            ends_on=date(2027, 3, 31),
+            is_active=True,
+        )
+        school_class = SchoolClass.objects.create(name="V", display_order=5)
+        student = Student.objects.create(
+            full_name="Balance Fee Student",
+            current_class=school_class,
+            admission_date=date(2025, 4, 1),
+            is_active=True,
+        )
+        tuition = FeeHead.objects.create(
+            name="Monthly Tuition Test",
+            frequency=FeeHead.Frequency.MONTHLY,
+            new_student_charge_rule=FeeHead.ChargeRule.MONTHLY,
+            old_student_charge_rule=FeeHead.ChargeRule.MONTHLY,
+        )
+        FeeStructure.objects.create(
+            session=session,
+            school_class=school_class,
+            fee_head=tuition,
+            amount=Decimal("700.00"),
+            is_active=True,
+        )
+        FeeReceipt.objects.create(
+            receipt_no="BAL-PAID-1",
+            student=student,
+            session=session,
+            receipt_date=date(2026, 7, 13),
+            received_amount=Decimal("1000.00"),
+        )
+
+        response = self.client.get(
+            reverse("core:student_fee_defaults", args=[student.id]),
+            {"session": session.id, "month": "JUL"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data["balance_fee_field"].startswith("fee_head_"))
+        self.assertEqual(data["due_status"]["target_month"], "JUL")
+        self.assertEqual(data["due_status"]["gross_demand"], "2800.00")
+        self.assertEqual(data["due_status"]["received_amount"], "1000.00")
+        self.assertEqual(data["due_status"]["due_amount"], "1800.00")
+
+    def test_fee_defaults_prioritizes_latest_unpaid_receipt_balance(self):
+        session = AcademicSession.objects.create(
+            name="2026-27",
+            starts_on=date(2026, 4, 1),
+            ends_on=date(2027, 3, 31),
+            is_active=True,
+        )
+        school_class = SchoolClass.objects.create(name="II", display_order=2)
+        student = Student.objects.create(
+            full_name="Receipt Balance Student",
+            current_class=school_class,
+            admission_date=date(2022, 4, 25),
+            is_active=True,
+        )
+        FeeHead.objects.get_or_create(name="Balance Fee", defaults={"is_active": True})
+        tuition = FeeHead.objects.create(
+            name="Monthly Tuition Test",
+            frequency=FeeHead.Frequency.MONTHLY,
+            new_student_charge_rule=FeeHead.ChargeRule.MONTHLY,
+            old_student_charge_rule=FeeHead.ChargeRule.MONTHLY,
+        )
+        FeeStructure.objects.create(
+            session=session,
+            school_class=school_class,
+            fee_head=tuition,
+            amount=Decimal("700.00"),
+            is_active=True,
+        )
+        FeeReceipt.objects.create(
+            receipt_no="MR-OLD-DUE",
+            student=student,
+            session=session,
+            receipt_date=date(2026, 7, 13),
+            from_month="APR",
+            to_month="MAR",
+            received_amount=Decimal("3000.00"),
+            concession_amount=Decimal("3150.00"),
+            legacy_due_amount=Decimal("5400.00"),
+        )
+
+        response = self.client.get(
+            reverse("core:student_fee_defaults", args=[student.id]),
+            {"session": session.id, "month": "MAR"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["due_status"]["due_amount"], "2250.00")
+        self.assertEqual(data["receipt_balance_due"]["amount"], "5400.00")
+        self.assertEqual(data["receipt_balance_due"]["receipt_no"], "MR-OLD-DUE")
+    def test_fee_collection_form_renders_balance_due_controls(self):
+        response = self.client.get(reverse("core:receipt_create"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "data-student-due-card")
+        self.assertContains(response, "data-student-current-due")
+        self.assertContains(response, "data-fill-balance-fee")
+        self.assertContains(response, "Balance / Due Fee")
+    def test_backup_helper_prefers_desktop_live_db_when_env_path_is_missing(self):
+        from core import views
+
+        fake_live = Path(tempfile.mkdtemp()) / "SchoolSoft" / "db.sqlite3"
+        fake_live.parent.mkdir(parents=True, exist_ok=True)
+        fake_live.write_bytes(b"live-db")
+
+        with patch.dict(os.environ, {"LOCALAPPDATA": str(fake_live.parent.parent)}, clear=False):
+            os.environ.pop("SCHOOLSOFT_SQLITE_PATH", None)
+            self.assertEqual(views._active_sqlite_db_path(), fake_live)
 class Month2DocumentTests(AuthenticatedClientMixin, TestCase):
     def test_admission_form_pdf(self):
         school_class = SchoolClass.objects.create(name="I", display_order=1)

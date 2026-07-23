@@ -5929,3 +5929,84 @@ body.dashboard-page .page {
         display: none !important;
     }
 }
+
+.fee-desk .student-due-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 12px;
+    padding: 12px 14px;
+    border: 1px solid #cbd5e1;
+    border-left: 4px solid var(--fa);
+    border-radius: 8px;
+    background: #f8fafc;
+}
+
+.fee-desk .student-due-card[hidden] {
+    display: none;
+}
+
+.fee-desk .student-due-card span {
+    display: block;
+    color: #5b6b64;
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.fee-desk .student-due-card strong {
+    display: block;
+    margin-top: 3px;
+    color: #0f172a;
+    font-size: 19px;
+    font-weight: 900;
+}
+
+.fee-desk .student-due-card small {
+    display: block;
+    margin-top: 4px;
+    color: #64748b;
+    font-size: 12px;
+}
+
+.fee-desk .student-due-card.is-due {
+    border-left-color: #dc2626;
+    background: #fff7ed;
+}
+
+.fee-desk .student-due-card.is-due strong {
+    color: #b91c1c;
+}
+
+.fee-desk .student-due-card.is-clear {
+    border-left-color: #059669;
+    background: #ecfdf5;
+}
+
+.fee-desk .student-due-card.is-clear strong {
+    color: #047857;
+}
+
+.fee-desk .student-due-card.is-credit {
+    border-left-color: #2563eb;
+    background: #eff6ff;
+}
+
+.fee-desk .student-due-card.is-credit strong {
+    color: #1d4ed8;
+}
+
+.fee-desk .student-due-card.is-warning {
+    border-left-color: #d97706;
+    background: #fffbeb;
+}
+
+.fee-desk .student-due-card button {
+    white-space: nowrap;
+}
+
+.fee-desk .student-due-card button:disabled {
+    cursor: not-allowed;
+    opacity: .55;
+}
