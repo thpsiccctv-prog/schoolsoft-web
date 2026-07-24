@@ -1,7 +1,13 @@
+import os
 from functools import wraps
 
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
+
+
+def is_online_deployment():
+    """True on Render (online read-only deployment); False on desktop EXE."""
+    return bool(os.environ.get("RENDER_EXTERNAL_HOSTNAME"))
 
 
 MODULE_PERMISSIONS = {
@@ -138,4 +144,5 @@ def access_context(request):
         },
         "can_manage_users": user_can_manage_users(user) if user is not None else False,
         "is_readonly": user_is_readonly(user) if user is not None else False,
+        "is_online_deployment": is_online_deployment(),
     }

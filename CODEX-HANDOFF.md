@@ -1,41 +1,108 @@
-# SchoolSoft Project — Status Handoff (July 2, 2026)
+﻿# SchoolSoft Project â€” Status Handoff (July 2, 2026)
 
 You are joining an in-progress project. Read this fully before changing anything.
 Everything below was completed and verified today. Do not redo finished work.
 
+## CURRENT DECISION - 15 July 2026
+
+The new PC restore/setup is successful and the school has started REAL daily
+entry in the Windows desktop EXE. The operational decision is now:
+
+- **Desktop EXE is the primary write system and source of truth.**
+- **Online Render site is for viewing/reports/remote checking only.**
+- **Allowed sync direction: Desktop -> Online only.**
+- **Do not implement online entry -> desktop update or two-way sync as a quick
+  feature.**
+
+Why this matters:
+
+- The existing sync (`sync-desktop-to-online.bat` / `fast_load_data.py`) is a
+  guarded full replace of the online DB from the desktop DB. It is not an
+  incremental merge engine. Online-created rows would be overwritten by the next
+  normal desktop sync.
+- Receipts, salary payments, vouchers, and cash book entries are accounting data.
+  Independent ID/receipt generation on SQLite and Postgres can create conflicts
+  and audit risk.
+- Render free-tier Postgres is not a reliable foundation for live two-way entry
+  because of sleep/cold starts and free DB lifecycle limits.
+
+If remote entry becomes necessary, recommend remote access to the Desktop EXE
+(AnyDesk/TeamViewer/Windows Remote Desktop) so all real entry still happens in
+one database. If true multi-location entry becomes a business requirement later,
+plan a separate architecture migration where **online becomes the single primary
+database** and desktop becomes backup/view-only. Do not build patchwork two-way
+sync.
+
+Current verified state:
+
+- New PC is now the main working PC; old PC should remain backup only for 7-10
+  days and must not receive new entry.
+- Live DB location: `%LOCALAPPDATA%\SchoolSoft\db.sqlite3`.
+- Acceptance numbers: Students 1215, Active 364, FeeReceipts 11169, Cash Book
+  01/06/2026-12/07/2026 with salary included closes at Rs. 10,367.
+- Dashboard has Last Backup and Last Online Sync cards.
+- Backup warning alert is implemented: Last Backup is green under 24 hours, amber from 1-2 days, and red at 3+ days/no backup.
+- Backup Now button is implemented for admins in the Desktop EXE. It performs a
+  Python-native SQLite backup with WAL checkpoint, writes to
+  `E:\SchoolSoft-Daily-Backups\YYYYMMDD-HHMMSS`, and creates `RESTORE-NOTE.txt`.
+- Admin-only Online Sync button was added to the desktop EXE. It launches the
+  guarded Desktop -> Online sync; it does not make online a write source.
+- Latest package EXE path:
+  `E:\SchoolSoft-Transfer-Package\03-desktop-build-exe\SchoolSoft\SchoolSoft.exe`.
+- Backup before latest EXE replace:
+  `E:\SchoolSoft-Transfer-Package\03-desktop-build-exe\SchoolSoft-old-build-20260715-151259`.
+
+## NEXT DISCUSSION PLAN FOR TEAM
+
+Discuss and agree on this operating plan with all staff/helpers before more
+features are added:
+
+1. Data entry policy: only Desktop EXE is used for fee receipts, expenses,
+   vouchers, student edits, and staff salary entries.
+2. Online policy: online site is read/report only. No online entry feature for
+   now.
+3. Daily routine: after school work, run daily backup; when online dashboard is
+   needed, click Online Sync from the desktop admin dashboard.
+4. Safety checks: before any rebuild/sync, verify students/receipts/cash-book
+   numbers and keep dated backups.
+5. Remote work: if someone needs to work from outside school, use remote desktop
+   into the main PC instead of entering data on the online site.
+6. Future upgrade trigger: only revisit online-primary architecture if the school
+   genuinely needs multi-user/multi-location live entry and is ready for paid,
+   always-on database hosting plus a proper migration/test plan.
 ## Project overview
 
 Legacy "SchoolSoft" school management system (old Access/VB) modernized into a
 Django 6 app at `D:\english medium\schoolsoft_web`. Two delivery targets:
 
-1. **Windows desktop EXE** (primary, daily school use) — PyInstaller + pywebview + waitress + SQLite. DONE and verified.
-2. **Online deployment** (secondary, view/reports) — Render.com + PostgreSQL. DEPLOYED and live today.
+1. **Windows desktop EXE** (primary, daily school use) â€” PyInstaller + pywebview + waitress + SQLite. DONE and verified.
+2. **Online deployment** (secondary, view/reports) â€” Render.com + PostgreSQL. DEPLOYED and live today.
 
 Modules (all working): Students (596), Fees/Receipts (667), Fee Structure,
 Marks (10,036 rows), Staff (19), Transport, School Profile, PDF generation
 (ReportLab: receipts, due reports, admission forms, TC, marksheets).
 Tests: 21/21 pass (`manage.py test`).
 
-## Desktop EXE — final architecture (do not regress these)
+## Desktop EXE â€” final architecture (do not regress these)
 
 - `desktop.py` (launcher):
-  - User data lives in `%LOCALAPPDATA%\SchoolSoft\db.sqlite3` — NEVER beside the EXE. Rebuilds/updates can never touch user data.
+  - User data lives in `%LOCALAPPDATA%\SchoolSoft\db.sqlite3` â€” NEVER beside the EXE. Rebuilds/updates can never touch user data.
   - On start: adopts legacy db beside EXE if found, else copies bundled `db.seed.sqlite3`; makes a dated backup (`db.backup-YYYYMMDD.sqlite3`, keeps 7); runs `migrate --noinput`; sets `PRAGMA journal_mode=WAL`.
-  - Single-instance lock = bind on port 47391. If taken: **shows a MessageBox** ("already running") then `os._exit(0)` — never a silent exit.
-  - `webview.settings["ALLOW_DOWNLOADS"] = True` — REQUIRED, otherwise all PDF downloads silently do nothing in pywebview.
+  - Single-instance lock = bind on port 47391. If taken: **shows a MessageBox** ("already running") then `os._exit(0)` â€” never a silent exit.
+  - `webview.settings["ALLOW_DOWNLOADS"] = True` â€” REQUIRED, otherwise all PDF downloads silently do nothing in pywebview.
   - `webview.create_window(..., zoomable=True, text_select=True)`.
-  - `webview.start(_force_foreground)` — helper uses ctypes FindWindowW + SetForegroundWindow because the window otherwise opens BEHIND other windows without focus (observed on Win 11).
-  - Do NOT pass `gui="edgechromium"` to `webview.start()` — it produced a live process with no visible window on this machine. Default auto-detect works.
-  - `finally: logging.shutdown(); os._exit(0)` after webview.start returns — REQUIRED: without it a zombie SchoolSoft.exe survives window close, holds the lock, and every future launch dies silently. This exact bug cost hours today.
+  - `webview.start(_force_foreground)` â€” helper uses ctypes FindWindowW + SetForegroundWindow because the window otherwise opens BEHIND other windows without focus (observed on Win 11).
+  - Do NOT pass `gui="edgechromium"` to `webview.start()` â€” it produced a live process with no visible window on this machine. Default auto-detect works.
+  - `finally: logging.shutdown(); os._exit(0)` after webview.start returns â€” REQUIRED: without it a zombie SchoolSoft.exe survives window close, holds the lock, and every future launch dies silently. This exact bug cost hours today.
   - Errors + breadcrumbs log to `%LOCALAPPDATA%\SchoolSoft\SchoolSoft-error.log` (settings.py LOGGING routes django.request errors there too via SCHOOLSOFT_LOG_FILE env).
 
 - `SchoolSoft.spec`:
-  - datas: templates, static, `staticfiles` (collectstatic output — WhiteNoise serves it in the EXE), `db.seed.sqlite3`, `collect_data_files` for django (admin templates/static), tzdata (Asia/Kolkata zoneinfo), reportlab (fonts).
+  - datas: templates, static, `staticfiles` (collectstatic output â€” WhiteNoise serves it in the EXE), `db.seed.sqlite3`, `collect_data_files` for django (admin templates/static), tzdata (Asia/Kolkata zoneinfo), reportlab (fonts).
   - hiddenimports: whitenoise, waitress, dotenv, tzdata, static names `webview.platforms.winforms` + `webview.platforms.edgechromium`, `collect_submodules` for core/schoolsoft/django/reportlab.
-  - WARNING: do NOT use `collect_submodules('webview')` — it imports pywebview (.NET) at build time and hangs/slows Analysis badly.
+  - WARNING: do NOT use `collect_submodules('webview')` â€” it imports pywebview (.NET) at build time and hangs/slows Analysis badly.
   - `upx=False` (antivirus false positives), `console=False`, excludes psycopg2/pyodbc/gunicorn.
 
-- `build-desktop.bat`: uses project `.venv`, checks deps, collectstatic, creates fresh `db.seed.sqlite3` (migrate + superuser admin/admin12345), runs PyInstaller. Build takes ~12–15 min on this machine. Output: `dist\SchoolSoft\SchoolSoft.exe`.
+- `build-desktop.bat`: uses project `.venv`, checks deps, collectstatic, creates fresh `db.seed.sqlite3` (migrate + superuser admin/admin12345), runs PyInstaller. Build takes ~12â€“15 min on this machine. Output: `dist\SchoolSoft\SchoolSoft.exe`.
 
 - EXE was GUI-tested end to end today (dashboard, students, receipts, dues, marks, back button, PDF downloads all verified working).
 
@@ -57,16 +124,16 @@ Tests: 21/21 pass (`manage.py test`).
 
 - Repo: `https://github.com/thpsicdudahi-jk1/schoolsoft-web` (PRIVATE). Branch `main`, initial commit `adc5b23` (65 files).
 - `git config --global safe.directory` was added for this folder (folder owner is a different Windows user).
-- `.gitignore` covers: `*.sqlite3`, `.env`, `*.log`, `staticfiles/`, `build/`, `dist/`, `.venv/`, `debug-scripts/`, `data.json`, `git-out.txt`. NEVER commit databases — they contain real student data.
+- `.gitignore` covers: `*.sqlite3`, `.env`, `*.log`, `staticfiles/`, `build/`, `dist/`, `.venv/`, `debug-scripts/`, `data.json`, `git-out.txt`. NEVER commit databases â€” they contain real student data.
 - `debug-scripts/` folder = throwaway diagnostic bats from today's debugging; ignore it.
 
 ## Render deployment (done today, LIVE)
 
 - Blueprint "schoolsoft" from `render.yaml` (repo root), branch main.
 - Web service: **schoolsoft-english-medium** (free plan, Oregon), URL:
-  `https://schoolsoft-english-medium.onrender.com` — LIVE, verified serving the app with styling. Free instance sleeps after 15 min idle (~50 s cold start).
-- Postgres: **schoolsoft-db** (free plan) — ⚠️ **expires August 1, 2026** (Render deletes free DBs after ~30 days). Desktop SQLite remains the source of truth; online DB can be recreated + reloaded any time via `migrate-data.bat`.
-- Env vars per render.yaml: SECRET_KEY generated, DEBUG=False, DATABASE_URL from schoolsoft-db, ALLOWED_HOSTS/CSRF for `english-medium.thpsic.com` (custom domain NOT yet configured — planned CNAME from Netlify DNS later).
+  `https://schoolsoft-english-medium.onrender.com` â€” LIVE, verified serving the app with styling. Free instance sleeps after 15 min idle (~50 s cold start).
+- Postgres: **schoolsoft-db** (free plan) â€” âš ï¸ **expires August 1, 2026** (Render deletes free DBs after ~30 days). Desktop SQLite remains the source of truth; online DB can be recreated + reloaded any time via `migrate-data.bat`.
+- Env vars per render.yaml: SECRET_KEY generated, DEBUG=False, DATABASE_URL from schoolsoft-db, ALLOWED_HOSTS/CSRF for `english-medium.thpsic.com` (custom domain NOT yet configured â€” planned CNAME from Netlify DNS later).
 - Build command: pip install + collectstatic + migrate. Auto-deploys on push to main.
 
 ## Data migration (COMPLETE)
@@ -107,13 +174,13 @@ Tests: 21/21 pass (`manage.py test`).
 
 ## Pending / next steps
 
-1. Change the admin password (default admin/admin12345 is in build scripts — must be changed on both desktop db and Render db via /admin/).
-2. Rotate the Render DB credential (Database page → Credentials → New default credential) — the external URL with password was pasted in chat/screenshot.
-3. Custom domain: CNAME `english-medium.thpsic.com` → Render service, then add as Custom Domain on the service.
+1. Change the admin password (default admin/admin12345 is in build scripts â€” must be changed on both desktop db and Render db via /admin/).
+2. Rotate the Render DB credential (Database page â†’ Credentials â†’ New default credential) â€” the external URL with password was pasted in chat/screenshot.
+3. Custom domain: CNAME `english-medium.thpsic.com` â†’ Render service, then add as Custom Domain on the service.
 4. Plan for DB expiry (Aug 1, 2026): either paid Postgres (~$7/mo) or recreate free DB monthly + rerun `migrate-data-fast.bat`.
 5. Optional cleanup: remove `git-out.txt` and `setup-git.bat` from the repo (committed accidentally, harmless).
 
-## 🚨 URGENT NEXT TASK — Student data is STALE, re-import from fresh SCHOOL7.mdb
+## ðŸš¨ URGENT NEXT TASK â€” Student data is STALE, re-import from fresh SCHOOL7.mdb
 
 **Discovered July 2 evening. This is the top-priority job. Read carefully.**
 
@@ -124,15 +191,15 @@ Our app shows 596 students, all active. Investigation proved BOTH numbers come f
 the same table, but our import used a **stale CSV export**:
 
 1. `migration_audit/exports/ADDMISSION.csv` (the file our importer used) has only
-   **592 rows** and its `TC_ISSUE` column says NO for 587 rows — it is an OLD export.
+   **592 rows** and its `TC_ISSUE` column says NO for 587 rows â€” it is an OLD export.
 2. The user opened the LIVE `SCHOOL7.mdb` in Access: `ADDMISSION` there has
    **1213 rows** (v_no 1..1213, sid up to 2613, includes 2026-27 admissions
-   with `adm_year = 26`, e.g. SHIVAM KUMAR sid 2589 … ARABAJ sid 2613), and
+   with `adm_year = 26`, e.g. SHIVAM KUMAR sid 2589 â€¦ ARABAJ sid 2613), and
    **TC_ISSUE = YES on a large share of rows** (with TC_NO / TC_DATE filled).
-3. So: blocked = `TC_ISSUE = YES` (≈849), active = rest (≈364). Our DB is missing
+3. So: blocked = `TC_ISSUE = YES` (â‰ˆ849), active = rest (â‰ˆ364). Our DB is missing
    ~617 students INCLUDING all new 2026-27 admissions, and marks everyone active.
 4. Other imported tables (StuFee = receipts 667, Marks, DUES, CLASS, FEE) came from
-   the SAME stale export folder — they are probably missing recent rows too.
+   the SAME stale export folder â€” they are probably missing recent rows too.
 
 ### Fresh data location (ready and waiting)
 
@@ -159,18 +226,18 @@ read-only source. NEVER commit it or any export of it to git.
    Minimum tables: ADDMISSION, CLASS, StuFee, FEE, DUES, Marks, TEST,
    Testmark1, Testmark2, Busmaster, RouteMaster, BUS_APPLICABLE, Emp_Mast.
    Verify: fresh ADDMISSION.csv must have **1213 rows**.
-2. Run `resync-students.bat` → expect `TOTAL ≈ 1213, ACTIVE ≈ 364`.
-   If ACTIVE ≈ 364 matches the legacy toolbar, the mapping is proven correct.
+2. Run `resync-students.bat` â†’ expect `TOTAL â‰ˆ 1213, ACTIVE â‰ˆ 364`.
+   If ACTIVE â‰ˆ 364 matches the legacy toolbar, the mapping is proven correct.
 3. Re-run the other importers (import_legacy_fees, import_legacy_marks,
    import_legacy_transport, import_legacy_staff, import_legacy_fee_structure,
-   import_legacy_school_profile) against the fresh exports — same
+   import_legacy_school_profile) against the fresh exports â€” same
    `SCHOOLSOFT_SQLITE_PATH=%LOCALAPPDATA%\SchoolSoft\db.sqlite3` env so the
-   EXE's live db gets the data. Check row deltas (receipts were 667 — live may
+   EXE's live db gets the data. Check row deltas (receipts were 667 â€” live may
    have more).
 4. **UI follow-ups:** student list should default to Active students with an
    All/Active/Inactive filter; dashboard Active Students already filters
    `is_active=True` so it will show ~364 automatically. Total-students tile
-   should say "1213 (364 active)" or similar — avoid the old confusion.
+   should say "1213 (364 active)" or similar â€” avoid the old confusion.
 5. `manage.py test` (21 tests) must stay green. Then push (push.bat) and
    rebuild EXE (build-desktop.bat).
 6. **Render re-load:** Postgres still has the stale 596-student data. After
@@ -190,12 +257,12 @@ read-only source. NEVER commit it or any export of it to git.
 ## Rules for any future work
 
 - Never bundle or commit real databases. Seed db only.
-- User data dir `%LOCALAPPDATA%\SchoolSoft\` is sacred — nothing in the repo/build may overwrite it.
+- User data dir `%LOCALAPPDATA%\SchoolSoft\` is sacred â€” nothing in the repo/build may overwrite it.
 - Desktop EXE is the primary system; online is read/report convenience.
-- `D:\english medium\9\SCHOOL7.mdb` (fresh legacy copy) is read-only source data — never commit it or its exports.
+- `D:\english medium\9\SCHOOL7.mdb` (fresh legacy copy) is read-only source data â€” never commit it or its exports.
 - Test with `manage.py test` (21 tests) before any EXE rebuild; rebuild via `build-desktop.bat` only.
 
-## ✅ Fresh SCHOOL7 local resync completed (July 2, 2026 evening)
+## âœ… Fresh SCHOOL7 local resync completed (July 2, 2026 evening)
 
 - Fresh CSV exports were generated from `D:\english medium\9\SCHOOL7.mdb`.
 - `ADDMISSION.csv` now has 1213 rows:
@@ -249,7 +316,7 @@ Fee Collection Workflow Improvements completed:
 - Updated core/urls.py and base.html to serve PWA components at root scope.
 - Verified mobile responsiveness for main pages.
 
-## Session — July 4, 2026 (Users & Permissions + auth roles + UI fixes)
+## Session â€” July 4, 2026 (Users & Permissions + auth roles + UI fixes)
 
 **All committed and pushed to `origin/main`. EXE rebuilt (BUILD OK). Role testing PASSED.**
 Commits this session (in order): `925200d` (styles.css clean baseline restore) -> `ac1f36b`
@@ -258,14 +325,14 @@ users-page styling + footer stack) -> `1d15f53` (sidebar nav scroll + service-wo
 network-first) -> `cab40ad` (Users & Permissions table polish). Latest = **`cab40ad`**.
 
 ### What was built (role-based access control, all in-app, no new model)
-- `core/access.py` — `module_required(module)` decorator, `write_required`/write guards,
+- `core/access.py` â€” `module_required(module)` decorator, `write_required`/write guards,
   `access_context` context processor (injects `access.*` booleans + `can_manage_users`),
   `MODULE_PERMISSIONS` map, `READONLY_GROUP`, `manage_users_required`.
 - Permissions live on a `managed=False` `ModuleAccess` model (migration
-  `core/0008_module_access_permissions.py`) — codenames like `access_fee_collection`,
+  `core/0008_module_access_permissions.py`) â€” codenames like `access_fee_collection`,
   `access_all_modules`, `access_dashboard`. "View/print only" = membership of the
   **Read Only** group (blocks all create/edit/delete via write guards).
-- `core/user_admin.py` — in-app Users & Permissions screen (admin-only). Role presets:
+- `core/user_admin.py` â€” in-app Users & Permissions screen (admin-only). Role presets:
   `admin` (all), `fee` (students, fee_collection, receipts, dues, collection, fee_setup,
   school_profile), `admission` (students, school_profile), `exam` (students, marks,
   school_profile), `staff` (staff, transport, school_profile), `viewer` (all modules +
@@ -285,27 +352,27 @@ network-first) -> `cab40ad` (Users & Permissions table polish). Latest = **`cab4
   `.sidebar{overflow:hidden}` + `.side-nav{overflow-y:auto; min-height:0}` +
   `.side-foot{flex-shrink:0}` (nav scrolls internally, footer pinned).
 - **Service worker was cache-first for all `/static/`, so CSS edits never showed even after
-  Ctrl+F5.** Fixed `templates/core/service-worker.js`: bumped `CACHE_NAME` v2→v3; `.css`/`.js`
+  Ctrl+F5.** Fixed `templates/core/service-worker.js`: bumped `CACHE_NAME` v2â†’v3; `.css`/`.js`
   now **network-first** (cache = offline fallback only); images stay cache-first. `base.html`
   styles.css cache-buster is `?v=20260704-users-3`. If future CSS edits "don't show", it's the
-  SW/cache — bump the `?v=` and/or CACHE_NAME, or DevTools → Application → unregister SW.
+  SW/cache â€” bump the `?v=` and/or CACHE_NAME, or DevTools â†’ Application â†’ unregister SW.
 - CRITICAL LESSON (carried from prior session): never append to styles.css via bash `cat >>`
-  — it truncated the file. Use the file editor only.
+  â€” it truncated the file. Use the file editor only.
 
-### Role testing — PASSED (dev server 127.0.0.1:8000, 5 test users)
+### Role testing â€” PASSED (dev server 127.0.0.1:8000, 5 test users)
 Created feetest/admtest/examtest/stafftest/viewtest via the Users & Permissions page (they
 live only in the local dev `db.sqlite3`, NOT the sacred LOCALAPPDATA db, NOT git). Verified:
 - Each role's sidebar shows only its allowed modules.
-- **Direct-URL module block works server-side** (e.g. stafftest → `/receipts/new/` →
-  "Fee Collection access nahi hai — Permission Required"), not just hidden links.
+- **Direct-URL module block works server-side** (e.g. stafftest â†’ `/receipts/new/` â†’
+  "Fee Collection access nahi hai â€” Permission Required"), not just hidden links.
 - **Viewer**: can VIEW all lists (marks, staff open) but every create/edit/delete
-  (`/students/new/`, `/staff/salary/new/`, `/receipts/new/`) → "View / print only" denied.
+  (`/students/new/`, `/staff/salary/new/`, `/receipts/new/`) â†’ "View / print only" denied.
 
 ### PENDING (this is where to pick up)
 1. **Verify Render online deploy** of `1d15f53` at
-   `https://schoolsoft-english-medium.onrender.com` — confirm the footer/Logout fix and
+   `https://schoolsoft-english-medium.onrender.com` â€” confirm the footer/Logout fix and
    service-worker fix are live (hard reload once). Free instance sleeps (~50 s cold start);
-   online DB is separate Postgres (won't have the 1213 desktop students — expected).
+   online DB is separate Postgres (won't have the 1213 desktop students â€” expected).
    Auto-deploy triggers on push, but confirm it actually completed on the Render dashboard.
 2. Marks source still unresolved (fresh `Testmark2.csv` exported 0 rows earlier; existing
    10,036 marks retained). Confirm correct current-marks mapping when needed.
@@ -313,19 +380,19 @@ live only in the local dev `db.sqlite3`, NOT the sacred LOCALAPPDATA db, NOT git
    Render DB credential, custom domain CNAME, Render free-DB expiry plan (Aug 1, 2026).
 4. Optional: deactivate/delete the 5 test users from the dev DB (harmless; not shipped).
 
-## PDF polish plan — Claude's review (July 4, 2026) — READ before executing the "Design Polish" plan
+## PDF polish plan â€” Claude's review (July 4, 2026) â€” READ before executing the "Design Polish" plan
 
 A "PDF Generation Design Polish (Premium SaaS Look)" plan exists for `core/pdf.py`
 (unified `_school_header`, brand colors, watermark, cleaner tables for Marksheet / TC /
 Character Certificate). The cosmetic parts are fine and low-risk, BUT the plan is
 **visual-only and misses the more important content gap.** Apply these corrections:
 
-**1. CONTENT before cosmetics — the Transfer Certificate is missing legally-required fields.**
+**1. CONTENT before cosmetics â€” the Transfer Certificate is missing legally-required fields.**
 Compare our current app TC to the legacy VB app's official bilingual TC
-(स्थानान्तरण प्रमाण-पत्र / TRANSFER CERTIFICATE, 23 numbered fields). Our TC lacks, at minimum:
+(à¤¸à¥à¤¥à¤¾à¤¨à¤¾à¤¨à¥à¤¤à¤°à¤£ à¤ªà¥à¤°à¤®à¤¾à¤£-à¤ªà¤¤à¥à¤° / TRANSFER CERTIFICATE, 23 numbered fields). Our TC lacks, at minimum:
 UDISE Code (09591200129), **PEN** (Permanent Education Number), **Book No. / S.R. No.**,
 Nationality, **SC/ST/OBC category**, **DOB in words** (not just figures), Subjects offered,
-"class last studied — in words", whether failed, fee concession nature, NCC/Scout, struck-off
+"class last studied â€” in words", whether failed, fee concession nature, NCC/Scout, struck-off
 date, School category (Govt/Independent), Prepared-by / Checked-by / Principal + seal, and the
 bilingual Hindi/English labels + officiating-principal note. Decide with the user whether to
 **replicate the official government format** (recommended if TCs are used officially) and pin
@@ -333,18 +400,18 @@ the exact field list FIRST. A pretty-but-incomplete TC is worse than a plain com
 
 **2. Hindi/bilingual text needs an embedded Unicode font.** ReportLab default fonts do NOT
 render Devanagari. Must bundle + `pdfmetrics.registerFont` a Devanagari font (e.g. Noto Sans
-Devanagari) and add it to `SchoolSoft.spec` datas so the EXE ships it. Non-trivial — plan for it.
+Devanagari) and add it to `SchoolSoft.spec` datas so the EXE ships it. Non-trivial â€” plan for it.
 
 **3. Do NOT put the "SCHOOLSOFT" watermark on TC or Marksheet.** Fine on internal receipts, but
 a watermark on an official Transfer Certificate / Marksheet looks unprofessional and can make it
-look invalid. The plan proposes adding it to the marksheet — skip that for official docs.
+look invalid. The plan proposes adding it to the marksheet â€” skip that for official docs.
 
 **4. Prefer the official/authoritative look over "premium SaaS" for the TC.** Alternating fancy
 row colors on a legal certificate reduce credibility for board/inspection. Keep the TC close to
 the government format; reserve the premium styling for Marksheet + receipts.
 
 **5. Marksheet "AB" (absent) handling:** current sample shows "AB" for a subject yet still totals
-568/900 — verify absent subjects are handled correctly in total/percentage/grade logic, not just
+568/900 â€” verify absent subjects are handled correctly in total/percentage/grade logic, not just
 visually.
 
 **Recommended split:** (A, priority) TC content completeness + Devanagari font; (B, low-risk)
@@ -490,9 +557,9 @@ The following role presets are available and have been verified across both Rend
 
 *Note: All roles implicitly have access to the Dashboard.*
 
-## Fees Module — Review Guardrails (Claude review, July 4, 2026)
+## Fees Module â€” Review Guardrails (Claude review, July 4, 2026)
 
-**Fees module is HIGH-RISK — this is where the original fee-head overlap and the
+**Fees module is HIGH-RISK â€” this is where the original fee-head overlap and the
 styles.css corruption first started. Read these guardrails and follow the phasing
 BEFORE writing any code.**
 
@@ -501,25 +568,25 @@ Do NOT start coding until you inspect: `templates/core/receipt_form.html`,
 current CSS around `.fee-desk` / `.classic-fee-heads` in `static/core/styles.css`.
 
 Confirmed decisions (from owner, July 4):
-1. Month chips stay as individual rounded chips — only polish active/hover/focus
+1. Month chips stay as individual rounded chips â€” only polish active/hover/focus
    state (no segmented toggle).
 2. Desktop fee form stays dense / two-column; stack only on mobile.
 3. Keep **Save & Print (F9)** as the primary action.
 4. Minimum DOM/JS touch: do NOT change `receipt_form.html` DOM unless absolutely
-   necessary. `receipt-form.js` relies on element IDs / names / data-attributes —
+   necessary. `receipt-form.js` relies on element IDs / names / data-attributes â€”
    keep them safe. If DOM changes, update `receipt-form.js` in lockstep and test a
    real receipt cycle.
 5. Scope all CSS under `.fee-desk` or `.fee-desk-page` only. Do NOT add broad global
    `.premium-table` / `.premium-filterbar` rules.
-6. Never use shell append / `cat >>` for `styles.css` — use the file editor /
+6. Never use shell append / `cat >>` for `styles.css` â€” use the file editor /
    apply_patch only. (styles.css was corrupted this way before; baseline safe
    commit = `925200d`.)
 7. Verify whether `FeeReceipt` has a cancelled/status field BEFORE styling cancelled
    receipts. If the field does not exist, that part cannot be built.
 8. Run `manage.py check` and `manage.py test` (keep green).
-9. Manual verification (mandatory, on dev-server AND the EXE): student select →
-   month chips → duplicate-overlap warning → totals → Save & Print →
-   receipt detail / PDF / print; and 1366×768 with no horizontal overflow.
+9. Manual verification (mandatory, on dev-server AND the EXE): student select â†’
+   month chips â†’ duplicate-overlap warning â†’ totals â†’ Save & Print â†’
+   receipt detail / PDF / print; and 1366Ã—768 with no horizontal overflow.
 10. Update CODEX-HANDOFF.md after completion.
 
 Phasing (owner direction): **Phase 1 = Fee Collection form polish ONLY.** Receipts
@@ -1089,16 +1156,16 @@ Completed today:
    - [ ] The Render PostgreSQL Database credentials (`DATABASE_URL`) were accidentally pasted in chat screenshots. The database password must be rotated on Render immediately to prevent unauthorized access.
 2. **Render Postgres Expiry**:
    - The Render free PostgreSQL database will expire on 1 August (in 3 weeks). The school must decide whether to upgrade to a paid plan (~$7/month) or commit to recreating and reloading the free DB every month.
-3. **Transfer Certificate (TC) Content Gaps** — RESOLVED 2026-07-08 (owner decision: English-only TC):
-   - Code audit found `category` (SC/ST/OBC) and DOB-in-words were already wired into `build_transfer_certificate_pdf`; only `pen_number` had no input field anywhere in the UI. `udise_code` lives on `SchoolProfile` and is editable via `/admin/` (admin-only, one-time setup — no in-app form needed for a single-record settings field).
-   - Owner decided: TC stays **English-only**. ReportLab does not shape Devanagari matras correctly (a known ReportLab limitation, not a missing-font issue — `NotoSansDevanagari` font files/registration were already in place), so replicating the bilingual government format would have required swapping the whole PDF engine (ReportLab -> WeasyPrint/HTML-to-PDF). Not worth it for an English-medium school; skip unless a board/inspection explicitly demands Hindi labels later.
+3. **Transfer Certificate (TC) Content Gaps** â€” RESOLVED 2026-07-08 (owner decision: English-only TC):
+   - Code audit found `category` (SC/ST/OBC) and DOB-in-words were already wired into `build_transfer_certificate_pdf`; only `pen_number` had no input field anywhere in the UI. `udise_code` lives on `SchoolProfile` and is editable via `/admin/` (admin-only, one-time setup â€” no in-app form needed for a single-record settings field).
+   - Owner decided: TC stays **English-only**. ReportLab does not shape Devanagari matras correctly (a known ReportLab limitation, not a missing-font issue â€” `NotoSansDevanagari` font files/registration were already in place), so replicating the bilingual government format would have required swapping the whole PDF engine (ReportLab -> WeasyPrint/HTML-to-PDF). Not worth it for an English-medium school; skip unless a board/inspection explicitly demands Hindi labels later.
    - Changes made:
      - `core/forms.py` `StudentForm`: added `pen_number` field (label "PEN Number").
      - `templates/core/student_form.html`: added PEN Number input in the "Identity & Enrollment" card.
      - `core/pdf.py` `build_transfer_certificate_pdf`: removed all Devanagari labels/subtitle/`hindi_style`, switched `field_style` and the top meta table from `NotoSansDevanagari` to `Helvetica`. All 23 fields remain, English-only.
-   - Not touched: `_premium_header` (used by Character Certificate/Marksheet) still has its optional Devanagari title path — this decision was scoped to the TC only, per the owner's answer.
+   - Not touched: `_premium_header` (used by Character Certificate/Marksheet) still has its optional Devanagari title path â€” this decision was scoped to the TC only, per the owner's answer.
    - TODO before considered fully closed: run `manage.py test core`, then re-issue/re-check one real student's TC PDF in browser to confirm PEN/UDISE now print when filled in.
-4. **Current Session (2026-27) Marks Data** — RESOLVED 2026-07-08 (owner confirmed):
+4. **Current Session (2026-27) Marks Data** â€” RESOLVED 2026-07-08 (owner confirmed):
    - Owner confirmed no exams/marks entry has happened yet in the legacy software for 2026-27. `Testmark2.csv` correctly exporting 0 rows for this session is expected, not a bug. No code change needed. Re-export/re-import `Testmark2` once real exams for this session are conducted and entered in the legacy app.
 5. **Custom Domain Setup**:
    - Setup `english-medium.thpsic.com` CNAME on Render when convenient (low risk).
@@ -1120,7 +1187,7 @@ MUSLMAN) silently became the stored `category` value. This is a data problem, no
 code fix alone can safely repair (a caste name cannot be auto-mapped to General/OBC/SC/ST).
 
 **Fix shipped**:
-- New read-only audit command `core/management/commands/audit_student_categories.py` — lists
+- New read-only audit command `core/management/commands/audit_student_categories.py` â€” lists
   every student whose `category` is blank or doesn't look like General/OBC/SC/ST/GEN, writes
   `migration_audit/category_audit.csv`. Run with:
   `.\.venv\Scripts\python.exe manage.py audit_student_categories`
@@ -1128,7 +1195,7 @@ code fix alone can safely repair (a caste name cannot be auto-mapped to General/
   before their TC/admission paperwork is finalized. `category` was deliberately kept as a free
   CharField (not a strict choices/enum) rather than force-converting it, since ~1213 live
   student records may have legacy spelling variants (e.g. `GEN` vs `General`) that would
-  otherwise silently show as "unset" in a strict dropdown — safer to flag via CSV and let a
+  otherwise silently show as "unset" in a strict dropdown â€” safer to flag via CSV and let a
   human confirm each one on a live production system.
 
 **Full admission-form field parity added to `Student` model** (owner chose "add everything at
@@ -1147,20 +1214,20 @@ once" after reviewing the real form), all in migration to be created via
 - `core/forms.py` `StudentForm`: all new fields added to `Meta.fields`; checkbox fields now
   correctly skip the `form-control` CSS class (loop changed from `field_name != "is_active"` to
   `not isinstance(field.widget, forms.CheckboxInput)`).
-- `templates/core/student_form.html`: reorganized into new cards — Social Category (caste,
+- `templates/core/student_form.html`: reorganized into new cards â€” Social Category (caste,
   category, religion, disability, minority toggle), Health, Previous School (if admitted by
-  transfer), Documents Received — using the existing `.entry-card`/`.entry-grid-four` system,
+  transfer), Documents Received â€” using the existing `.entry-card`/`.entry-grid-four` system,
   no new CSS needed.
 
 **Not yet done / next session must**:
 1. Run `manage.py makemigrations core` then `manage.py migrate` (new migration not yet created
-   or applied — this was written by Claude/Opus without shell access; a human must run it).
-2. Run `manage.py test core` — should still be the same test count since no existing test posts
+   or applied â€” this was written by Claude/Opus without shell access; a human must run it).
+2. Run `manage.py test core` â€” should still be the same test count since no existing test posts
    to the student form directly.
 3. Run `manage.py audit_student_categories` and review `migration_audit/category_audit.csv`.
 4. Manually open the student edit form in browser to confirm all new cards render correctly and
    save/reload works, then `collectstatic` + `build-desktop.bat` before shipping desktop.
-5. TC PDF/print still only uses `category` (unchanged) for the SC/ST/OBC line — `caste` is not
+5. TC PDF/print still only uses `category` (unchanged) for the SC/ST/OBC line â€” `caste` is not
    printed anywhere yet (matches the legacy TC format, which also has no caste line).
 
 ## 2026-07-08 Checkpoint - Roll No + Section-by-Class Filter (same review pass)
@@ -1174,58 +1241,58 @@ Fixed:
   widget that stamps each `<option data-class="{school_class_id}">` so the browser can filter
   client-side with no extra request. Set as the widget for `current_section`.
 - `templates/core/student_form.html`: added a Roll No field next to Current Section. Added JS in
-  the existing `DOMContentLoaded` block — on `current_class` change, hides `current_section`
+  the existing `DOMContentLoaded` block â€” on `current_class` change, hides `current_section`
   options whose `data-class` doesn't match, resets the selection if it becomes hidden. Runs once
   on page load too, so the edit form pre-filters correctly for an existing student.
 
 **Owner decision (same session)**: build Photo upload now; skip Bank Details (not needed for
-real operations right now — revisit only if the school starts doing scholarship/RTE
+real operations right now â€” revisit only if the school starts doing scholarship/RTE
 reimbursement by bank transfer).
 
 ## 2026-07-08 Checkpoint - Student Photo Upload
 
 - `core/models.py`: `Student.photo = models.ImageField(upload_to="student_photos/", null=True, blank=True)`.
 - `schoolsoft/settings.py`: added `MEDIA_URL = 'media/'` and
-  `MEDIA_ROOT = Path(os.environ.get("SCHOOLSOFT_MEDIA_ROOT", local_data_dir() / "media"))` —
+  `MEDIA_ROOT = Path(os.environ.get("SCHOOLSOFT_MEDIA_ROOT", local_data_dir() / "media"))` â€”
   same env-var-with-fallback pattern already used for `SCHOOLSOFT_SQLITE_PATH`.
 - `desktop.py` `configure_desktop_environment()`: now also creates
   `%LOCALAPPDATA%\SchoolSoft\media\` and sets `SCHOOLSOFT_MEDIA_ROOT` to it, so uploaded photos
   survive EXE rebuilds exactly like the sqlite db does.
 - `schoolsoft/urls.py`: added an explicit route serving `MEDIA_URL` via
   `django.views.static.serve`, unconditionally (not just when `DEBUG=True`). WhiteNoise only
-  serves `STATIC_URL`, not `MEDIA_URL`. This is fine for a single small school's traffic — no
+  serves `STATIC_URL`, not `MEDIA_URL`. This is fine for a single small school's traffic â€” no
   nginx/object-storage layer needed. **On Render this storage is NOT persistent across
-  redeploys/restarts** (ephemeral disk on the free plan) — acceptable since the Desktop EXE
+  redeploys/restarts** (ephemeral disk on the free plan) â€” acceptable since the Desktop EXE
   remains the source of truth; revisit with S3/Cloudinary only if online photo uploads need to
   survive redeploys.
 - `core/forms.py` `StudentForm`: added `photo` to `Meta.fields`.
 - `core/views.py`: `student_create`/`student_update` now pass `request.FILES` into `StudentForm`
-  (required for file uploads — was missing before, would have silently dropped any uploaded
+  (required for file uploads â€” was missing before, would have silently dropped any uploaded
   file).
 - `templates/core/student_form.html`: `<form>` tag now has `enctype="multipart/form-data"`
-  (REQUIRED for file uploads to reach the server at all — easy to forget). Photo box shows the
+  (REQUIRED for file uploads to reach the server at all â€” easy to forget). Photo box shows the
   existing photo if set, plus the file input below it.
 - `templates/core/student_detail.html`: profile avatar circle shows the real photo when present,
   falls back to the placeholder icon otherwise.
 - `static/core/styles.css`: `.student-entry .student-photo-box` gained `overflow: hidden`; added
   `.student-photo-preview { width/height:100%; object-fit:cover }`.
-- `.gitignore`: added `media/` — uploaded photos (real student data) must never be committed.
-- `SchoolSoft.spec`: NOT changed — `media/` must stay a runtime-only per-user folder, never
+- `.gitignore`: added `media/` â€” uploaded photos (real student data) must never be committed.
+- `SchoolSoft.spec`: NOT changed â€” `media/` must stay a runtime-only per-user folder, never
   bundled into the EXE build (same rule as the sqlite db). Pillow is not in `hiddenimports`
   explicitly; PyInstaller has a built-in hook for Pillow so this is normally fine, but if the EXE
   rebuild fails to find `PIL`, add `collect_submodules('PIL')` to `hiddenimports` as a fallback.
 
 **Not yet done / next session must**:
-1. Run `manage.py makemigrations core` + `manage.py migrate` (adds the `photo` column — bundled
+1. Run `manage.py makemigrations core` + `manage.py migrate` (adds the `photo` column â€” bundled
    with the same migration as the admission-form-parity fields above, or its own, whichever
    `makemigrations` generates).
 2. Run `manage.py test core`.
 3. Manually test: open a student, upload a photo, save, confirm it shows on the edit form photo
    box AND the student profile page avatar. Confirm the image file actually lands under
-   `%LOCALAPPDATA%\SchoolSoft\media\student_photos\` (desktop) — not next to the EXE.
+   `%LOCALAPPDATA%\SchoolSoft\media\student_photos\` (desktop) â€” not next to the EXE.
 4. `collectstatic` + `build-desktop.bat`, then fully close/reopen the EXE and re-test the same
    upload flow inside the packaged app (PyInstaller ONEDIR sometimes behaves differently than
-   `runserver` for file writes — verify for real, don't assume).
+   `runserver` for file writes â€” verify for real, don't assume).
 
 ## 2026-07-08 Checkpoint - Photo Instant Preview + House System + Discipline Record
 
@@ -1233,7 +1300,7 @@ Note: `core/forms.py`'s `SectionSelect` widget was rewritten by another session 
 previous checkpoint and this one (now uses `optgroups()` + a `_temp_map` dict with defensive
 `int(str(value))` handling for `ModelChoiceIteratorValue`, and `current_section.label_from_instance`
 was overridden to show just the section letter). Everything below was built on top of that
-current version — re-read `core/forms.py` fresh before editing it further, don't assume it still
+current version â€” re-read `core/forms.py` fresh before editing it further, don't assume it still
 matches older checkpoints in this file.
 
 **1. Photo instant preview** (owner reported: picked a file, nothing appeared until they
@@ -1588,7 +1655,7 @@ session): Render free Postgres DB expiry decision (paid plan vs. monthly recreat
 2026), custom domain CNAME setup (`english-medium.thpsic.com`), rotating the exposed Render DB
 credential.
 
-## ✅ Feature Sprint & Bugfixes (July 9, 2026)
+## âœ… Feature Sprint & Bugfixes (July 9, 2026)
 
 Following the implementation of the House System, Discipline Records, ID Cards, WhatsApp buttons, and Inventory modules, several crucial bug fixes and improvements were made during the final EXE rebuild phase:
 
@@ -1605,17 +1672,17 @@ Following the implementation of the House System, Discipline Records, ID Cards, 
    - The `build-desktop.bat` script encountered `PermissionError: [WinError 5] Access is denied` because the legacy `SchoolSoft.exe` process was still running in the background and holding locks on DLLs.
    - The issue was resolved by explicitly killing the background processes before triggering the final build. The new EXE is now fully packed and verified to work locally.
 
-## ✅ Family Ledger Finalization (July 10, 2026)
+## âœ… Family Ledger Finalization (July 10, 2026)
 
 - **Migrations & Tests**: Ran `makemigrations` and `migrate` to apply the `Family` model, `Student.family` FK, and `access_family` permissions. Ran `manage.py test core` and all 60 tests passed successfully.
 - **Manual Verification**: The user successfully tested "Suggested Families" exact-matching, manual linking of siblings, the Family Detail dashboard total dues calculation, and the Family WhatsApp reminder message formatting.
 - **Data Sync**: The user successfully synced the Desktop SQLite database to the Render PostgreSQL online database (`migrate-data-fast.bat`), ensuring all recent updates (Houses, Sections A-G, Discipline, Family Ledger) are live online.
 - **Deployment**: Committed the Family Ledger code to GitHub and ran `build-desktop.bat` to pack the final Desktop EXE. The local app is fully up to date and all 4 of the chosen Grand Plan features (ID Card, House System/Discipline, WhatsApp alerts, Family Ledger) are now complete and live!
 
-## 🏁 Phase Wrap-up (July 10, 2026)
+## ðŸ Phase Wrap-up (July 10, 2026)
 The owner has officially decided **not** to proceed with the Hindi/Bilingual UI feature. With this decision, the current development phase (which successfully delivered the 4 major modules: ID Cards, WhatsApp Alerts, Inventory/House/Discipline, and Family Ledger) is now officially wrapped up and complete. The system is fully deployed to both the Desktop EXE and the live online website.
 
-## ✅ Dashboard UI/UX Fintech Overhaul (July 10, 2026)
+## âœ… Dashboard UI/UX Fintech Overhaul (July 10, 2026)
 A new phase was initiated to refine the Dashboard UX, making it feel more like a premium fintech application. 
 
 **Stage 1 Implemented & Verified:**
@@ -1623,7 +1690,7 @@ A new phase was initiated to refine the Dashboard UX, making it feel more like a
 - **Responsive Empty States**: Sidebar groups automatically hide if empty. The quick access tiles reflow seamlessly.
 - **Read-Only Compatibility**: A backward-compatible migration (`0022_readonly_group_marker_only.py`) was applied to fix the Read Only group's broad-permission bugs.
 - **Visual Polish (Checkpoint 2)**:
-  - **Honest Zeroes**: A small grey caption ("Abhi tak koi collection nahi") replaces stark red/green `₹0` values.
+  - **Honest Zeroes**: A small grey caption ("Abhi tak koi collection nahi") replaces stark red/green `â‚¹0` values.
   - **Color Semantics**: Green is exclusively used for incoming money, red/amber for attention, and slate for all other informational tiles.
   - **Tight Currency Formatting**: `font-variant-numeric: tabular-nums` applied for perfect alignment.
   - **Gold Accent**: Added the school's signature gold branding as a thin accent line under the hero header.
@@ -1643,7 +1710,7 @@ owner explicitly specified this safer version:
   the total for that date sums ALL non-cancelled receipts on it (same `received_amount` metric as
   the main KPI), so a same-day zero-amount receipt doesn't skew anything.
   - No prior date found at all -> nothing shown.
-  - 1-13 days ago -> `Pichhla collection day (08 Jul): ₹12,800`.
+  - 1-13 days ago -> `Pichhla collection day (08 Jul): â‚¹12,800`.
   - 14+ days ago -> `Pichhli collection 18 din pehle hui thi` (no amount shown - deliberately
     avoids implying the number is still "current").
   - No delta/percentage anywhere - see rationale above.
@@ -1666,7 +1733,7 @@ Not done / next session must:
    comparison (e.g. previous day's total *as of the same clock time*) or waiting until the school
    day is officially over - do not add a naive full-day-vs-partial-day delta.
 
-## ✅ Scholar's Register vs Transfer Certificate (July 10, 2026)
+## âœ… Scholar's Register vs Transfer Certificate (July 10, 2026)
 
 The owner uploaded 3 real reference PDFs (legacy VB TC, a physical "Scholar's Register &
 Transfer Certificate Form" for student Aashruti Pal, and a current SchoolSoft-generated TC) along
@@ -1821,7 +1888,7 @@ verification.
 - Empty TC rows (exam result, subjects, fees paid through, attendance, application/leaving reason)
   are missing data, not layout defects; complete applicable entries before official issue.
 
-### Pending discussion: full physical Scholar Register book — RESOLVED, see checkpoint below
+### Pending discussion: full physical Scholar Register book â€” RESOLVED, see checkpoint below
 The 4 open questions (missing SID handling, which statuses to include, cover format, index
 content) were put to the owner via explicit multiple-choice questions and decided on 2026-07-11.
 See "Full Scholar Register Book (July 11, 2026)" checkpoint below for the decisions and the
@@ -1917,7 +1984,7 @@ Not done / next session must:
 
 ### Verified and closed (July 11, 2026, later same day)
 - Fixed an encoding defect in `_scholar_register_index_flowables`: the index title used an em-dash
-  (`SCHOLAR'S REGISTER — INDEX`) and the "Not Allotted" text used curly quotes - both replaced with
+  (`SCHOLAR'S REGISTER â€” INDEX`) and the "Not Allotted" text used curly quotes - both replaced with
   plain ASCII (`SCHOLAR'S REGISTER - INDEX`, `'Not Allotted'`, plain `-` for missing-row cells) for
   reliable rendering with ReportLab's base Helvetica font, consistent with the plain-ASCII
   convention already used everywhere else in `pdf.py`.
@@ -1979,9 +2046,9 @@ galat likha hai" - the Hindi text was fundamentally wrong, not just a typo.
    files (`NotoSansDevanagari-Regular/Bold.ttf`) are present and correctly registered - this is
    NOT a missing-font issue. The actual cause: ReportLab draws each Devanagari character glyph in
    raw Unicode storage order and does not perform OpenType shaping. Devanagari needs this for two
-   reasons ReportLab can't do: (a) matras like "ि" are stored after their consonant in Unicode but
-   must display before it, and (b) conjunct consonants (जुड़े हुए अक्षर, e.g. in जन्मतिथि, प्रवेश,
-   कक्षोन्नति) require ligature glyph substitution via the font's GSUB table. This is a
+   reasons ReportLab can't do: (a) matras like "à¤¿" are stored after their consonant in Unicode but
+   must display before it, and (b) conjunct consonants (à¤œà¥à¤¡à¤¼à¥‡ à¤¹à¥à¤ à¤…à¤•à¥à¤·à¤°, e.g. in à¤œà¤¨à¥à¤®à¤¤à¤¿à¤¥à¤¿, à¤ªà¥à¤°à¤µà¥‡à¤¶,
+   à¤•à¤•à¥à¤·à¥‹à¤¨à¥à¤¨à¤¤à¤¿) require ligature glyph substitution via the font's GSUB table. This is a
    long-documented ReportLab limitation for Indic/complex scripts, unrelated to the earlier
    em-dash/curly-quote encoding fix (that was a plain-ASCII vs non-ASCII glyph availability issue
    in Helvetica - a completely different class of bug).
@@ -2030,8 +2097,8 @@ Not done / next session must:
 
 ### Devanagari shaping via HarfBuzz + FreeType (July 11, 2026, later same day)
 **Confirmed the Pillow+raqm fix above did NOT work.** Owner rendered a real book page and reported
-"पूर्व विद्यालय" showing as "पूर्व वदि्यालय" - the "ि" matra visibly attached to the wrong
-consonant (द instead of व), the same class of bug as before the Pillow fix. Diagnosed via a direct
+"à¤ªà¥‚à¤°à¥à¤µ à¤µà¤¿à¤¦à¥à¤¯à¤¾à¤²à¤¯" showing as "à¤ªà¥‚à¤°à¥à¤µ à¤µà¤¦à¤¿à¥à¤¯à¤¾à¤²à¤¯" - the "à¤¿" matra visibly attached to the wrong
+consonant (à¤¦ instead of à¤µ), the same class of bug as before the Pillow fix. Diagnosed via a direct
 check on the owner's machine: `python -c "from PIL import features; print(features.check('raqm'))"`
 returned **False**. Pillow==12.2.0 installed (project pins 12.3.0 in requirements.txt - a version
 drift worth investigating separately) does not have libraqm compiled in on this Windows install,
@@ -2071,8 +2138,8 @@ of code than the Pillow attempt - treat the next verification round as the real 
 Not done / next session must:
 1. `pip install -r requirements.txt` (or `pip install freetype-py uharfbuzz` directly) inside the
    venv - these are new dependencies, nothing will work until they're installed.
-2. Re-render the same sample that showed "वदि्यालय" and confirm it now reads "विद्यालय" correctly,
-   plus spot-check a word with a real conjunct (e.g. "जन्मतिथि", "प्रवेश", "वर्तमान") for proper
+2. Re-render the same sample that showed "à¤µà¤¦à¤¿à¥à¤¯à¤¾à¤²à¤¯" and confirm it now reads "à¤µà¤¿à¤¦à¥à¤¯à¤¾à¤²à¤¯" correctly,
+   plus spot-check a word with a real conjunct (e.g. "à¤œà¤¨à¥à¤®à¤¤à¤¿à¤¥à¤¿", "à¤ªà¥à¤°à¤µà¥‡à¤¶", "à¤µà¤°à¥à¤¤à¤®à¤¾à¤¨") for proper
    ligature formation, not just matra position.
 3. Run `manage.py test core` - if `uharfbuzz`/`freetype-py` fail to import or the shaping pipeline
    throws for some unexpected reason, the fallback path means PDFs should still generate (just with
@@ -2085,10 +2152,10 @@ Not done / next session must:
 ### Verified working, one real follow-up bug found and fixed (July 11, 2026, same day)
 Owner installed the new dependencies and ran the full suite: **85/85 passed**. Rendered a real
 sample and confirmed the HarfBuzz+FreeType shaping itself is correct - matras and conjuncts
-(including "विद्यालय", "जन्मतिथि", "प्रवेश", "वर्तमान") now display properly.
+(including "à¤µà¤¿à¤¦à¥à¤¯à¤¾à¤²à¤¯", "à¤œà¤¨à¥à¤®à¤¤à¤¿à¤¥à¤¿", "à¤ªà¥à¤°à¤µà¥‡à¤¶", "à¤µà¤°à¥à¤¤à¤®à¤¾à¤¨") now display properly.
 
 A second, real bug surfaced from that same render: English words in the mixed English/Hindi
-"Note / टिप्पणी" lines at the bottom of the page showed as missing-glyph boxes ("tofu"). Root
+"Note / à¤Ÿà¤¿à¤ªà¥à¤ªà¤£à¥€" lines at the bottom of the page showed as missing-glyph boxes ("tofu"). Root
 cause: `NotoSansDevanagari.ttf` has no Latin glyphs, and `_render_devanagari_png()` was being
 called on the ENTIRE mixed-script note string, so HarfBuzz/FreeType had no glyph to draw for the
 English letters.
@@ -2097,10 +2164,10 @@ English letters.
 every caller benefits automatically**: new `_text_script_runs(text)` splits text into
 `(is_devanagari, run_text)` tuples by grouping consecutive same-class characters (Devanagari
 Unicode block `U+0900-U+097F` vs everything else), with whitespace attaching to whichever run is
-already open so a phrase like "पूर्व विद्यालय" or "VI to VIII" doesn't get needlessly fragmented
+already open so a phrase like "à¤ªà¥‚à¤°à¥à¤µ à¤µà¤¿à¤¦à¥à¤¯à¤¾à¤²à¤¯" or "VI to VIII" doesn't get needlessly fragmented
 at every space. `_devanagari_flowable()` now renders each Devanagari run through the HarfBuzz+
 FreeType pipeline as before, and each non-Devanagari run (English words, but also plain ASCII
-punctuation like the hyphen in "धर्म-जाती" or the colon in the note text - anything NotoSansDevanagari
+punctuation like the hyphen in "à¤§à¤°à¥à¤®-à¤œà¤¾à¤¤à¥€" or the colon in the note text - anything NotoSansDevanagari
 doesn't have a glyph for) through a normal Helvetica `Paragraph`. Multiple runs are assembled into
 a borderless single-row `Table` (auto-sized columns, `VALIGN=BOTTOM`, zero padding) so they read as
 one continuous line. Single-run text (the common case - most labels are pure Devanagari) still
@@ -2109,10 +2176,10 @@ Call sites (`bilingual_label`, `grid_heading`, the subtitle line, both note line
 changes - the fix is entirely internal to `_devanagari_flowable`.
 
 Not done / next session must:
-1. Re-render the same sample and confirm the "Note / टिप्पणी" lines now show English words in
+1. Re-render the same sample and confirm the "Note / à¤Ÿà¤¿à¤ªà¥à¤ªà¤£à¥€" lines now show English words in
    Helvetica (not boxes) while the Hindi portions keep their correct HarfBuzz-shaped rendering,
    sitting on the same line.
-2. Also spot-check "Religion / Caste" (धर्म-जाती, contains a hyphen) now renders correctly rather
+2. Also spot-check "Religion / Caste" (à¤§à¤°à¥à¤®-à¤œà¤¾à¤¤à¥€, contains a hyphen) now renders correctly rather
    than showing a box where the hyphen should be - this exact bug existed there too before this fix,
    just not yet reported/noticed.
 3. Run `manage.py test core` again to confirm 85/85 still passes after this change.
@@ -2143,12 +2210,12 @@ actual code afterward (not just trusted from the relayed summary):
 ### Owner visual review confirmed round 2 mostly works, one more real bug found (July 11, 2026)
 Owner rendered the layout-polish-round-2 build: single A4 page confirmed, vertical group labels
 render correctly, matras/conjuncts still correct. One remaining bug reported: words glued together
-with no space at a Hindi->English transition inside the mixed note lines - "का कार्यWork" instead
-of "का कार्य Work", "प्रत्येकentry" instead of "प्रत्येक entry". English->Hindi transitions were
+with no space at a Hindi->English transition inside the mixed note lines - "à¤•à¤¾ à¤•à¤¾à¤°à¥à¤¯Work" instead
+of "à¤•à¤¾ à¤•à¤¾à¤°à¥à¤¯ Work", "à¤ªà¥à¤°à¤¤à¥à¤¯à¥‡à¤•entry" instead of "à¤ªà¥à¤°à¤¤à¥à¤¯à¥‡à¤• entry". English->Hindi transitions were
 fine (space preserved); only Devanagari->Latin transitions lost the space.
 
 **Root cause**: `_render_devanagari_png`'s canvas bounding box was computed only from glyphs that
-actually painted a visible bitmap. A trailing space at the end of a Devanagari run (e.g. "कार्य ")
+actually painted a visible bitmap. A trailing space at the end of a Devanagari run (e.g. "à¤•à¤¾à¤°à¥à¤¯ ")
 advances the pen but paints nothing, so that advance was silently dropped from the image's width -
 the rendered PNG was trimmed flush to the last visible glyph, and with zero cell padding in
 `_devanagari_flowable`'s row table, the next (Latin) run's cell sat directly against it.
@@ -2159,7 +2226,7 @@ line, in `core/pdf.py` `_render_devanagari_png`. Fixes this for every mixed-scri
 the two note lines (anywhere a Devanagari run is followed by Latin text with a space between them).
 
 Not done / next session must:
-1. Re-render and confirm "का कार्य Work" and "प्रत्येक entry" (and the rest of both note lines) now
+1. Re-render and confirm "à¤•à¤¾ à¤•à¤¾à¤°à¥à¤¯ Work" and "à¤ªà¥à¤°à¤¤à¥à¤¯à¥‡à¤• entry" (and the rest of both note lines) now
    show a normal space at every script transition.
 2. Run `manage.py test core` to reconfirm 85/85 after this change.
 3. `collectstatic` + `build-desktop.bat` + full EXE rebuild once the owner confirms - the entire
@@ -2194,15 +2261,15 @@ Owner did a final visual review of the trailing-space fix (previous checkpoint) 
 confirmed it rendered correctly ("wah"). Two small content/layout fixes followed, then the whole
 Devanagari/layout-polish body of work was finally shipped to a rebuilt EXE.
 
-1. **"Work" column note was factually wrong.** Note said "Classes VI to VIII का कार्य Work column
-   में अंकित करें" (only Junior High). Owner confirmed via `AskUserQuestion` that the real rule is
+1. **"Work" column note was factually wrong.** Note said "Classes VI to VIII à¤•à¤¾ à¤•à¤¾à¤°à¥à¤¯ Work column
+   à¤®à¥‡à¤‚ à¤…à¤‚à¤•à¤¿à¤¤ à¤•à¤°à¥‡à¤‚" (only Junior High). Owner confirmed via `AskUserQuestion` that the real rule is
    Nursery to VIII (all classes) - text corrected in `core/pdf.py` `_scholar_register_page_flowables`
    to "Classes Nursery to VIII...". This is a content/business-rule fix, not a rendering bug.
-2. **Note heading layout**: owner wanted "Note / टिप्पणी :" on its own bold line, with "1." and "2."
+2. **Note heading layout**: owner wanted "Note / à¤Ÿà¤¿à¤ªà¥à¤ªà¤£à¥€ :" on its own bold line, with "1." and "2."
    each on their own line below it (matching the legacy form), instead of the heading being glued to
    the start of line 1. Changed from two `_devanagari_flowable()` calls to three (heading rendered
    bold via `bold=True`, then "1. ..." then "2. ..."), each separated by a `0.8mm` Spacer. Confirmed
-   correct via owner screenshot: bold "Note / टिप्पणी :" heading line, then two numbered lines below,
+   correct via owner screenshot: bold "Note / à¤Ÿà¤¿à¤ªà¥à¤ªà¤£à¥€ :" heading line, then two numbered lines below,
    full page still fits on one A4 page with the outer border intact.
 3. **Shipped**: `manage.py test core` reconfirmed 85/85 (`Ran 85 tests in 107.682s OK`), then
    `collectstatic` (0 new/changed static files - expected, PDF logic only) and `build-desktop.bat`
@@ -2306,7 +2373,7 @@ Solution" branding) against the first Django version and rejected both - old loo
 **Real bug found and fixed, not just styling**: `_premium_header()` (shared by Character Certificate
 and the Marksheet/Report Card) rendered its optional Hindi title via a raw `Paragraph` in
 `NotoSansDevanagari-Bold` - the exact same no-shaping bug fixed for the Scholar Register weeks earlier,
-but never propagated here. "चरित्र प्रमाण-पत्र" was rendering as "चरत्रि प्रमाण-पत्" (matra
+but never propagated here. "à¤šà¤°à¤¿à¤¤à¥à¤° à¤ªà¥à¤°à¤®à¤¾à¤£-à¤ªà¤¤à¥à¤°" was rendering as "à¤šà¤°à¤¤à¥à¤°à¤¿ à¤ªà¥à¤°à¤®à¤¾à¤£-à¤ªà¤¤à¥" (matra
 reordering broken). Fixed by routing through `_devanagari_flowable()` instead. Marksheet is unaffected
 - it never passes `title_hi`.
 
@@ -2468,7 +2535,7 @@ project, for consistency):
     the downloadable/printable PDF (previously only had a "Balance Due" table row, easy to miss). Also
     added the "Previous Due (carried forward)" line item (purple, bold) per owner decision #2 above.
   - `templates/core/receipt_list.html`: receipt number cell now also shows a "CARRIED FORWARD" or
-    "⚠ DUE" badge (reusing the same small-pill style as the existing CANCELLED/EDITED badges).
+    "âš  DUE" badge (reusing the same small-pill style as the existing CANCELLED/EDITED badges).
 - Tests added to `core/tests.py` `FeeReceiptTests` (92 total tests now, was 88):
   `test_previous_due_suggested_from_earlier_session`,
   `test_receipt_create_with_previous_due_marks_prior_receipts_carried_forward`,
@@ -2499,11 +2566,11 @@ project, for consistency):
 
 **What happened (confirmed with owner):** On receipt `MR-20260712170536` (student Pawan Vishwakarma), the
 office went into Django admin (Fee Setup > Fee Heads) and manually created a brand-new **Fee Head** named
-"Previous Due", then entered ₹1,900 against it as an ordinary line item - on top of the *separate*,
-dedicated `previous_due_amount` field on the same receipt (which had correctly auto-suggested ₹56,950 from
+"Previous Due", then entered â‚¹1,900 against it as an ordinary line item - on top of the *separate*,
+dedicated `previous_due_amount` field on the same receipt (which had correctly auto-suggested â‚¹56,950 from
 this student's real earlier unpaid receipts). Result: the old due was counted twice under two different
-mechanisms with the same name, producing a receipt that showed Fee Total ₹5,950 (includes the bogus
-₹1,900 "Previous Due" fee-head line) but Net Payable ₹62,900 (₹5,950 + ₹56,950 previous-due field), which
+mechanisms with the same name, producing a receipt that showed Fee Total â‚¹5,950 (includes the bogus
+â‚¹1,900 "Previous Due" fee-head line) but Net Payable â‚¹62,900 (â‚¹5,950 + â‚¹56,950 previous-due field), which
 looked nonsensical to the owner ("total galat dikha rha hai").
 
 Root cause: the dedicated "Previous Due" field (shipped this session, see checkpoint above) and a
@@ -2520,7 +2587,7 @@ nothing in the UI stopped someone from creating a Fee Head with that exact name.
   case/whitespace/synonym variants, confirms ordinary Fee Head names like "Tuition Fee" still work).
   Test count now 95 (was 92).
 
-**UPDATE (same incident, corrected root cause):** owner pushed back that ₹61,000 due is unrealistic -
+**UPDATE (same incident, corrected root cause):** owner pushed back that â‚¹61,000 due is unrealistic -
 "pure sal ka bhi fee itna nahi hua" (not even a full year's fee is this much) - which led to finding a
 SECOND, more serious bug stacked on top of the first:
 
@@ -2533,7 +2600,7 @@ SECOND, more serious bug stacked on top of the first:
   including years of legacy CSV bulk-imported receipts (`SF-...` receipt numbers, `legacy_receipt_no` set)
   going back to 2018-19. Legacy per-receipt "due" figures are stale snapshots from the old manual system -
   frequently already resolved via cash payments that were never entered into this system - so blindly
-  summing years of them produced a wildly inflated, meaningless total (~₹56,950 auto-filled on this
+  summing years of them produced a wildly inflated, meaningless total (~â‚¹56,950 auto-filled on this
   receipt). This directly contradicted the owner's original request: *"is sal jo purana due hai manual
   dala jayega aur next year se agar koi due ho to autometic next year show ho jaye"* (this year's old due
   should be entered manually; only from next year should it show automatically) - the auto-suggestion was
@@ -2553,8 +2620,8 @@ originally asked. Added `test_previous_due_ignores_legacy_bulk_imported_receipts
    cascade. Deactivating just hides it from the Fee Collection form's line-item list going forward. The
    new model-level guardrail blocks anyone from ever reactivating/recreating one with this name.
 2. **Correct receipt `MR-20260712170536`**: open it in Edit mode.
-   - Remove/zero the ₹1,900 "Previous Due" fee-head line item (it's a duplicate of the dedicated field).
-   - Change the dedicated "Previous Due" field from the bogus auto-suggested ~₹56,950 down to the ACTUAL
+   - Remove/zero the â‚¹1,900 "Previous Due" fee-head line item (it's a duplicate of the dedicated field).
+   - Change the dedicated "Previous Due" field from the bogus auto-suggested ~â‚¹56,950 down to the ACTUAL
      correct old-due figure for this student, which only the office knows (from their paper/manual
      records) - do not trust the old auto-filled number, it was computed by the now-fixed buggy logic.
    - Re-check "Amount Paid" reflects what was actually collected in cash/bank for this receipt.
@@ -2657,8 +2724,8 @@ together.
 
 ## CRITICAL REGRESSION FOUND AND FIXED: "Correct Receipt" was silently broken for EVERY receipt
 
-**Owner report:** cancelled the bad receipt, created a correct fresh one (MR-20260712183241, ₹4,050 fees,
-₹800 paid, ₹3,250 due - itself correct), then tried "Correct Receipt" to adjust it, filled a reason, saved
+**Owner report:** cancelled the bad receipt, created a correct fresh one (MR-20260712183241, â‚¹4,050 fees,
+â‚¹800 paid, â‚¹3,250 due - itself correct), then tried "Correct Receipt" to adjust it, filled a reason, saved
 - and the Due amount never changed. Tried a second time, same result. "edit save nahi ho raha hai."
 
 **Root cause:** earlier this session, `previous_due_amount` was added to `FeeReceiptEntryForm.Meta.fields`
@@ -2701,7 +2768,7 @@ session's Previous Due changes went in did NOT actually save those corrections -
 whatever it was before those correction attempts (the fields being edited stayed at their original
 values). Worth a quick sanity check of any receipts believed to have been corrected recently, though based
 on this conversation the only one affected in practice is MR-20260712183241 (Pawan Vishwakarma) - and
-since its correction attempts changed nothing, its data (₹4,050 fee / ₹800 paid / ₹3,250 due) should
+since its correction attempts changed nothing, its data (â‚¹4,050 fee / â‚¹800 paid / â‚¹3,250 due) should
 already be accurate as originally created; the owner should just retry "Correct Receipt" on it now if a
 change (e.g. Received Amount) is still needed.
 
@@ -3198,3 +3265,6 @@ after confirming no further forensic comparison is needed.
 5. Add a "Last verified backup" panel in Admin/Settings so the owner can see the latest DB backup time.
 6. Add a small dashboard card for "Today's Salary Paid" separately if the owner later wants expense and
    salary split visually. For now, the combined Today's Expense card is correct for cash-out awareness.
+
+
+

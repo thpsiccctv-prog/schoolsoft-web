@@ -1,305 +1,117 @@
-# SchoolSoft Operator Guide
+# SchoolSoft Operator Training Manual (ऑपरेटर मार्गदर्शिका)
+**Last Updated: 16 July 2026**
 
-Date: 05 July 2026
+SchoolSoft ERP में आपका स्वागत है। यह गाइड स्कूल के ऑपरेटर और एडमिनिस्ट्रेटर को दैनिक कार्यों (daily operations), फीस कलेक्शन, कैश बुक, बैकअप और डेटा सुरक्षा से जुड़े नियमों को सरल भाषा (Hinglish/Hindi) में समझाने के लिए बनाई गई है।
 
-This guide explains where daily entries must be done, where data is saved, how to back up the software, how to move SchoolSoft to another computer, and what to do with the old Access software.
+---
 
-## 1. Sabse Zaroori Rule
+## 1. सबसे महत्वपूर्ण नियम (Golden Rules)
+> [!IMPORTANT]
+> - **सिर्फ एक कम्प्यूटर (Main PC) पर एंट्री करें:** स्कूल के दैनिक कार्यों की एंट्री केवल मुख्य कम्प्यूटर (जिस पर Desktop EXE इंस्टॉल है) पर ही होगी।
+> - **Online Site केवल रिपोर्ट देखने के लिए है:** `https://schoolsoft-english-medium.onrender.com` पर डायरेक्ट डेली एंट्री न करें। यहाँ सिर्फ रिपोर्ट देखें।
+> - **पुराना Access सॉफ्टवेयर बंद करें:** पुराने Access सॉफ्टवेयर (Sun Software Solution) में अब कोई भी नई एंट्री बिल्कुल न करें। 
 
-Daily real work sirf Desktop App / EXE me karein.
+---
+
+## 2. सिस्टम के तीन भाग (Understanding the Architecture)
 
-Use this:
-
-`SchoolSoft.exe`
-
-Do not use the online website for daily fee/admission entries unless the administrator specifically tells you.
-
-Do not continue new entries in the old MS Access SchoolSOFT software.
-
-## 2. Teen Alag Systems Ko Samjhein
-
-### A. Desktop SchoolSoft EXE
-
-This is the main and official software for daily work.
-
-Use it for:
-
-- New fee receipts
-- Student admission/edit
-- Receipt correction/cancel/void
-- Marks, staff, transport, fee setup, reports
-- Printing receipts and PDFs
-
-Data is saved on this computer at:
-
-`C:\Users\Admin\AppData\Local\SchoolSoft\db.sqlite3`
-
-Important: the shortcut or EXE file is not the data. The real data is in the `db.sqlite3` file above.
-
-### B. Online Website
-
-URL:
-
-`https://schoolsoft-english-medium.onrender.com`
-
-Use it mainly for:
-
-- Viewing reports from mobile or another place
-- Online backup/mirror of desktop data
-- Checking dashboard/status
-
-Do not make daily real entries online, because online data does not automatically come back to the Desktop EXE.
-
-### C. Old MS Access SchoolSOFT
-
-The old software is now only for reference/history.
-
-Do not enter new fee receipts, admission, marks, or updates in the old software.
-
-If someone enters data in old software now, it will not automatically come into new SchoolSoft. This will create confusion and split records.
-
-## 3. Where New Entries Will Save
-
-If entry is done in Desktop EXE:
-
-- Data saves in: `C:\Users\Admin\AppData\Local\SchoolSoft\db.sqlite3`
-- This is the main school record.
-- It works even without internet.
-
-If entry is done on online website:
-
-- Data saves on Render PostgreSQL server.
-- It will not automatically appear in Desktop EXE.
-- Avoid this for daily work.
-
-If entry is done in old Access software:
-
-- Data stays in old Access files only.
-- It will not automatically appear in new SchoolSoft.
-- Do not use it for new work.
-
-## 4. Daily Work Procedure
-
-1. Open `SchoolSoft.exe`.
-2. Login with your assigned username/password.
-3. Do fee/admission/student/marks/staff work inside Desktop EXE only.
-4. Print receipt/PDF from the same app.
-5. At the end of the day, close SchoolSoft.
-6. Take a backup of the database.
-
-## 5. Daily Backup Procedure
-
-At the end of every working day:
-
-1. Close SchoolSoft completely.
-2. Open this folder:
-
-   `C:\Users\Admin\AppData\Local\SchoolSoft`
-
-3. Copy this file:
-
-   `db.sqlite3`
-
-4. Paste it into a safe backup location, for example:
-
-   `D:\SchoolSoft Backups\`
-
-   or an external pen drive/hard disk.
-
-5. Rename the copied file with date:
-
-   `SchoolSoft_backup_2026-07-05.sqlite3`
-
-Recommended backup schedule:
-
-- Daily: copy `db.sqlite3`
-- Weekly: copy the full folder `C:\Users\Admin\AppData\Local\SchoolSoft`
-- Before any software update/import/sync: take one extra backup
-
-## 6. Moving SchoolSoft To Another Computer
-
-Use this when you want to run the same SchoolSoft data on another desktop/laptop.
-
-### On Old Computer
-
-1. Close SchoolSoft completely.
-2. Copy the data folder:
-
-   `C:\Users\Admin\AppData\Local\SchoolSoft`
-
-3. Also copy the app folder or installer/EXE folder:
-
-   `D:\english medium\schoolsoft_web\dist\SchoolSoft`
-
-   The important app file inside it is:
-
-   `SchoolSoft.exe`
-
-4. Keep both on pen drive/external disk:
-
-   - `SchoolSoft` data folder
-   - `dist\SchoolSoft` app folder
-
-### On New Computer
-
-1. Paste the app folder somewhere safe, for example:
-
-   `D:\SchoolSoft\SchoolSoft`
-
-2. Run `SchoolSoft.exe` once, then close it.
-3. Open this folder on the new computer:
-
-   `%LOCALAPPDATA%`
-
-4. Paste the old `SchoolSoft` data folder there, so the final path becomes:
-
-   `C:\Users\<NewUser>\AppData\Local\SchoolSoft\db.sqlite3`
-
-5. Create a desktop shortcut for:
-
-   `SchoolSoft.exe`
-
-6. Open SchoolSoft and verify dashboard values.
-
-Latest verified reference values before future new entries:
-
-- Active Students: `364`
-- Total Students: `1,215`
-- Current Session Receipts: `101`
-- Total Dues: `Rs. 2,15,700`
-
-These numbers will change after new real entries.
-
-## 7. Important Rule For Multiple Computers
-
-Do not enter data on two different computers independently.
-
-Example problem:
-
-- Computer A receives fee receipt no. 102.
-- Computer B also receives another fee receipt no. 102.
-- Later both data files cannot be safely merged without special work.
-
-Current recommended setup:
-
-- One master desktop computer for all real entries.
-- Other computers/mobile/online website for viewing reports only.
-
-If the school needs multiple counters entering data at the same time, then a proper network/server setup should be planned separately.
-
-## 8. Online Sync Procedure
-
-The Desktop EXE database is the master.
-
-The online website is a copy/mirror for reporting.
-
-When online website needs to be updated:
-
-1. Stop making entries for a few minutes.
-2. Close SchoolSoft EXE completely.
-3. Take backup of Desktop DB:
-
-   `C:\Users\Admin\AppData\Local\SchoolSoft\db.sqlite3`
-
-4. Run this file from the project/app folder:
-
-   `sync-desktop-to-online.bat`
-
-5. First time only, it will ask for Render External Database URL.
-   Paste the URL that starts with:
-
-   `postgresql://...`
-
-   It will save this URL locally in:
-
-   `render-db-url.txt`
-
-   This file is ignored by Git and should not be shared publicly.
-
-6. The script will:
-
-   - Backup the Desktop DB into `sync-backups`
-   - Export fresh Desktop data into `data.json`
-   - Replace the online Render database with the Desktop data
-   - Print final counts
-
-7. After sync, open the online website and check the dashboard:
-
-   `https://schoolsoft-english-medium.onrender.com`
-
-Important:
-
-- Sync is not automatic.
-- Desktop entries do not instantly appear online.
-- Online entries do not come back to desktop automatically.
-- Sync direction is one-way: Desktop -> Online.
-- Do not run sync while operators are making entries.
-
-## 9. What Not To Do
-
-Do not:
-
-- Delete `db.sqlite3`
-- Rename `db.sqlite3` unless restoring backup
-- Copy only the desktop shortcut and think data is copied
-- Enter new records in old MS Access software
-- Enter the same receipt online and desktop both
-- Run import/sync without backup
-- Edit database directly in SQLite tools unless instructed
-
-## 10. Emergency Restore From Backup
-
-If data becomes wrong or software shows unexpected values:
-
-1. Close SchoolSoft completely.
-2. Open:
-
-   `C:\Users\Admin\AppData\Local\SchoolSoft`
-
-3. Rename current database:
-
-   `db.sqlite3` -> `db.problem_2026-07-05.sqlite3`
-
-4. Copy the latest good backup into this folder.
-5. Rename backup copy to:
-
-   `db.sqlite3`
-
-6. Open SchoolSoft again.
-7. Verify dashboard and recent receipts.
-
-## 11. Operator Checklist
-
-Daily start:
-
-- [ ] Open Desktop `SchoolSoft.exe`
-- [ ] Login with assigned user
-- [ ] Check dashboard current session
-
-During work:
-
-- [ ] Make entries only in Desktop EXE
-- [ ] Print receipt/PDF if needed
-- [ ] Use Cancel/Void for wrong receipt, not hard delete
-- [ ] Use Edit/Correct only with a clear reason
-
-Daily end:
-
-- [ ] Close SchoolSoft
-- [ ] Copy `db.sqlite3` backup
-- [ ] Save backup with date
-
-Monthly/weekly:
-
-- [ ] Ask administrator if online website needs sync
-- [ ] Take full folder backup
-
-## Final Decision
-
-From now on:
-
-1. New real entries: Desktop EXE only.
-2. Online website: report/mobile/backup mirror only.
-3. Old Access software: no new entry, reference only.
-4. Main data file: `C:\Users\Admin\AppData\Local\SchoolSoft\db.sqlite3`.
-5. To move to another computer: copy both the app folder and the `SchoolSoft` data folder.
+| भाग (Component) | उपयोग (Use Case) | डेटा कहाँ सेव होता है? |
+| :--- | :--- | :--- |
+| **Desktop App (SchoolSoft.exe)** | फीस कलेक्शन, रसीद काटना, एडमिशन, खर्च, सैलरी एंट्री | आपके कंप्यूटर के अंदर: `%LOCALAPPDATA%\SchoolSoft\db.sqlite3` |
+| **Online Website** | मोबाइल या दूसरे डिवाइस पर रिपोर्ट देखना, ऑनलाइन बैकअप mirror | क्लाउड डेटाबेस (PostgreSQL) पर |
+| **Old Access Software** | पुराना रिकॉर्ड और इतिहास (history) देखने के लिए | पुराने Access MDB फाइल में (केवल Read-Only) |
+
+---
+
+## 3. दैनिक कार्य प्रक्रिया (Daily Workflow Schedule)
+
+### 🌅 सुबह काम शुरू करते समय (Daily Start):
+1. **SchoolSoft.exe** खोलें।
+2. अपने **Username/Password** से लॉगिन करें।
+3. **Session Check करें:** ऊपर दायें (Top Right) कोने में चालू सत्र (जैसे: **Session 2026-27**) दिखाई दे रहा है, यह पक्का करें।
+
+### ☀️ दिनभर के काम के दौरान (Daily Entry Tasks):
+
+#### A. फीस कलेक्शन (Fee Collection)
+1. **Student Search:** बायीं पट्टी (Sidebar) में **Fee Collection** पर क्लिक करें। स्टूडेंट का नाम, रोल नंबर या स्कॉलर नंबर (S.R. No.) डालकर सर्च करें।
+2. **Month Selection:** स्टूडेंट को सेलेक्ट करने के बाद, जिन महीनों की फीस जमा करनी है उनके गोल बटन (chips) पर क्लिक करें (Hover/Click करने पर रंग बदलता है)।
+3. **Dues & Balance:** सिस्टम अपने आप बकाया फीस (dues) कैलकुलेट कर लेगा।
+4. **Save & Print (F9):** फीस एंट्री के बाद कीबोर्ड पर **F9** बटन दबाएं या `Save & Print` पर क्लिक करें। रसीद सेव हो जाएगी और सीधे थर्मल प्रिंटर पर प्रिंट हो जाएगी।
+5. **रसीद में सुधार (Edit/Cancel):**
+   - रसीद गलत बनने पर उसे **Hard Delete न करें**।
+   - रसीद के Detail पेज पर जाकर **Cancel / Void** पर क्लिक करें और कारण (reason) लिखें।
+   - अगर कोई छोटी गलती सुधरनी है, तो **Edit / Correct** पर क्लिक करके कारण दर्ज करें। सिस्टम ऑडिट लॉग में इसे सुरक्षित रखेगा।
+
+#### B. दैनिक खर्चे और सैलरी (Expenses & Salaries)
+* **स्कूल के खर्चे (diesel, चाय-पानी, स्टेशनरी):** बायीं पट्टी में **Daily Expense** पर क्लिक करके एंट्री करें।
+* **स्टाफ सैलरी (Salary Payments):** सैलरी भुगतान के लिए **Salary Register** का उपयोग करें। यदि पुराना एरियर दिया जा रहा है तो भुगतान तारीख आज की रखें और रिमार्क्स में बकाया लिखें।
+* **अन्य प्राप्तियां (Other Receipts):** स्कूल को फीस के अलावा मिलने वाला कोई पैसा (जैसे personal loan या एडवांस वापसी) **Other Receipt** में दर्ज करें।
+
+#### C. कैश बुक का मिलान (Cash Book Auditing)
+दिन के अंत में **Cash Book** मेनू पर क्लिक करें और `Include Salary` बटन ऑन करके आज का क्लोजिंग बैलेंस (Closing Balance) दराज (cash counter box) में बचे कैश से मिलाएं। दोनों बिल्कुल मैच होने चाहिए।
+
+### 🌌 शाम को काम खत्म करते समय (Daily Shutdown):
+1. काम खत्म होने के बाद **SchoolSoft.exe** को पूरी तरह बंद कर दें।
+2. **बैकअप लें:** स्क्रीन पर एडमिन लॉगिन में **Backup Now** बटन पर क्लिक करें। 
+3. **कन्फर्म करें:** "Daily backup banana hai?" पूछे जाने पर **OK** पर क्लिक करें।
+4. **सफलता संदेश:** स्क्रीन पर `Backup complete: E:\SchoolSoft-Daily-Backups\<YYYYMMDD-HHMMSS>` का बैनर दिखने तक प्रतीक्षा करें।
+
+---
+
+## 4. ऑनलाइन डेटा अपडेट करना (Online Sync Procedure)
+डेस्कटॉप का डेटा ऑनलाइन वेबसाइट पर भेजने के लिए नीचे दी गई प्रक्रिया अपनाएं:
+
+> [!WARNING]
+> सिंक करने के दौरान स्कूल काउंटर पर किसी भी प्रकार की डेटा एंट्री न होने दें।
+
+1. एडमिन अकाउंट से लॉगिन करें।
+2. डैशबोर्ड के ऊपरी-दाहिने हिस्से में **Online Sync** बटन पर क्लिक करें।
+3. कन्फर्मेशन पॉपअप आने पर **OK** पर क्लिक करें।
+4. सिस्टम बैकग्राउंड में सुरक्षा जांच (safety checks) चलाएगा और डेटा को ऑनलाइन अपलोड कर देगा।
+5. सिंक पूरा होने पर ऑनलाइन वेबसाइट `https://schoolsoft-english-medium.onrender.com` खोलकर रिपोर्ट और कैश बुक मिलान कर लें।
+
+---
+
+## 5. ऑडिटिंग नियम (Auditing Routines)
+
+सॉफ्टवेयर के कैश और डेटा को सुरक्षित रखने के लिए तीन स्तरों पर ऑडिट करें:
+
+* **डेली ऑपरेटर चेक (Daily):** 
+  - आज की कुल फीस रसीदें (Today's Collection)
+  - आज का कुल खर्च (Today's Expense)
+  - कैश बुक का क्लोजिंग बैलेंस और वास्तविक नकद (actual cash)
+* **साप्ताहिक एडमिन चेक (Weekly):**
+  - **Collection Report** और **Receipt Register** देखें।
+  - **Cancelled / Edited Receipts** की लिस्ट चेक करें कि कोई ऑपरेटर गलत इरादे से एंट्री बदल तो नहीं रहा है।
+  - **Voucher Register** in-app चेक करें।
+  - **Dues Summary** चेक करें।
+* **मासिक ऑडिट (Monthly):**
+  - महीने भर की कुल फीस रसीद (Collection Total)।
+  - सैलरी भुगतान (Salary Payments) का स्टाफ-वाइज मिलान।
+  - एडमिनिस्ट्रेटर द्वारा मासिक रूप से एडमिन पासवर्ड बदलें।
+
+---
+
+## 6. क्या कभी नहीं करना है (Critical Don'ts)
+
+> [!CAUTION]
+> 1. **db.sqlite3 फाइल को न छुएं:** `%LOCALAPPDATA%\SchoolSoft\` के अंदर की `db.sqlite3` फाइल को कभी भी डिलीट, रीनेम या ओवरराइट न करें।
+> 2. **डेस्कटॉप शॉर्टकट सिर्फ लिंक है:** पेन ड्राइव में केवल डेस्कटॉप शॉर्टकट कॉपी कर लेने से डेटा बैकअप नहीं होता। डेटा हमेशा बैकअप फोल्डर (`E:\SchoolSoft-Daily-Backups`) से ही लें।
+> 3. **एक साथ दो कंप्यूटरों पर एंट्री न करें:** एक कंप्यूटर का डेटा दूसरे पर बिना बैकअप रिस्टोर किए अलग-अलग एंट्री शुरू न करें। इससे डेटा क्लैश हो जाएगा और मर्ज करना नामुमकिन होगा।
+
+---
+
+## 7. आपातकालीन स्थिति में बैकअप रीस्टोर कैसे करें (Emergency Restore)
+यदि डेटा गलत हो जाए या कंप्यूटर खराब हो जाए, तो अंतिम सही बैकअप को रीस्टोर करने के लिए:
+
+1. **SchoolSoft.exe** को पूरी तरह बंद कर दें।
+2. इस फोल्डर में जाएं: `%LOCALAPPDATA%\SchoolSoft\`
+3. वर्तमान डेटाबेस का नाम बदल दें (सुरक्षा के लिए):
+   `db.sqlite3` ➡️ `db.problem_date.sqlite3`
+4. `E:\SchoolSoft-Daily-Backups\` में से सबसे नवीनतम (latest) दिनांक वाले फोल्डर को खोलें।
+5. वहाँ से `db.sqlite3` फाइल को कॉपी करें।
+6. कॉपी की गई फाइल को `%LOCALAPPDATA%\SchoolSoft\` फोल्डर में पेस्ट कर दें।
+7. SchoolSoft दोबारा खोलें और डेटा का मिलान करें।
+
+---
+*नोट: किसी भी समस्या या एरर आने पर तुरंत एरर मैसेज का स्क्रीनशॉट लें और अपने डेवलपर से संपर्क करें।*

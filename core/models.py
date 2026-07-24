@@ -1178,11 +1178,38 @@ class AccountGroup(TimeStampedModel):
         return self.name
 
 
+class Person(TimeStampedModel):
+    """Represents an individual or external party (Lender, Vendor, Manager, etc.).
+    Used to safely consolidate ledgers that belong to the same real-world entity
+    without relying on string matching."""
+
+    class PersonType(models.TextChoices):
+        LENDER = "lender", "Lender"
+        MANAGER = "manager", "Manager"
+        VENDOR = "vendor", "Vendor"
+        OTHER = "other", "Other"
+
+    name = models.CharField(max_length=120, unique=True)
+    person_type = models.CharField(max_length=20, choices=PersonType.choices, default=PersonType.OTHER)
+    contact_info = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return f"{self.name} ({self.get_person_type_display()})"
+
+
 class LedgerAccount(TimeStampedModel):
     """Individual account head under a group (Cash, Diesel, Bank, etc.)."""
 
     group = models.ForeignKey(
         AccountGroup, on_delete=models.PROTECT, related_name="ledgers"
+    )
+    person = models.ForeignKey(
+        Person, on_delete=models.SET_NULL, related_name="ledgers", null=True, blank=True,
+        help_text="Optional link to a Person for consolidating personal accounts."
     )
     name = models.CharField(max_length=80, unique=True)
     opening_balance = models.DecimalField(

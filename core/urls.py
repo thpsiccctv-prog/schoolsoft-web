@@ -96,6 +96,8 @@ urlpatterns = [
     path("transport/", module_required("transport")(views.transport_list), name="transport_list"),
 
     # Accounts / Cash Book
+    path("accounts/persons/", module_required("accounts")(views.person_list), name="person_list"),
+    path("accounts/persons/<int:pk>/", module_required("accounts")(views.person_detail), name="person_detail"),
     path("accounts/expense/new/", module_required("accounts", write=True)(views.expense_create), name="expense_create"),
     path("accounts/receipt/new/", module_required("accounts", write=True)(views.receipt_other_create), name="receipt_other_create"),
     path("accounts/ledgers/", module_required("accounts")(views.ledger_list), name="ledger_list"),

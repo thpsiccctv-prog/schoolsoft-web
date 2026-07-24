@@ -20,7 +20,12 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 
-from .access import user_can_access, user_can_manage_users, user_is_readonly
+from .access import (
+    is_online_deployment,
+    user_can_access,
+    user_can_manage_users,
+    user_is_readonly,
+)
 from .fee_engine import calculate_student_due
 from .forms import DisciplineRecordForm, FamilyForm, FeeReceiptEditForm, FeeReceiptEntryForm, FeeReceiptLineEntryForm, InventoryIssueForm, InventoryItemForm, SalaryPaymentForm, StudentForm, TransferCertificateForm
 from .models import (
@@ -576,7 +581,7 @@ def dashboard(request):
         "system_status": _dashboard_system_status(),
         "can_new_receipt": user_can_access(user, "fee_collection") and not readonly,
         "can_due_report": user_can_access(user, "dues"),
-        "can_online_sync": user_can_manage_users(user),
+        "can_online_sync": user_can_manage_users(user) and not is_online_deployment(),
         "can_backup": user_can_manage_users(user) and connection.vendor == "sqlite",
     }
     return render(request, "core/dashboard.html", context)
@@ -2760,6 +2765,63 @@ def ledger_list(request):
     from .models import LedgerAccount, AccountGroup
     ledgers = LedgerAccount.objects.select_related("group").all()
     return render(request, "core/ledger_list.html", {"ledgers": ledgers})
+
+
+@login_required
+@permission_required('core.access_accounts', raise_exception=True)
+def person_list(request):
+    from .models import Person, Voucher
+    from django.db.models import Sum
+
+    persons = Person.objects.prefetch_related("ledgers").all()
+    
+    for p in persons:
+        net_balance = 0
+        for l in p.ledgers.all():
+            debits = Voucher.objects.filter(debit_account=l, is_cancelled=False).aggregate(s=Sum('amount'))['s'] or 0
+            credits = Voucher.objects.filter(credit_account=l, is_cancelled=False).aggregate(s=Sum('amount'))['s'] or 0
+            net_balance += (l.opening_balance + debits - credits)
+        p.net_balance = net_balance
+        p.balance_status = "DR" if net_balance > 0 else "CR"
+        p.abs_balance = abs(net_balance)
+
+    return render(request, "core/person_list.html", {"persons": persons})
+
+
+@login_required
+@permission_required('core.access_accounts', raise_exception=True)
+def person_detail(request, pk):
+    from .models import Person, Voucher
+    from django.shortcuts import get_object_or_404
+    from django.db.models import Sum, Q
+
+    person = get_object_or_404(Person, pk=pk)
+    
+    net_balance = 0
+    ledgers = person.ledgers.all()
+    for l in ledgers:
+        debits = Voucher.objects.filter(debit_account=l, is_cancelled=False).aggregate(s=Sum('amount'))['s'] or 0
+        credits = Voucher.objects.filter(credit_account=l, is_cancelled=False).aggregate(s=Sum('amount'))['s'] or 0
+        l.current_balance = l.opening_balance + debits - credits
+        l.balance_status = "DR" if l.current_balance > 0 else "CR"
+        l.abs_balance = abs(l.current_balance)
+        net_balance += l.current_balance
+    
+    person.net_balance = net_balance
+    person.balance_status = "DR" if net_balance > 0 else "CR"
+    person.abs_balance = abs(net_balance)
+
+    vouchers = Voucher.objects.filter(
+        Q(debit_account__person=person) | Q(credit_account__person=person),
+        is_cancelled=False
+    ).select_related('debit_account', 'credit_account').order_by('voucher_date', 'id')
+
+    return render(request, "core/person_detail.html", {
+        "person": person,
+        "ledgers": ledgers,
+        "vouchers": vouchers,
+    })
+
 
 
 @login_required

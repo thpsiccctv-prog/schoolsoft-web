@@ -82,7 +82,7 @@
     </div>
 
 
-    {% if system_status %}
+    {% if not is_online_deployment and system_status %}
     <div class="dash-system-status" aria-label="System safety status">
         {% for item in system_status %}
         <div class="dash-system-card dash-system-{{ item.tone }}" title="{{ item.detail }}">
