@@ -63,6 +63,15 @@
             <div class="dash-kpi-body">
                 <span class="dash-kpi-label">{{ kpi.label }}</span>
                 <strong class="dash-kpi-value{% if kpi.currency %} dash-money{% endif %}">{% if kpi.currency %}&#8377;{% endif %}{{ kpi.value|indian_number }}</strong>
+                {% if kpi.trend_pct is not None %}
+                    {% if kpi.trend_pct > 0 %}
+                    <span class="dash-kpi-context" style="color: var(--color-success, green); font-weight: 600;">&#9650; {{ kpi.trend_pct }}% vs pichhla din</span>
+                    {% elif kpi.trend_pct < 0 %}
+                    <span class="dash-kpi-context" style="color: var(--color-danger, #d97706); font-weight: 600;">&#9660; {{ kpi.trend_pct|stringformat:"d"|slice:"1:" }}% vs pichhla din</span>
+                    {% else %}
+                    <span class="dash-kpi-context" style="color: gray; font-weight: 600;">&minus; 0% vs pichhla din</span>
+                    {% endif %}
+                {% endif %}
                 {% if kpi.empty_caption and not kpi.value %}
                 <span class="dash-kpi-context">{{ kpi.empty_caption }}</span>
                 {% endif %}

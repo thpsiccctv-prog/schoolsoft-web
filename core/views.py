@@ -427,6 +427,10 @@ def dashboard(request):
                     receipt_date=prev_date, is_cancelled=False
                 ).aggregate(total=Sum("received_amount"))["total"] or Decimal("0.00")
 
+        trend_pct = None
+        if prev_total and prev_total > 0:
+            trend_pct = round(((today_received - prev_total) / prev_total) * 100)
+
         kpis.append({
             "label": "Today's Collection",
             "value": today_received,
@@ -437,6 +441,7 @@ def dashboard(request):
             "prev_date": prev_date,
             "prev_total": prev_total,
             "prev_days_ago": prev_days_ago,
+            "trend_pct": trend_pct,
         })
 
     # "Today's Expense" is cash-basis, matching the Cash Book: Daily Expense
