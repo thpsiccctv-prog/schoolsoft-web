@@ -5638,13 +5638,17 @@ body.dashboard-page .page {
 }
 
 .dash-system-card {
-    min-height: 64px;
-    padding: 12px 14px;
+    min-height: auto;
+    padding: 6px 12px;
     background: #ffffff;
     border: 1px solid #d9e4df;
     border-left-width: 4px;
-    border-radius: 8px;
-    box-shadow: 0 1px 3px rgba(16, 40, 32, 0.04), 0 4px 10px rgba(16, 40, 32, 0.04);
+    border-radius: 6px;
+    box-shadow: 0 1px 2px rgba(16, 40, 32, 0.04);
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    flex-wrap: wrap;
 }
 
 .dash-system-ok {
@@ -5670,19 +5674,20 @@ body.dashboard-page .page {
 
 .dash-system-value {
     display: block;
-    margin-top: 6px;
+    margin-top: 0;
     color: #12342a;
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 800;
     line-height: 1.25;
 }
 .dash-system-warning-text {
     display: block;
-    margin-top: 6px;
+    margin-top: 0;
     color: #dc2626;
     font-size: 11px;
     font-weight: 800;
     line-height: 1.2;
+    margin-left: auto;
 }
 
 .dash-system-card.dash-system-warn .dash-system-warning-text {
