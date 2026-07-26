@@ -522,56 +522,56 @@ def dashboard(request):
         tiles.append({
             "url": reverse("core:receipt_create"), "color": "positive",
             "label": "Fee Collection", "sub": "Daily counter receipt desk",
-            "icon": "receipt",
+            "icon": "receipt", "group": "finance"
         })
     if user_can_access(user, "students"):
         tiles.append({
             "url": reverse("core:student_list"), "color": "neutral",
             "label": "Students", "sub": "total", "sub_value": student_total,
-            "count": active_students, "icon": "students",
+            "count": active_students, "icon": "students", "group": "academics_admin"
         })
     if user_can_access(user, "receipts"):
         receipt_count = FeeReceipt.objects.filter(session=active_session, is_cancelled=False).count() if active_session else 0
         tiles.append({
             "url": reverse("core:receipt_list"), "color": "neutral",
             "label": "Receipts", "sub": "Register and PDFs",
-            "count": receipt_count, "icon": "book",
+            "count": receipt_count, "icon": "book", "group": "finance"
         })
     if user_can_access(user, "dues"):
         tiles.append({
             "url": reverse("core:due_up_to_month_report"), "color": "attention",
-            "label": "Dues", "sub": "Due up to selected month", "icon": "clock",
+            "label": "Dues", "sub": "Due up to selected month", "icon": "clock", "group": "finance"
         })
     if user_can_access(user, "marks"):
         tiles.append({
             "url": reverse("core:marks_report"), "color": "neutral",
-            "label": "Marks", "sub": "Results and marksheets", "icon": "cap",
+            "label": "Marks", "sub": "Results and marksheets", "icon": "cap", "group": "academics_admin"
         })
     if user_can_access(user, "collection"):
         tiles.append({
             "url": reverse("core:collection_report"), "color": "positive",
-            "label": "Collection", "sub": "Daily collection report", "icon": "chart",
+            "label": "Collection", "sub": "Daily collection report", "icon": "chart", "group": "finance"
         })
     if user_can_access(user, "fee_setup"):
         tiles.append({
             "url": reverse("core:fee_structure_report"), "color": "neutral",
             "label": "Fee Setup", "sub": "Heads and structure",
-            "count": FeeHead.objects.count(), "icon": "grid",
+            "count": FeeHead.objects.count(), "icon": "grid", "group": "finance"
         })
     if user_can_access(user, "staff"):
         tiles.append({
             "url": reverse("core:staff_list"), "color": "neutral",
-            "label": "Staff", "sub": "Teacher records", "icon": "people",
+            "label": "Staff", "sub": "Teacher records", "icon": "people", "group": "academics_admin"
         })
     if user_can_access(user, "transport"):
         tiles.append({
             "url": reverse("core:transport_list"), "color": "neutral",
-            "label": "Transport", "sub": "Routes and buses", "icon": "bus",
+            "label": "Transport", "sub": "Routes and buses", "icon": "bus", "group": "academics_admin"
         })
     if user_can_access(user, "school_profile"):
         tiles.append({
             "url": reverse("core:school_profile_detail"), "color": "neutral",
-            "label": "School Profile", "sub": "Identity and settings", "icon": "building",
+            "label": "School Profile", "sub": "Identity and settings", "icon": "building", "group": "academics_admin"
         })
 
     for tile in tiles:
