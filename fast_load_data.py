@@ -12,7 +12,7 @@ from django.core.management.color import no_style
 from django.db import connection, transaction
 
 
-BATCH_SIZE = 1000
+BATCH_SIZE = 250
 
 
 def fixture_path():
@@ -90,6 +90,7 @@ def bulk_insert(deserialized):
 
 
 def print_counts():
+    connection.close()
     print("[5/5] Final counts:")
     for label in [
         "core.Student",

@@ -2864,7 +2864,13 @@ def voucher_list(request):
     
     q = request.GET.get("q", "").strip()
     if q:
-        vouchers = vouchers.filter(voucher_no__icontains=q)
+        vouchers = vouchers.filter(
+            Q(voucher_no__icontains=q) |
+            Q(debit_account__name__icontains=q) |
+            Q(credit_account__name__icontains=q) |
+            Q(paid_to_or_received_from__icontains=q) |
+            Q(narration__icontains=q)
+        )
         
     v_type = request.GET.get("type", "")
     if v_type:
