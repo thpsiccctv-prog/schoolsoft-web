@@ -4,8 +4,7 @@ from django import forms
 from django.db.models import Count, Max
 from django.utils import timezone
 
-from .models import AcademicSession, AccountGroup, DisciplineRecord, Family, FeeHead, FeeReceipt, House, InventoryIssue, InventoryItem, SalaryPayment, Section, Staff, Student, TransferCertificate, LedgerAccount, Voucher
-
+from .models import AcademicSession, AccountGroup, DisciplineRecord, Family, FeeHead, FeeReceipt, House, InventoryIssue, InventoryItem, SalaryPayment, Section, Staff, Student, TransferCertificate, LedgerAccount, Voucher, TransportRoute, StudentTransport
 
 class SectionSelect(forms.Select):
     """Renders each <option> with a data-class attribute so student_form.html can
@@ -47,7 +46,20 @@ class StudentChoiceField(forms.ModelChoiceField):
         return f"{obj.full_name}{status_marker} ({details})"
 
 
+class TransportRouteChoiceField(forms.ModelChoiceField):
+    def label_from_instance(self, obj):
+        return f"{obj.name} - ₹{obj.monthly_charge}"
+
 class StudentForm(forms.ModelForm):
+    transport_required = forms.BooleanField(required=False, label="Transport Required?")
+    transport_route = TransportRouteChoiceField(
+        queryset=TransportRoute.objects.none(),
+        required=False,
+        label="Route",
+        empty_label="-- Select Route --"
+    )
+    stop_name = forms.CharField(required=False, label="Stop Name", max_length=100)
+
     class Meta:
         model = Student
         fields = [
@@ -124,11 +136,21 @@ class StudentForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["transport_route"].queryset = TransportRoute.objects.filter(is_active=True).order_by("name")
         self.fields["scholar_register_no"].disabled = True
         self.fields["scholar_register_no"].help_text = "Automatic from Admission No. (100 students per register)."
+        
+        # Prefill transport fields for existing students
+        if self.instance.pk:
+            transport = self.instance.transport_assignments.filter(is_active=True).first()
+            if transport:
+                self.initial["transport_required"] = True
+                self.initial["transport_route"] = transport.route
+                self.initial["stop_name"] = transport.stop_name
+
         if not self.instance.pk:
             if "admission_date" not in self.initial:
-                self.fields["admission_date"].initial = timezone.localdate()
+                self.initial["admission_date"] = timezone.localdate()
             if "legacy_sid" not in self.initial:
                 max_sid = Student.objects.aggregate(max_sid=Max("legacy_sid"))["max_sid"]
                 self.fields["legacy_sid"].initial = (max_sid or 0) + 1
@@ -150,6 +172,19 @@ class StudentForm(forms.ModelForm):
             if not isinstance(field.widget, forms.CheckboxInput):
                 field.widget.attrs.setdefault("class", "form-control")
 
+    def clean(self):
+        cleaned_data = super().clean()
+        transport_required = cleaned_data.get("transport_required")
+        transport_route = cleaned_data.get("transport_route")
+        stop_name = cleaned_data.get("stop_name")
+
+        if transport_required:
+            if not transport_route:
+                self.add_error("transport_route", "Please select a route if transport is required.")
+            if not stop_name:
+                self.add_error("stop_name", "Please enter a stop name if transport is required.")
+                
+        return cleaned_data
 
 class FeeReceiptEntryForm(forms.ModelForm):
     student = StudentChoiceField(queryset=Student.objects.none())

@@ -267,6 +267,29 @@
                 </section>
 
                 <section class="entry-card">
+                    <div class="entry-card-title">Transport Details</div>
+                    <div class="entry-grid entry-grid-four">
+                        <div class="entry-field">
+                            <label class="student-active-toggle">
+                                {{ form.transport_required }}
+                                <span>{{ form.transport_required.label }}</span>
+                            </label>
+                            {% if form.transport_required.errors %}<div class="error-text">{{ form.transport_required.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field entry-span-2 transport-field" style="display: none;">
+                            <label for="{{ form.transport_route.id_for_label }}">{{ form.transport_route.label }}</label>
+                            {{ form.transport_route }}
+                            {% if form.transport_route.errors %}<div class="error-text">{{ form.transport_route.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field transport-field" style="display: none;">
+                            <label for="{{ form.stop_name.id_for_label }}">{{ form.stop_name.label }}</label>
+                            {{ form.stop_name }}
+                            {% if form.stop_name.errors %}<div class="error-text">{{ form.stop_name.errors|striptags }}</div>{% endif %}
+                        </div>
+                    </div>
+                </section>
+
+                <section class="entry-card">
                     <div class="entry-card-title">Previous School (if admitted by transfer)</div>
                     <div class="entry-grid entry-grid-four">
                         <div class="entry-field entry-span-2">
@@ -429,6 +452,22 @@
         const sidInput = document.getElementById("{{ form.legacy_sid.id_for_label }}");
         const admissionInput = document.getElementById("{{ form.admission_no.id_for_label }}");
         const mobileInput = document.getElementById("{{ form.mobile_primary.id_for_label }}");
+        
+        // Transport toggle
+        const transportRequiredCb = document.getElementById("{{ form.transport_required.id_for_label }}");
+        const transportFields = document.querySelectorAll(".transport-field");
+        function toggleTransportFields() {
+            if (transportRequiredCb) {
+                const isChecked = transportRequiredCb.checked;
+                transportFields.forEach(function(el) {
+                    el.style.display = isChecked ? "block" : "none";
+                });
+            }
+        }
+        if (transportRequiredCb) {
+            transportRequiredCb.addEventListener("change", toggleTransportFields);
+            toggleTransportFields();
+        }
 
         // Only show sections belonging to the selected class.
         const classSelect = document.getElementById("{{ form.current_class.id_for_label }}");

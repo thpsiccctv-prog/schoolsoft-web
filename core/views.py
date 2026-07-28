@@ -2421,11 +2421,43 @@ def salary_payslip_pdf(request, pk):
     response["Content-Disposition"] = f'attachment; filename="{payment.slip_no}.pdf"'
     return response
 
+
+def _handle_student_transport(form, student):
+    transport_required = form.cleaned_data.get("transport_required")
+    active_session = AcademicSession.objects.filter(is_active=True).order_by("-starts_on").first()
+    if not active_session:
+        return
+        
+    if transport_required:
+        route = form.cleaned_data.get("transport_route")
+        stop_name = form.cleaned_data.get("stop_name")
+        
+        transport = StudentTransport.objects.filter(student=student, session=active_session).first()
+        if not transport:
+            transport = StudentTransport(student=student, session=active_session)
+            
+        transport.route = route
+        transport.stop_name = stop_name
+        transport.monthly_amount = route.monthly_charge if route else 0
+        transport.start_month = "APR"
+        transport.end_month = "MAR"
+        transport.is_transport_enabled = True
+        transport.billing_confirmed = True
+        transport.is_active = True
+        transport.save()
+    else:
+        active_transports = StudentTransport.objects.filter(student=student, session=active_session, is_active=True)
+        for t in active_transports:
+            t.is_active = False
+            t.save()
+
+
 def student_create(request):
     if request.method == "POST":
         form = StudentForm(request.POST, request.FILES)
         if form.is_valid():
             student = form.save()
+            _handle_student_transport(form, student)
             action = request.POST.get("action")
             if action == "save_new":
                 return redirect("core:student_create")
@@ -2448,6 +2480,7 @@ def student_update(request, pk):
         form = StudentForm(request.POST, request.FILES, instance=student)
         if form.is_valid():
             form.save()
+            _handle_student_transport(form, student)
             return redirect("core:student_detail", pk=student.pk)
     else:
         form = StudentForm(instance=student)
