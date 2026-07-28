@@ -578,11 +578,16 @@ def dashboard(request):
         tile.setdefault("count", None)
         tile.setdefault("sub_value", None)
 
+    has_finance_tiles = any(t.get("group") == "finance" for t in tiles)
+    has_academics_tiles = any(t.get("group") == "academics_admin" for t in tiles)
+
     context = {
         "today": today,
         "active_session": active_session,
         "dashboard_kpis": kpis,
         "tiles": tiles,
+        "has_finance_tiles": has_finance_tiles,
+        "has_academics_tiles": has_academics_tiles,
         "system_status": _dashboard_system_status(),
         "can_new_receipt": user_can_access(user, "fee_collection") and not readonly,
         "can_due_report": user_can_access(user, "dues"),

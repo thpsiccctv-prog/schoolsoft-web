@@ -103,7 +103,7 @@
     </div>
     {% endif %}
     <!-- ─── QUICK ACCESS TILES ─── -->
-    {% if tiles %}
+    {% if has_finance_tiles %}
     <div class="dash-section-label">Finance</div>
     <div class="dash-tiles">
         {% for tile in tiles %}
@@ -139,8 +139,10 @@
         {% endif %}
         {% endfor %}
     </div>
+    {% endif %}
 
-    <div class="dash-section-label" style="margin-top: 24px;">Academics & Admin</div>
+    {% if has_academics_tiles %}
+    <div class="dash-section-label" {% if has_finance_tiles %}style="margin-top: 24px;"{% endif %}>Academics & Admin</div>
     <div class="dash-tiles">
         {% for tile in tiles %}
         {% if tile.group == 'academics_admin' %}
