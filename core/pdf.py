@@ -283,8 +283,8 @@ def build_fee_receipt_pdf(receipt, school_profile=None):
     buffer = BytesIO()
     document = SimpleDocTemplate(
         buffer,
-        pagesize=A5,
-        rightMargin=8 * mm,
+        pagesize=landscape(A4),
+        rightMargin=(A5[0] + 8 * mm),
         leftMargin=8 * mm,
         topMargin=6 * mm,
         bottomMargin=7 * mm,
@@ -532,6 +532,11 @@ def build_fee_receipt_pdf(receipt, school_profile=None):
     # Add Watermark callback
     def add_watermark(canvas, doc):
         canvas.saveState()
+        canvas.setStrokeColor(colors.HexColor("#cbd5e1"))
+        canvas.setLineWidth(0.3)
+        canvas.setDash(2, 2)
+        canvas.line(A5[0], 5 * mm, A5[0], landscape(A4)[1] - 5 * mm)
+        canvas.setDash()
         if receipt.is_cancelled:
             canvas.setFont('Helvetica-Bold', 60)
             canvas.setFillColor(colors.HexColor("#dc2626"), alpha=0.2)
