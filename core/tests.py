@@ -15,7 +15,7 @@ from django.test import TestCase, TransactionTestCase
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
-from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib.pagesizes import A4, A5, landscape
 
 from .access import READONLY_GROUP
 
@@ -744,8 +744,8 @@ class FeeReceiptTests(AuthenticatedClientMixin, TestCase):
         self.assertEqual(pdf_response.status_code, 200)
         self.assertEqual(pdf_page_count(pdf_response.content), 1)
         page_width, page_height = pdf_page_size(pdf_response.content)
-        self.assertAlmostEqual(page_width, landscape(A4)[0], delta=0.2)
-        self.assertAlmostEqual(page_height, landscape(A4)[1], delta=0.2)
+        self.assertAlmostEqual(page_width, landscape(A5)[0], delta=0.2)
+        self.assertAlmostEqual(page_height, landscape(A5)[1], delta=0.2)
 
     def test_receipt_list_filters(self):
         session = AcademicSession.objects.create(name="2026-27")

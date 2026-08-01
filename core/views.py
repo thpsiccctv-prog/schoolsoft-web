@@ -1550,7 +1550,7 @@ def receipt_pdf(request, pk):
     )
     pdf_bytes = build_fee_receipt_pdf(receipt, get_active_school_profile())
     response = HttpResponse(pdf_bytes, content_type="application/pdf")
-    response["Content-Disposition"] = f'attachment; filename="{receipt.receipt_no}.pdf"'
+    response["Content-Disposition"] = f'inline; filename="{receipt.receipt_no}.pdf"'
     return response
 
 

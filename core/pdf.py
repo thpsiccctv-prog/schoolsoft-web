@@ -281,11 +281,13 @@ def _devanagari_flowable(text, font_size_pt, bold=False, align=0, color=(23, 32,
 
 def build_fee_receipt_pdf(receipt, school_profile=None):
     buffer = BytesIO()
+    page_size = landscape(A5)
+    page_width, page_height = page_size
     document = SimpleDocTemplate(
         buffer,
-        pagesize=landscape(A4),
-        rightMargin=(A5[0] + 8 * mm),
-        leftMargin=8 * mm,
+        pagesize=page_size,
+        rightMargin=7 * mm,
+        leftMargin=7 * mm,
         topMargin=6 * mm,
         bottomMargin=7 * mm,
         title=f"Fee Receipt {receipt.receipt_no}",
@@ -302,8 +304,8 @@ def build_fee_receipt_pdf(receipt, school_profile=None):
     title_style = ParagraphStyle(
         "ReceiptTitle",
         parent=styles["Title"],
-        fontSize=14,
-        leading=16,
+        fontSize=12,
+        leading=13,
         alignment=0, # Left align
         textColor=brand_color,
         fontName="Helvetica-Bold",
@@ -312,15 +314,15 @@ def build_fee_receipt_pdf(receipt, school_profile=None):
     small_style = ParagraphStyle(
         "Small",
         parent=styles["Normal"],
-        fontSize=6.5,
-        leading=7.5,
+        fontSize=5.6,
+        leading=6.4,
         textColor=colors.HexColor("#64748b"),
     )
     badge_style = ParagraphStyle(
         "Badge",
         parent=styles["Normal"],
-        fontSize=7,
-        leading=8,
+        fontSize=6,
+        leading=6.8,
         fontName="Helvetica-Bold",
         textColor=brand_color,
         backColor=colors.HexColor("#ecfdf5"),
@@ -374,15 +376,15 @@ def build_fee_receipt_pdf(receipt, school_profile=None):
             receipt_no_cell
         ]
     ]
-    header_table = Table(header_data, colWidths=[83 * mm, 49 * mm])
+    header_table = Table(header_data, colWidths=[125 * mm, 57 * mm])
     header_table.setStyle(TableStyle([
         ('VALIGN', (0,0), (-1,-1), 'TOP'),
         ('ALIGN', (1,0), (1,0), 'RIGHT'),
         ('LINEBELOW', (0,0), (-1,-1), 1.5, border_color),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 5),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 3),
     ]))
     
-    story.extend([header_table, Spacer(1, 3 * mm)])
+    story.extend([header_table, Spacer(1, 1.5 * mm)])
 
     student = receipt.student
     class_label = receipt.display_class_section
@@ -395,15 +397,15 @@ def build_fee_receipt_pdf(receipt, school_profile=None):
         "ReceiptMetaLabel",
         parent=small_style,
         fontName="Helvetica-Bold",
-        fontSize=7.2,
-        leading=8.2,
+        fontSize=6.2,
+        leading=6.8,
         textColor=colors.HexColor("#475569"),
     )
     meta_value_style = ParagraphStyle(
         "ReceiptMetaValue",
         parent=small_style,
-        fontSize=7.2,
-        leading=8.2,
+        fontSize=6.2,
+        leading=6.8,
         textColor=text_color,
     )
 
@@ -415,7 +417,7 @@ def build_fee_receipt_pdf(receipt, school_profile=None):
         [meta_cell("SID / Admn", meta_label_style), meta_cell(f"{student.legacy_sid or ''} / {student.admission_no or ''}", meta_value_style), meta_cell("Class", meta_label_style), meta_cell(class_label, meta_value_style)],
         [meta_cell("Fee Month", meta_label_style), meta_cell(month_label, meta_value_style), meta_cell("Mode", meta_label_style), meta_cell(receipt.get_payment_mode_display(), meta_value_style)],
     ]
-    meta_table = Table(meta, colWidths=[24 * mm, 42 * mm, 20 * mm, 46 * mm])
+    meta_table = Table(meta, colWidths=[28 * mm, 64 * mm, 25 * mm, 65 * mm])
     meta_table.setStyle(
         TableStyle(
             [
@@ -428,14 +430,14 @@ def build_fee_receipt_pdf(receipt, school_profile=None):
                 ("TEXTCOLOR", (2, 0), (2, -1), colors.HexColor("#475569")),
                 ("TEXTCOLOR", (1, 0), (1, -1), text_color),
                 ("TEXTCOLOR", (3, 0), (3, -1), text_color),
-                ("FONTSIZE", (0, 0), (-1, -1), 7.2),
+                ("FONTSIZE", (0, 0), (-1, -1), 6.2),
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("TOPPADDING", (0, 0), (-1, -1), 3),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+                ("TOPPADDING", (0, 0), (-1, -1), 1.4),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 1.4),
             ]
         )
     )
-    story.extend([meta_table, Spacer(1, 3 * mm)])
+    story.extend([meta_table, Spacer(1, 1.5 * mm)])
 
     line_rows = [["Fee Head Description", "Amount (Rs.)"]]
     for line in receipt.lines.select_related("fee_head").all():
@@ -464,7 +466,7 @@ def build_fee_receipt_pdf(receipt, school_profile=None):
         due_idx = len(line_rows)
         line_rows.append(["Balance Due", f"Rs. {money(receipt.legacy_due_amount)}"])
 
-    fee_table = Table(line_rows, colWidths=[96 * mm, 36 * mm], repeatRows=1)
+    fee_table = Table(line_rows, colWidths=[136 * mm, 46 * mm], repeatRows=1)
     
     ts = [
         # Header
@@ -475,10 +477,10 @@ def build_fee_receipt_pdf(receipt, school_profile=None):
         
         # Body Lines
         ("ALIGN", (1, 1), (1, -1), "RIGHT"),
-        ("FONTSIZE", (0, 0), (-1, -1), 7.2),
+        ("FONTSIZE", (0, 0), (-1, -1), 6.2),
         ("TEXTCOLOR", (0, 1), (-1, body_last_idx), text_color),
-        ("TOPPADDING", (0, 0), (-1, -1), 2.2),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 2.2),
+        ("TOPPADDING", (0, 0), (-1, -1), 1.1),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 1.1),
         
         # Totals Section
         ("FONTNAME", (0, total_start_idx), (-1, -1), "Helvetica-Bold"),
@@ -490,7 +492,7 @@ def build_fee_receipt_pdf(receipt, school_profile=None):
         ("TEXTCOLOR", (0, net_idx), (-1, net_idx), text_color),
         ("LINEABOVE", (0, net_idx), (-1, net_idx), 1, border_color),
         ("LINEBELOW", (0, net_idx), (-1, net_idx), 1, border_color),
-        ("FONTSIZE", (0, net_idx), (-1, net_idx), 8.2),
+        ("FONTSIZE", (0, net_idx), (-1, net_idx), 7.2),
     ]
 
     if body_last_idx >= 1:
@@ -507,22 +509,22 @@ def build_fee_receipt_pdf(receipt, school_profile=None):
     story.append(fee_table)
 
     if receipt.remarks:
-        story.extend([Spacer(1, 2 * mm), Paragraph(f"<i>Remarks: {receipt.remarks}</i>", small_style)])
+        story.extend([Spacer(1, 1 * mm), Paragraph(f"<i>Remarks: {receipt.remarks}</i>", small_style)])
 
     story.extend(
         [
-            Spacer(1, 6 * mm),
+            Spacer(1, 3 * mm),
             Table(
                 [["Cashier's Signature", "Parent / Guardian"]],
-                colWidths=[60 * mm, 60 * mm],
+                colWidths=[82 * mm, 82 * mm],
                 style=TableStyle(
                     [
                         ("LINEABOVE", (0, 0), (0, 0), 1, border_color),
                         ("LINEABOVE", (1, 0), (1, 0), 1, border_color),
                         ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-                        ("FONTSIZE", (0, 0), (-1, -1), 7),
+                        ("FONTSIZE", (0, 0), (-1, -1), 6),
                         ("TEXTCOLOR", (0, 0), (-1, -1), colors.HexColor("#64748b")),
-                        ("TOPPADDING", (0, 0), (-1, -1), 4),
+                        ("TOPPADDING", (0, 0), (-1, -1), 2),
                     ]
                 ),
             ),
@@ -532,21 +534,16 @@ def build_fee_receipt_pdf(receipt, school_profile=None):
     # Add Watermark callback
     def add_watermark(canvas, doc):
         canvas.saveState()
-        canvas.setStrokeColor(colors.HexColor("#cbd5e1"))
-        canvas.setLineWidth(0.3)
-        canvas.setDash(2, 2)
-        canvas.line(A5[0], 5 * mm, A5[0], landscape(A4)[1] - 5 * mm)
-        canvas.setDash()
         if receipt.is_cancelled:
             canvas.setFont('Helvetica-Bold', 60)
             canvas.setFillColor(colors.HexColor("#dc2626"), alpha=0.2)
-            canvas.translate(A5[0] / 2, A5[1] / 2)
+            canvas.translate(page_width / 2, page_height / 2)
             canvas.rotate(45)
             canvas.drawCentredString(0, 0, "CANCELLED")
         elif receipt.is_edited:
             canvas.setFont('Helvetica-Bold', 60)
             canvas.setFillColor(colors.HexColor("#f59e0b"), alpha=0.2) # Amber
-            canvas.translate(A5[0] / 2, A5[1] / 2)
+            canvas.translate(page_width / 2, page_height / 2)
             canvas.rotate(45)
             canvas.drawCentredString(0, 0, "EDITED")
             # Also draw footer note
@@ -555,11 +552,11 @@ def build_fee_receipt_pdf(receipt, school_profile=None):
             canvas.setFont('Helvetica', 5.5)
             canvas.setFillColor(colors.HexColor("#b45309"))
             footer_text = f"Edited on {receipt.edited_at.strftime('%d-%m-%Y %H:%M')} by {receipt.edited_by.username if receipt.edited_by else 'System'}. Reason: {receipt.edit_reason}"
-            canvas.drawCentredString(A5[0] / 2, 4 * mm, footer_text[:115])
+            canvas.drawCentredString(page_width / 2, 4 * mm, footer_text[:115])
         else:
             canvas.setFont('Helvetica-Bold', 68)
             canvas.setFillColor(colors.HexColor("#0f766e"), alpha=0.04)
-            canvas.translate(A5[0] / 2, A5[1] / 2)
+            canvas.translate(page_width / 2, page_height / 2)
             canvas.rotate(45)
             canvas.drawCentredString(0, 0, "SCHOOLSOFT")
         canvas.restoreState()
