@@ -698,6 +698,36 @@ class FeeReceiptTests(AuthenticatedClientMixin, TestCase):
         self.assertEqual(pdf_response.status_code, 200)
         self.assertEqual(pdf_response["Content-Type"], "application/pdf")
         self.assertContains(detail_response, "R-2")
+        self.assertContains(detail_response, reverse("core:receipt_print", args=[receipt.id]))
+
+    @patch("core.views.os.startfile", create=True)
+    def test_receipt_print_sends_a5_pdf_to_windows_print(self, startfile_mock):
+        session = AcademicSession.objects.create(name="2026-27")
+        school_class = SchoolClass.objects.create(name="I", display_order=1)
+        student = Student.objects.create(full_name="Print Student", current_class=school_class)
+        fee_head = FeeHead.objects.create(name="Tuition Fee")
+        receipt = FeeReceipt.objects.create(
+            receipt_no="PRINT-1",
+            student=student,
+            session=session,
+            received_amount=Decimal("100.00"),
+            legacy_fee_total=Decimal("100.00"),
+            legacy_net_total=Decimal("100.00"),
+        )
+        FeeReceiptLine.objects.create(receipt=receipt, fee_head=fee_head, amount=Decimal("100.00"))
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            with patch.dict(os.environ, {"LOCALAPPDATA": tmp_dir}), patch("core.views.os.name", "nt"):
+                response = self.client.get(
+                    reverse("core:receipt_print", args=[receipt.id]),
+                    HTTP_HOST="127.0.0.1:8000",
+                )
+                self.assertRedirects(response, reverse("core:receipt_detail", args=[receipt.id]))
+                startfile_mock.assert_called_once()
+                pdf_path, action = startfile_mock.call_args.args
+                self.assertEqual(action, "print")
+                self.assertTrue(pdf_path.endswith(".pdf"))
+                self.assertTrue(Path(pdf_path).exists())
 
     def test_receipt_pdf_stays_one_page_for_dense_fee_heads(self):
         session = AcademicSession.objects.create(name="2026-27")

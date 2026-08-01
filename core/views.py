@@ -3,6 +3,7 @@ import os
 import shutil
 import sqlite3
 import subprocess
+import tempfile
 from datetime import date, datetime, time
 from pathlib import Path
 from decimal import Decimal
@@ -1552,6 +1553,43 @@ def receipt_pdf(request, pk):
     response = HttpResponse(pdf_bytes, content_type="application/pdf")
     response["Content-Disposition"] = f'inline; filename="{receipt.receipt_no}.pdf"'
     return response
+
+
+def _local_print_allowed(request):
+    host = request.get_host().split(":", 1)[0].strip("[]").lower()
+    return os.name == "nt" and (host == "localhost" or host == "::1" or host.startswith("127."))
+
+
+def receipt_print(request, pk):
+    receipt = get_object_or_404(
+        FeeReceipt.objects.select_related(
+            "student",
+            "student__current_class",
+            "student__current_section",
+            "session",
+        ).prefetch_related("lines", "lines__fee_head"),
+        pk=pk,
+    )
+    if not _local_print_allowed(request):
+        return redirect("core:receipt_pdf", pk=receipt.pk)
+
+    pdf_bytes = build_fee_receipt_pdf(receipt, get_active_school_profile())
+    safe_receipt_no = "".join(
+        char if char.isalnum() or char in ("-", "_") else "_"
+        for char in receipt.receipt_no
+    ) or f"receipt-{receipt.pk}"
+    print_dir = Path(os.environ.get("LOCALAPPDATA") or tempfile.gettempdir()) / "SchoolSoft" / "print-jobs"
+    print_dir.mkdir(parents=True, exist_ok=True)
+    pdf_path = print_dir / f"{safe_receipt_no}-{datetime.now().strftime('%Y%m%d%H%M%S')}.pdf"
+    pdf_path.write_bytes(pdf_bytes)
+
+    try:
+        os.startfile(str(pdf_path), "print")
+    except OSError as exc:
+        messages.error(request, f"Print start nahi ho paya: {exc}")
+    else:
+        messages.success(request, "A5 landscape receipt print command bhej diya gaya.")
+    return redirect("core:receipt_detail", pk=receipt.pk)
 
 
 def student_fee_defaults(request, pk):
