@@ -4,6 +4,44 @@
 {% block title %}Receipt {{ receipt.receipt_no }} | SchoolSoft Modernization{% endblock %}
 
 {% block content %}
+<style>
+@media print {
+    @page {
+        size: A5 landscape;
+        margin: 6mm;
+    }
+    body { margin: 0; padding: 0; }
+    .receipt-paper {
+        margin: 0 !important;
+        padding: 10px 15px !important;
+        box-shadow: none !important;
+        border: none !important;
+        width: 100% !important;
+        page-break-after: avoid !important;
+        page-break-inside: avoid !important;
+    }
+    
+    /* Compact spacing and fonts for A5 fit */
+    .receipt-header h2 { font-size: 18px !important; margin: 0 0 4px 0 !important; }
+    .receipt-header p { font-size: 11px !important; margin: 0 0 2px 0 !important; }
+    .receipt-title-badge { font-size: 10px !important; padding: 3px 10px !important; margin-top: 4px !important; }
+    .receipt-number { font-size: 10px !important; padding: 6px 12px !important; }
+    .receipt-number strong { font-size: 16px !important; }
+    
+    .receipt-meta { padding: 12px 16px !important; gap: 12px !important; margin: 16px 0 !important; }
+    .receipt-meta span { font-size: 10px !important; margin-bottom: 2px !important; }
+    .receipt-meta strong { font-size: 13px !important; }
+    
+    .print-table th, .print-table td { padding: 6px 12px !important; font-size: 12px !important; }
+    .net-total-row th, .net-total-row td { font-size: 13px !important; padding: 8px 12px !important; }
+    .due-row th, .due-row td { font-size: 12px !important; padding: 8px 12px !important; }
+    
+    .receipt-footer { margin-top: 40px !important; font-size: 13px !important; }
+    
+    /* Hide non-print elements */
+    .no-print { display: none !important; }
+}
+</style>
 <section class="section no-print" style="margin-bottom: 20px;">
     <div class="section-heading with-actions" style="background: #fff; padding: 16px 24px; border-radius: 8px; border: 1px solid #e2e8f0;">
         <div>
@@ -293,3 +331,4 @@
     }
 </script>
 {% endblock %}
+
