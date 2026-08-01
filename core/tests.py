@@ -729,6 +729,44 @@ class FeeReceiptTests(AuthenticatedClientMixin, TestCase):
                 self.assertTrue(pdf_path.endswith(".pdf"))
                 self.assertTrue(Path(pdf_path).exists())
 
+    @patch("core.views.subprocess.Popen")
+    @patch("core.views.os.startfile", create=True)
+    def test_receipt_print_uses_edge_when_pdf_print_verb_is_missing(self, startfile_mock, popen_mock):
+        startfile_mock.side_effect = OSError("No application is associated")
+        session = AcademicSession.objects.create(name="2026-27")
+        school_class = SchoolClass.objects.create(name="I", display_order=1)
+        student = Student.objects.create(full_name="Edge Print Student", current_class=school_class)
+        fee_head = FeeHead.objects.create(name="Tuition Fee")
+        receipt = FeeReceipt.objects.create(
+            receipt_no="PRINT-EDGE-1",
+            student=student,
+            session=session,
+            received_amount=Decimal("100.00"),
+            legacy_fee_total=Decimal("100.00"),
+            legacy_net_total=Decimal("100.00"),
+        )
+        FeeReceiptLine.objects.create(receipt=receipt, fee_head=fee_head, amount=Decimal("100.00"))
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fake_edge = Path(tmp_dir) / "msedge.exe"
+            fake_edge.write_text("", encoding="utf-8")
+            with (
+                patch.dict(os.environ, {"LOCALAPPDATA": tmp_dir}),
+                patch("core.views.os.name", "nt"),
+                patch("core.views._edge_executable_path", return_value=fake_edge),
+            ):
+                response = self.client.get(
+                    reverse("core:receipt_print", args=[receipt.id]),
+                    HTTP_HOST="127.0.0.1:8000",
+                )
+                self.assertRedirects(response, reverse("core:receipt_detail", args=[receipt.id]))
+                startfile_mock.assert_called_once()
+                popen_mock.assert_called_once()
+                command = popen_mock.call_args.args[0]
+                self.assertEqual(command[0], str(fake_edge))
+                self.assertIn("--kiosk-printing", command)
+                self.assertTrue(command[-1].startswith("file:///"))
+
     def test_receipt_pdf_stays_one_page_for_dense_fee_heads(self):
         session = AcademicSession.objects.create(name="2026-27")
         school_class = SchoolClass.objects.create(name="III", display_order=3)

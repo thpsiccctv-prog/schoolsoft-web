@@ -1560,6 +1560,39 @@ def _local_print_allowed(request):
     return os.name == "nt" and (host == "localhost" or host == "::1" or host.startswith("127."))
 
 
+def _edge_executable_path():
+    candidates = [
+        Path(os.environ.get("PROGRAMFILES(X86)", "")) / "Microsoft" / "Edge" / "Application" / "msedge.exe",
+        Path(os.environ.get("PROGRAMFILES", "")) / "Microsoft" / "Edge" / "Application" / "msedge.exe",
+        Path(os.environ.get("LOCALAPPDATA", "")) / "Microsoft" / "Edge" / "Application" / "msedge.exe",
+    ]
+    for candidate in candidates:
+        if str(candidate) and candidate.exists():
+            return candidate
+    return None
+
+
+def _send_pdf_to_printer(pdf_path):
+    try:
+        os.startfile(str(pdf_path), "print")
+        return "default"
+    except OSError:
+        edge_path = _edge_executable_path()
+        if not edge_path:
+            raise
+        subprocess.Popen(
+            [
+                str(edge_path),
+                "--kiosk-printing",
+                "--new-window",
+                pdf_path.as_uri(),
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        return "edge"
+
+
 def receipt_print(request, pk):
     receipt = get_object_or_404(
         FeeReceipt.objects.select_related(
@@ -1584,11 +1617,14 @@ def receipt_print(request, pk):
     pdf_path.write_bytes(pdf_bytes)
 
     try:
-        os.startfile(str(pdf_path), "print")
+        print_method = _send_pdf_to_printer(pdf_path)
     except OSError as exc:
         messages.error(request, f"Print start nahi ho paya: {exc}")
     else:
-        messages.success(request, "A5 landscape receipt print command bhej diya gaya.")
+        if print_method == "edge":
+            messages.success(request, "A5 landscape receipt Edge print mode me bhej diya gaya.")
+        else:
+            messages.success(request, "A5 landscape receipt print command bhej diya gaya.")
     return redirect("core:receipt_detail", pk=receipt.pk)
 
 
