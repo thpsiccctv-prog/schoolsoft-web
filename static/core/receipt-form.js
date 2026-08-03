@@ -8,6 +8,18 @@
         return value.toFixed(2);
     }
 
+    function escapeHtml(value) {
+        return String(value || "").replace(/[&<>"']/g, function(char) {
+            return {
+                "&": "&amp;",
+                "<": "&lt;",
+                ">": "&gt;",
+                '"': "&quot;",
+                "'": "&#39;"
+            }[char];
+        });
+    }
+
     // 1. Custom Dropdown for Student Search
     function setupStudentCustomDropdown() {
         var filterBox = document.querySelector("[data-student-filter]");
@@ -34,11 +46,15 @@
                 name = match[1];
                 details = match[2];
             }
+            var detailParts = details ? details.split("|").map(function(part) {
+                return part.trim();
+            }).filter(Boolean) : [];
             return {
                 value: opt.value,
                 text: cleanText,
                 name: name,
                 details: details,
+                detailParts: detailParts,
                 isActive: isActive,
                 selected: opt.selected
             };
@@ -67,10 +83,13 @@
                     var li = document.createElement("li");
                     li.className = "dropdown-item";
                     if (index === activeIndex) li.classList.add("active");
-                    
+
                     var badge = o.isActive ? "" : "<span class='badge inactive'>Inactive/TC</span>";
-                    li.innerHTML = "<strong>" + o.name + "</strong> " + badge + "<br><small>" + o.details + "</small>";
-                    
+                    var detailsHtml = o.detailParts.map(function(part) {
+                        return "<span>" + escapeHtml(part) + "</span>";
+                    }).join("");
+                    li.innerHTML = "<strong>" + escapeHtml(o.name) + "</strong> " + badge + "<br><small class='student-result-details'>" + detailsHtml + "</small>";
+
                     li.addEventListener("mousedown", function(e) {
                         e.preventDefault();
                         selectStudent(o.value);
@@ -131,7 +150,10 @@
             }
             var opt = allOptions.find(o => o.value === selectedVal);
             if (opt) {
-                summary.innerHTML = "<strong>" + opt.name + "</strong><span>" + opt.details + "</span><em>Ready for fee entry</em>";
+                var detailsHtml = opt.detailParts.map(function(part) {
+                    return "<span>" + escapeHtml(part) + "</span>";
+                }).join("");
+                summary.innerHTML = "<strong>" + escapeHtml(opt.name) + "</strong><span class='student-summary-details'>" + detailsHtml + "</span><em>Ready for fee entry</em>";
             }
         }
 

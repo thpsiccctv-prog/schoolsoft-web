@@ -26,7 +26,7 @@
     <div class="premium-filterbar">
         <form class="student-filterbar" method="get">
             <div class="filterbar-inputs">
-                <input type="search" name="q" value="{{ query }}" placeholder="Search name, SID, admission no, mobile">
+                <input type="search" name="q" value="{{ query }}" placeholder="Search name, father, SID, admission no, mobile">
                 <select name="status" aria-label="Student status">
                     <option value="active" {% if selected_status == "active" %}selected{% endif %}>Active students</option>
                     <option value="inactive" {% if selected_status == "inactive" %}selected{% endif %}>Inactive / TC</option>

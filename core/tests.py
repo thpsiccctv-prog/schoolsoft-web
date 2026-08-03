@@ -19,7 +19,7 @@ from reportlab.lib.pagesizes import A4, A5, landscape
 
 from .access import READONLY_GROUP
 
-from .forms import FeeReceiptEditForm, VoucherForm
+from .forms import FeeReceiptEditForm, FeeReceiptEntryForm, VoucherForm
 from .whatsapp import build_wa_link, fee_due_message, normalize_indian_mobile
 from .models import (
     AccountGroup,
@@ -655,6 +655,29 @@ class PreviousCollectionDayTests(AuthenticatedClientMixin, TestCase):
 
 
 class FeeReceiptTests(AuthenticatedClientMixin, TestCase):
+    def test_fee_receipt_student_choice_label_includes_identity_details(self):
+        school_class = SchoolClass.objects.create(name="II", display_order=2)
+        section = Section.objects.create(school_class=school_class, name="A")
+        student = Student.objects.create(
+            full_name="Duplicate Name Student",
+            legacy_sid=2298,
+            admission_no="ADM-2298",
+            father_name="Amit Father",
+            mobile_primary="9999999999",
+            current_class=school_class,
+            current_section=section,
+            is_active=True,
+        )
+
+        label = FeeReceiptEntryForm().fields["student"].label_from_instance(student)
+
+        self.assertIn("Duplicate Name Student", label)
+        self.assertIn("SID 2298", label)
+        self.assertIn("II-A", label)
+        self.assertIn("Adm ADM-2298", label)
+        self.assertIn("Father Amit Father", label)
+        self.assertIn("Mobile 9999999999", label)
+
     def test_payable_amount_uses_lines_late_fee_and_concession(self):
         session = AcademicSession.objects.create(name="2026-27")
         school_class = SchoolClass.objects.create(name="I", display_order=1)

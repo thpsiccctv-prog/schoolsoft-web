@@ -41,7 +41,9 @@ class StudentChoiceField(forms.ModelChoiceField):
         class_label = "-".join(class_bits)
         sid = f"SID {obj.legacy_sid}" if obj.legacy_sid else "No SID"
         admission = f"Adm {obj.admission_no}" if obj.admission_no else ""
-        details = " | ".join(part for part in [sid, class_label, admission] if part)
+        father = f"Father {obj.father_name}" if obj.father_name else ""
+        mobile = f"Mobile {obj.mobile_primary}" if obj.mobile_primary else ""
+        details = " | ".join(part for part in [sid, class_label, admission, father, mobile] if part)
         status_marker = "" if obj.is_active else " [INACTIVE]"
         return f"{obj.full_name}{status_marker} ({details})"
 
