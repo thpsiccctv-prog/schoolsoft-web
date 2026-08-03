@@ -55,6 +55,7 @@
                 {% endif %}
                 {% if access.dues %}
                 <a href="{% url 'core:due_up_to_month_report' %}"><span class="nav-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></span><span>Dues up to Month</span></a>
+                <a href="{% url 'core:defaulter_list' %}"><span class="nav-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span><span>Fee Defaulters</span></a>
                 {% endif %}
                 {% if access.collection %}
                 <a href="{% url 'core:collection_report' %}"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg></span><span>Collection</span></a>

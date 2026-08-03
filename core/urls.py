@@ -46,6 +46,7 @@ urlpatterns = [
     path("dues-up-to-month/slips/", module_required("dues")(views.due_slip_pdf), name="due_slip_pdf"),
     path("dues/", module_required("dues")(views.due_report), name="due_report"),
     path("dues/pdf/", module_required("dues")(views.due_report_pdf), name="due_report_pdf"),
+    path("reports/defaulters/", module_required("dues")(views.defaulter_list), name="defaulter_list"),
     path("receipts/<int:pk>/", module_required("receipts")(views.receipt_detail), name="receipt_detail"),
     path("receipts/<int:pk>/edit/", module_required("receipts", write=True)(views.receipt_edit), name="receipt_edit"),
     path("receipts/<int:pk>/pdf/", module_required("receipts")(views.receipt_pdf), name="receipt_pdf"),

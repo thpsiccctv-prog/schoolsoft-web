@@ -43,6 +43,7 @@ from .models import (
     Section,
     Staff,
     Student,
+    StudentOpeningBalance,
     StudentTransport,
     Subject,
     TransferCertificate,
@@ -856,6 +857,7 @@ class FeeReceiptTests(AuthenticatedClientMixin, TestCase):
         self.assertNotContains(response, "FILTER-2")
         self.assertNotContains(response, "Second Fee Student")
 
+
     def test_manual_receipt_create(self):
         session = AcademicSession.objects.create(name="2026-27")
         school_class = SchoolClass.objects.create(name="I", display_order=1)
@@ -1368,6 +1370,90 @@ class FeeReceiptTests(AuthenticatedClientMixin, TestCase):
         with patch.dict(os.environ, {"LOCALAPPDATA": str(fake_live.parent.parent)}, clear=False):
             os.environ.pop("SCHOOLSOFT_SQLITE_PATH", None)
             self.assertEqual(views._active_sqlite_db_path(), fake_live)
+
+
+class DefaulterListTests(AuthenticatedClientMixin, TestCase):
+    def test_defaulter_list_uses_fee_engine_and_active_students_only(self):
+        session = AcademicSession.objects.create(
+            name="2026-27",
+            starts_on=date(2026, 4, 1),
+            ends_on=date(2027, 3, 31),
+            is_active=True,
+        )
+        school_class = SchoolClass.objects.create(name="III", display_order=3)
+        section = Section.objects.create(school_class=school_class, name="A")
+        tuition = FeeHead.objects.create(
+            name="Defaulter Tuition Fee",
+            frequency=FeeHead.Frequency.MONTHLY,
+            new_student_charge_rule=FeeHead.ChargeRule.MONTHLY,
+            old_student_charge_rule=FeeHead.ChargeRule.MONTHLY,
+        )
+        FeeStructure.objects.create(
+            session=session,
+            school_class=school_class,
+            fee_head=tuition,
+            amount=Decimal("800.00"),
+            is_active=True,
+        )
+        due_student = Student.objects.create(
+            full_name="Opening Balance Defaulter",
+            admission_no="DUE-1",
+            mobile_primary="9999999999",
+            current_class=school_class,
+            current_section=section,
+            admission_date=date(2025, 4, 1),
+            is_active=True,
+        )
+        StudentOpeningBalance.objects.create(
+            student=due_student,
+            session=session,
+            amount=Decimal("100.00"),
+            as_of_date=date(2026, 4, 1),
+            source_reference="Test opening balance",
+        )
+        FeeReceipt.objects.create(
+            receipt_no="DEF-PARTIAL",
+            student=due_student,
+            session=session,
+            receipt_date=date(2026, 4, 20),
+            received_amount=Decimal("100.00"),
+        )
+        paid_student = Student.objects.create(
+            full_name="Fully Paid Student",
+            current_class=school_class,
+            admission_date=date(2025, 4, 1),
+            is_active=True,
+        )
+        FeeReceipt.objects.create(
+            receipt_no="DEF-PAID",
+            student=paid_student,
+            session=session,
+            receipt_date=date(2026, 4, 21),
+            received_amount=Decimal("800.00"),
+        )
+        Student.objects.create(
+            full_name="Inactive Due Student",
+            current_class=school_class,
+            admission_date=date(2025, 4, 1),
+            is_active=False,
+        )
+
+        response = self.client.get(
+            reverse("core:defaulter_list"),
+            {"class": school_class.id, "month": "APR"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["total_defaulters"], 1)
+        self.assertEqual(response.context["total_due"], Decimal("800.00"))
+        self.assertContains(response, "Opening Balance Defaulter")
+        self.assertContains(response, "9999999999")
+        self.assertContains(response, "20-Apr-2026")
+        self.assertContains(response, "Rs. 800.00")
+        self.assertNotContains(response, "Fully Paid Student")
+        self.assertNotContains(response, "Inactive Due Student")
+
+
 class Month2DocumentTests(AuthenticatedClientMixin, TestCase):
     def test_admission_form_pdf(self):
         school_class = SchoolClass.objects.create(name="I", display_order=1)

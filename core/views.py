@@ -15,7 +15,7 @@ from django.contrib.auth.decorators import login_required, permission_required
 from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.db import connection, transaction
-from django.db.models import Count, F, ProtectedError, Q, Sum
+from django.db.models import Count, F, Max, ProtectedError, Q, Sum
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -1140,6 +1140,98 @@ def _due_up_to_month_data(request):
         "export_query": export_query,
         "school_name": (get_active_school_profile().name if get_active_school_profile() else ""),
     }
+
+
+
+def defaulter_list(request):
+    sessions = AcademicSession.objects.order_by("-starts_on", "name")
+    active_session = sessions.filter(is_active=True).first() or sessions.first()
+    if not active_session:
+        return render(request, "core/defaulter_list.html", {"error": "No active academic session found."})
+
+    default_m = _default_due_month(active_session)
+    default_idx = ACADEMIC_MONTHS.index(default_m) if default_m in ACADEMIC_MONTHS else 0
+    available_months = ACADEMIC_MONTHS[:default_idx + 1]
+
+    selected_month = request.GET.get("month", "").strip().upper() or default_m
+    if selected_month not in available_months:
+        selected_month = default_m
+
+    selected_class = request.GET.get("class", "").strip()
+
+    invalid_id_filter = False
+    if selected_class and not selected_class.isdigit():
+        invalid_id_filter = True
+
+    students = Student.objects.filter(is_active=True).select_related(
+        "current_class", "current_section"
+    ).order_by(
+        "current_class__display_order",
+        "current_section__name",
+        "roll_no",
+        "full_name",
+    )
+    if selected_class and not invalid_id_filter:
+        students = students.filter(current_class_id=selected_class)
+
+    candidates = [] if invalid_id_filter else list(students)
+
+    # Pre-fetch last payment dates
+    candidate_ids = [s.id for s in candidates]
+    last_payments = FeeReceipt.objects.filter(
+        student_id__in=candidate_ids,
+        is_cancelled=False,
+        session=active_session
+    ).values("student_id").annotate(last_date=Max("receipt_date"))
+    last_payment_map = {item["student_id"]: item["last_date"] for item in last_payments}
+
+    defaulters = []
+    total_due = Decimal("0.00")
+
+    for student in candidates:
+        try:
+            result = calculate_student_due(
+                student=student,
+                session=active_session,
+                through_month=selected_month,
+            )
+        except ValidationError:
+            continue
+
+        if result.due_amount > Decimal("0.00"):
+            class_name = student.current_class.name if student.current_class else "Unknown"
+            if student.current_section:
+                class_name = f"{class_name}-{student.current_section.name}"
+
+            defaulters.append({
+                "student": student,
+                "class_name": class_name,
+                "due_amount": result.due_amount,
+                "last_payment_date": last_payment_map.get(student.id)
+            })
+            total_due += result.due_amount
+
+    # Grouping
+    grouped_defaulters = {}
+    for d in defaulters:
+        cname = d["class_name"]
+        if cname not in grouped_defaulters:
+            grouped_defaulters[cname] = []
+        grouped_defaulters[cname].append(d)
+
+    context = {
+        "school_name": get_active_school_profile().name if get_active_school_profile() else "",
+        "classes": SchoolClass.objects.order_by("display_order", "name"),
+        "available_months": available_months,
+        "selected_month": selected_month,
+        "selected_class": selected_class,
+        "defaulters": defaulters,
+        "grouped_defaulters": grouped_defaulters,
+        "total_defaulters": len(defaulters),
+        "total_due": total_due,
+        "target_label": _due_month_label(active_session, selected_month),
+    }
+    return render(request, "core/defaulter_list.html", context)
 
 
 def due_up_to_month_report(request):

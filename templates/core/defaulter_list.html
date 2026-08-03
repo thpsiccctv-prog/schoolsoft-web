@@ -1,0 +1,216 @@
+{% extends "base.html" %}
+
+{% block title %}Class-wise Fee Defaulters | SchoolSoft{% endblock %}
+
+{% block content %}
+<style>
+    @media print {
+        @page {
+            size: A4 portrait;
+            margin: 10mm;
+        }
+        
+        body {
+            background-color: white !important;
+        }
+        
+        #sidebar, .navbar, .no-print, .btn, form {
+            display: none !important;
+        }
+        
+        #main-content {
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 100% !important;
+        }
+
+        .card {
+            border: none !important;
+            box-shadow: none !important;
+        }
+        
+        .card-header {
+            background-color: white !important;
+            border-bottom: 2px solid #000 !important;
+            padding: 0 0 10px 0 !important;
+            margin-bottom: 20px !important;
+        }
+
+        .table {
+            width: 100% !important;
+            border-collapse: collapse !important;
+            font-size: 11pt !important;
+        }
+        
+        .table th, .table td {
+            border: 1px solid #000 !important;
+            padding: 6px !important;
+        }
+
+        .table thead th {
+            background-color: #f8f9fa !important;
+            -webkit-print-color-adjust: exact;
+        }
+        
+        .print-summary {
+            margin-top: 20px;
+            font-size: 12pt;
+            font-weight: bold;
+            border-top: 2px solid #000;
+            padding-top: 10px;
+        }
+        
+        .class-group-header {
+            background-color: #e9ecef !important;
+            -webkit-print-color-adjust: exact;
+            font-weight: bold;
+            font-size: 13pt;
+            padding: 10px;
+            margin-top: 20px;
+            border: 1px solid #000;
+            border-bottom: none;
+        }
+    }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-4 no-print">
+    <h1 class="h3 text-gray-800">Fee Defaulters List</h1>
+    <button onclick="window.print()" class="btn btn-primary shadow-sm">
+        <i class="fas fa-print fa-sm text-white-50"></i> Print List
+    </button>
+</div>
+
+<!-- Filters -->
+<div class="card shadow mb-4 no-print">
+    <div class="card-body">
+        <form method="get" class="row gx-3 gy-2 align-items-center">
+            <div class="col-sm-3">
+                <label class="visually-hidden" for="class">Class</label>
+                <select class="form-select" id="class" name="class">
+                    <option value="">All Classes</option>
+                    {% for c in classes %}
+                    <option value="{{ c.id }}" {% if selected_class == c.id|stringformat:"s" %}selected{% endif %}>{{ c.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-sm-3">
+                <label class="visually-hidden" for="month">Month</label>
+                <select class="form-select" id="month" name="month">
+                    {% for m in available_months %}
+                    <option value="{{ m }}" {% if selected_month == m %}selected{% endif %}>{{ m }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-secondary">Filter</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Report Display -->
+<div class="card shadow mb-4">
+    <div class="card-header py-3 d-flex flex-column align-items-center text-center">
+        <h4 class="m-0 font-weight-bold text-primary">{{ school_name }}</h4>
+        <h5 class="m-0 mt-1 font-weight-bold">Fee Defaulters List</h5>
+        <div class="text-muted mt-2">Dues up to: <strong>{{ target_label }}</strong></div>
+    </div>
+    <div class="card-body p-0">
+        {% if defaulters %}
+            
+            {% if not selected_class %}
+                <!-- Grouped View for All Classes (Print & Screen) -->
+                {% for class_name, group in grouped_defaulters.items %}
+                    <div class="class-group-header no-print-bg">
+                        {{ class_name }} <span class="badge bg-secondary ms-2">{{ group|length }} Defaulters</span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-striped mb-0">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Student Name</th>
+                                    <th>Adm. No.</th>
+                                    <th>Parent Phone</th>
+                                    <th>Last Payment</th>
+                                    <th class="text-end">Due Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for d in group %}
+                                <tr>
+                                    <td>{{ forloop.counter }}</td>
+                                    <td>
+                                        <a href="{% url 'core:student_detail' d.student.id %}" class="text-decoration-none no-print-link">
+                                            {{ d.student.full_name }}
+                                        </a>
+                                    </td>
+                                    <td>{{ d.student.admission_no|default:"-" }}</td>
+                                    <td>{{ d.student.mobile_primary|default:"-" }}</td>
+                                    <td>{{ d.last_payment_date|date:"d-M-Y"|default:"-" }}</td>
+                                    <td class="text-end text-danger fw-bold">Rs. {{ d.due_amount }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <!-- Single Table for specific class -->
+                <div class="table-responsive">
+                    <table class="table table-bordered table-striped mb-0">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Student Name</th>
+                                <th>Adm. No.</th>
+                                <th>Class</th>
+                                <th>Parent Phone</th>
+                                <th>Last Payment</th>
+                                <th class="text-end">Due Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for d in defaulters %}
+                            <tr>
+                                <td>{{ forloop.counter }}</td>
+                                <td>
+                                    <a href="{% url 'core:student_detail' d.student.id %}" class="text-decoration-none no-print-link">
+                                        {{ d.student.full_name }}
+                                    </a>
+                                </td>
+                                <td>{{ d.student.admission_no|default:"-" }}</td>
+                                <td>{{ d.class_name }}</td>
+                                <td>{{ d.student.mobile_primary|default:"-" }}</td>
+                                <td>{{ d.last_payment_date|date:"d-M-Y"|default:"-" }}</td>
+                                <td class="text-end text-danger fw-bold">Rs. {{ d.due_amount }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% endif %}
+
+            <!-- Summary Row -->
+            <div class="card-footer bg-white text-center print-summary d-flex justify-content-around">
+                <span>Total Defaulters: <strong>{{ total_defaulters }}</strong></span>
+                <span>Total Amount Due: <strong>Rs. {{ total_due }}</strong></span>
+            </div>
+            
+        {% else %}
+            <div class="text-center p-5 text-muted">
+                <i class="fas fa-check-circle fa-3x mb-3 text-success"></i>
+                <h5>No defaulters found for this selection.</h5>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<style>
+    .no-print-link { color: inherit !important; pointer-events: auto; text-decoration: none !important; }
+    @media print {
+        .no-print-bg { background-color: #e9ecef !important; -webkit-print-color-adjust: exact; }
+    }
+</style>
+
+{% endblock %}
