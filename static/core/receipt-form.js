@@ -8,6 +8,10 @@
         return value.toFixed(2);
     }
 
+    function formatMoneyShort(value) {
+        return formatMoney(value).replace(/\.00$/, "");
+    }
+
     function escapeHtml(value) {
         return String(value || "").replace(/[&<>"']/g, function(char) {
             return {
@@ -87,7 +91,7 @@
                     var badge = o.isActive ? "" : "<span class='badge inactive'>Inactive/TC</span>";
                     var detailsHtml = o.detailParts.map(function(part) {
                         return "<span>" + escapeHtml(part) + "</span>";
-                    }).join("");
+                    }).join(" ");
                     li.innerHTML = "<strong>" + escapeHtml(o.name) + "</strong> " + badge + "<br><small class='student-result-details'>" + detailsHtml + "</small>";
 
                     li.addEventListener("mousedown", function(e) {
@@ -152,7 +156,7 @@
             if (opt) {
                 var detailsHtml = opt.detailParts.map(function(part) {
                     return "<span>" + escapeHtml(part) + "</span>";
-                }).join("");
+                }).join(" ");
                 summary.innerHTML = "<strong>" + escapeHtml(opt.name) + "</strong><span class='student-summary-details'>" + detailsHtml + "</span><em>Ready for fee entry</em>";
             }
         }
@@ -337,10 +341,10 @@
                 var label = row.month + " Clear";
                 var tone = "is-clear";
                 if (dueAmount > 0) {
-                    label = row.month + " Due " + formatMoney(dueAmount);
+                    label = row.month + " Due " + formatMoneyShort(dueAmount);
                     tone = "is-due";
                 } else if (creditAmount > 0) {
-                    label = row.month + " Adv " + formatMoney(creditAmount);
+                    label = row.month + " Adv " + formatMoneyShort(creditAmount);
                     tone = "is-credit";
                 }
                 return "<span class='" + tone + "'>" + escapeHtml(label) + "</span>";
@@ -455,7 +459,7 @@
                         }
                         var identityHtml = identityParts.map(function(part) {
                             return "<span>" + escapeHtml(part) + "</span>";
-                        }).join("");
+                        }).join(" ");
                         summary.innerHTML = "<strong>" + escapeHtml(data.student) + "</strong><span class='student-summary-details'>" + identityHtml + "</span><em>Active fee structure loaded</em>";
                     }
                 })

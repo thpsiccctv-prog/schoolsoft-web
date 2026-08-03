@@ -5968,6 +5968,43 @@ body.dashboard-page .page {
     background: #f8fafc;
 }
 
+.fee-desk .selected-student-card {
+    align-items: center;
+    gap: 10px;
+}
+
+.fee-desk .selected-student-card strong {
+    min-width: 180px;
+}
+
+.fee-desk .selected-student-card .student-summary-details {
+    display: flex;
+    flex: 1;
+    flex-wrap: wrap;
+    gap: 4px 6px;
+    min-width: 0;
+}
+
+.fee-desk .selected-student-card .student-summary-details span {
+    display: inline-flex;
+    align-items: center;
+    min-height: 22px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: #eef7f3;
+    color: #24433b;
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 1.15;
+    text-transform: none;
+    white-space: nowrap;
+}
+
+.fee-desk .selected-student-card em {
+    margin-left: auto;
+    white-space: nowrap;
+}
+
 .fee-desk .student-due-card > div {
     flex: 1;
     min-width: 0;
@@ -6009,7 +6046,7 @@ body.dashboard-page .page {
 
 .fee-desk .student-fee-status-grid div {
     margin: 0;
-    padding: 8px 10px;
+    padding: 7px 9px;
     border: 1px solid #d7e3df;
     border-radius: 8px;
     background: rgba(255, 255, 255, .7);
@@ -6026,27 +6063,29 @@ body.dashboard-page .page {
 .fee-desk .student-fee-status-grid dd {
     margin: 0;
     color: #0f2e28;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 800;
     line-height: 1.3;
 }
 
 .fee-desk .student-month-status {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(86px, 1fr));
     gap: 5px;
-    margin-top: 10px;
+    margin-top: 8px;
 }
 
 .fee-desk .student-month-status span {
     display: inline-flex;
     align-items: center;
-    min-height: 22px;
-    padding: 3px 7px;
+    justify-content: center;
+    min-height: 24px;
+    padding: 4px 6px;
     border-radius: 999px;
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 900;
     line-height: 1.2;
+    white-space: nowrap;
 }
 
 .fee-desk .student-month-status .is-clear {
@@ -6112,6 +6151,19 @@ body.dashboard-page .page {
     }
     .fee-desk .student-fee-status-grid {
         grid-template-columns: 1fr;
+    }
+    .fee-desk .student-month-status {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .fee-desk .selected-student-card {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+    .fee-desk .selected-student-card strong {
+        min-width: 0;
+    }
+    .fee-desk .selected-student-card em {
+        margin-left: 0;
     }
     .fee-desk .student-due-card button {
         margin-top: 0;
