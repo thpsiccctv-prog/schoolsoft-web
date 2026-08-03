@@ -313,6 +313,10 @@
         var dueCard = document.querySelector("[data-student-due-card]");
         var dueValue = document.querySelector("[data-student-current-due]");
         var dueNote = document.querySelector("[data-student-due-note]");
+        var paidThrough = document.querySelector("[data-student-paid-through]");
+        var nextDue = document.querySelector("[data-student-next-due]");
+        var lastPayment = document.querySelector("[data-student-last-payment]");
+        var monthStatus = document.querySelector("[data-student-month-status]");
         var fillBalanceButton = document.querySelector("[data-fill-balance-fee]");
         var currentDefaults = null;
 
@@ -324,12 +328,39 @@
             return (toSelect && toSelect.value) || (fromSelect && fromSelect.value) || "MAR";
         }
 
+        function renderMonthStatus(rows) {
+            if (!monthStatus) return;
+            rows = rows || [];
+            monthStatus.innerHTML = rows.map(function(row) {
+                var dueAmount = toNumber(row.due_amount);
+                var creditAmount = toNumber(row.credit_amount);
+                var label = row.month + " Clear";
+                var tone = "is-clear";
+                if (dueAmount > 0) {
+                    label = row.month + " Due " + formatMoney(dueAmount);
+                    tone = "is-due";
+                } else if (creditAmount > 0) {
+                    label = row.month + " Adv " + formatMoney(creditAmount);
+                    tone = "is-credit";
+                }
+                return "<span class='" + tone + "'>" + escapeHtml(label) + "</span>";
+            }).join("");
+        }
+
+        function resetStatusDetails() {
+            if (paidThrough) paidThrough.textContent = "-";
+            if (nextDue) nextDue.textContent = "-";
+            if (lastPayment) lastPayment.textContent = "-";
+            if (monthStatus) monthStatus.innerHTML = "";
+        }
+
         function showDueStatus(data) {
             currentDefaults = data;
             if (!dueCard || !dueValue || !dueNote) return;
             var status = data && data.due_status;
             if (!status) {
                 dueCard.hidden = true;
+                resetStatusDetails();
                 return;
             }
             dueCard.hidden = false;
@@ -338,26 +369,41 @@
                 dueCard.classList.add("is-warning");
                 dueValue.textContent = "-";
                 dueNote.textContent = status.error || "Due status not available.";
+                resetStatusDetails();
                 if (fillBalanceButton) fillBalanceButton.disabled = true;
                 return;
             }
 
             var dueAmount = toNumber(status.due_amount);
             var creditAmount = toNumber(status.credit_amount);
+            var paidAmount = toNumber(status.received_amount);
+            var demandAmount = toNumber(status.gross_demand);
+            if (paidThrough) {
+                paidThrough.textContent = (status.last_payment && status.last_payment.month_range) || status.clear_through || "-";
+            }
+            if (nextDue) nextDue.textContent = status.next_due_month || "No due";
+            if (lastPayment) {
+                if (status.last_payment) {
+                    lastPayment.textContent = status.last_payment.date + " / " + status.last_payment.receipt_no + " / Rs. " + formatMoney(toNumber(status.last_payment.amount));
+                } else {
+                    lastPayment.textContent = "No receipt in this session";
+                }
+            }
+            renderMonthStatus(status.month_results);
             if (dueAmount > 0) {
                 dueCard.classList.add("is-due");
                 dueValue.textContent = "Rs. " + formatMoney(dueAmount);
-                dueNote.textContent = "Up to " + status.target_month + ": demand Rs. " + formatMoney(toNumber(status.gross_demand)) + ", paid Rs. " + formatMoney(toNumber(status.received_amount)) + ".";
+                dueNote.textContent = "Up to " + status.target_month + ": demand Rs. " + formatMoney(demandAmount) + ", paid Rs. " + formatMoney(paidAmount) + ".";
                 if (fillBalanceButton) fillBalanceButton.disabled = !data.balance_fee_field;
             } else if (creditAmount > 0) {
                 dueCard.classList.add("is-credit");
                 dueValue.textContent = "Advance Rs. " + formatMoney(creditAmount);
-                dueNote.textContent = "Up to " + status.target_month + " no due. Advance/credit available.";
+                dueNote.textContent = "Up to " + status.target_month + ": demand Rs. " + formatMoney(demandAmount) + ", paid Rs. " + formatMoney(paidAmount) + ".";
                 if (fillBalanceButton) fillBalanceButton.disabled = true;
             } else {
                 dueCard.classList.add("is-clear");
                 dueValue.textContent = "Clear";
-                dueNote.textContent = "Up to " + status.target_month + " no due.";
+                dueNote.textContent = "Up to " + status.target_month + ": demand Rs. " + formatMoney(demandAmount) + ", paid Rs. " + formatMoney(paidAmount) + ".";
                 if (fillBalanceButton) fillBalanceButton.disabled = true;
             }
         }
@@ -366,6 +412,7 @@
             var studentId = studentSelect.value;
             if (!studentId) {
                 if (dueCard) dueCard.hidden = true;
+                resetStatusDetails();
                 currentDefaults = null;
                 return;
             }
@@ -401,8 +448,15 @@
 
                     var summary = document.querySelector("[data-student-summary]");
                     if (summary && data.student) {
-                        var section = data.section ? "-" + data.section : "";
-                        summary.innerHTML = "<strong>" + data.student + "</strong><span>Class " + (data.class || "") + section + "</span><em>Active fee structure loaded</em>";
+                        var identityParts = data.student_identity || [];
+                        if (!identityParts.length) {
+                            var section = data.section ? "-" + data.section : "";
+                            identityParts = ["Class " + (data.class || "") + section];
+                        }
+                        var identityHtml = identityParts.map(function(part) {
+                            return "<span>" + escapeHtml(part) + "</span>";
+                        }).join("");
+                        summary.innerHTML = "<strong>" + escapeHtml(data.student) + "</strong><span class='student-summary-details'>" + identityHtml + "</span><em>Active fee structure loaded</em>";
                     }
                 })
                 .catch(function () {
@@ -412,6 +466,7 @@
                     }
                     if (dueValue) dueValue.textContent = "-";
                     if (dueNote) dueNote.textContent = "Could not load due status.";
+                    resetStatusDetails();
                 });
         }
 

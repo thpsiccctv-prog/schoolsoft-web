@@ -90,9 +90,24 @@
 
                     <div class="student-due-card" data-student-due-card hidden>
                         <div>
-                            <span>Balance / current due</span>
+                            <span>Fee status up to selected month</span>
                             <strong data-student-current-due>0.00</strong>
                             <small data-student-due-note>Select student and month range.</small>
+                            <dl class="student-fee-status-grid">
+                                <div>
+                                    <dt>Latest receipt range</dt>
+                                    <dd data-student-paid-through>-</dd>
+                                </div>
+                                <div>
+                                    <dt>Next due month</dt>
+                                    <dd data-student-next-due>-</dd>
+                                </div>
+                                <div>
+                                    <dt>Last receipt</dt>
+                                    <dd data-student-last-payment>-</dd>
+                                </div>
+                            </dl>
+                            <div class="student-month-status" data-student-month-status></div>
                         </div>
                         <button type="button" class="button secondary" data-fill-balance-fee>Balance / Due Fee</button>
                     </div>

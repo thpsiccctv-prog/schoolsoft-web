@@ -163,6 +163,69 @@ def _receipt_due_status(receipt):
         "has_credit": target_result.credit_amount > Decimal("0.00"),
     }
 
+
+def _student_due_status_payload(student, session, target_month):
+    month_results = []
+    clear_through = ""
+    next_due_month = ""
+    target_index = ACADEMIC_MONTHS.index(target_month)
+
+    for month in ACADEMIC_MONTHS[: target_index + 1]:
+        month_result = calculate_student_due(
+            student=student,
+            session=session,
+            through_month=month,
+        )
+        is_clear = month_result.due_amount <= Decimal("0.00")
+        if is_clear:
+            clear_through = month
+        elif not next_due_month:
+            next_due_month = month
+        month_results.append(
+            {
+                "month": month,
+                "gross_demand": str(month_result.gross_demand),
+                "received_amount": str(month_result.received_amount),
+                "due_amount": str(month_result.due_amount),
+                "credit_amount": str(month_result.credit_amount),
+                "status": "clear" if is_clear else "due",
+            }
+        )
+
+    target_result = month_results[-1]
+    latest_receipt = (
+        FeeReceipt.objects.filter(student=student, session=session, is_cancelled=False)
+        .order_by("-receipt_date", "-id")
+        .first()
+    )
+    last_payment = None
+    if latest_receipt:
+        month_range = " - "
+        if latest_receipt.from_month or latest_receipt.to_month:
+            month_range = f"{latest_receipt.from_month or '-'} to {latest_receipt.to_month or '-'}"
+        last_payment = {
+            "receipt_no": latest_receipt.receipt_no,
+            "date": latest_receipt.receipt_date.strftime("%d/%m/%Y"),
+            "amount": str(latest_receipt.received_amount),
+            "month_range": month_range,
+        }
+
+    return {
+        "available": True,
+        "target_month": target_month,
+        "gross_demand": target_result["gross_demand"],
+        "received_amount": target_result["received_amount"],
+        "due_amount": target_result["due_amount"],
+        "credit_amount": target_result["credit_amount"],
+        "has_due": Decimal(target_result["due_amount"]) > Decimal("0.00"),
+        "has_credit": Decimal(target_result["credit_amount"]) > Decimal("0.00"),
+        "clear_through": clear_through,
+        "next_due_month": next_due_month,
+        "last_payment": last_payment,
+        "month_results": month_results,
+    }
+
+
 def _format_file_mtime(path):
     try:
         return datetime.fromtimestamp(Path(path).stat().st_mtime).strftime("%d/%m/%Y %I:%M %p")
@@ -1753,21 +1816,11 @@ def student_fee_defaults(request, pk):
         target_month = ACADEMIC_MONTHS[-1]
     if selected_session:
         try:
-            result = calculate_student_due(
+            due_status = _student_due_status_payload(
                 student=student,
                 session=selected_session,
-                through_month=target_month,
+                target_month=target_month,
             )
-            due_status = {
-                "available": True,
-                "target_month": target_month,
-                "gross_demand": str(result.gross_demand),
-                "received_amount": str(result.received_amount),
-                "due_amount": str(result.due_amount),
-                "credit_amount": str(result.credit_amount),
-                "has_due": result.due_amount > Decimal("0.00"),
-                "has_credit": result.credit_amount > Decimal("0.00"),
-            }
         except (ValidationError, AttributeError) as exc:
             due_status = {
                 "available": False,
@@ -1780,6 +1833,24 @@ def student_fee_defaults(request, pk):
             "student": student.full_name,
             "class": student.current_class.name if student.current_class else "",
             "section": student.current_section.name if student.current_section else "",
+            "student_identity": [
+                part
+                for part in [
+                    f"SID {student.legacy_sid}" if student.legacy_sid else "",
+                    "-".join(
+                        part
+                        for part in [
+                            student.current_class.name if student.current_class else "",
+                            student.current_section.name if student.current_section else "",
+                        ]
+                        if part
+                    ),
+                    f"Adm {student.admission_no}" if student.admission_no else "",
+                    f"Father {student.father_name}" if student.father_name else "",
+                    f"Mobile {student.mobile_primary}" if student.mobile_primary else "",
+                ]
+                if part
+            ],
             "amounts": amounts,
             "balance_fee_field": f"fee_head_{balance_head.id}" if balance_head else "",
             "due_status": due_status,

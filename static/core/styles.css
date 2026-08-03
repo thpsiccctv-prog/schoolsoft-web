@@ -5957,7 +5957,7 @@ body.dashboard-page .page {
 
 .fee-desk .student-due-card {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
     gap: 12px;
     margin-top: 12px;
@@ -5966,6 +5966,11 @@ body.dashboard-page .page {
     border-left: 4px solid var(--fa);
     border-radius: 8px;
     background: #f8fafc;
+}
+
+.fee-desk .student-due-card > div {
+    flex: 1;
+    min-width: 0;
 }
 
 .fee-desk .student-due-card[hidden] {
@@ -5993,6 +5998,70 @@ body.dashboard-page .page {
     margin-top: 4px;
     color: #64748b;
     font-size: 12px;
+}
+
+.fee-desk .student-fee-status-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    margin: 10px 0 0;
+}
+
+.fee-desk .student-fee-status-grid div {
+    margin: 0;
+    padding: 8px 10px;
+    border: 1px solid #d7e3df;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, .7);
+}
+
+.fee-desk .student-fee-status-grid dt {
+    margin: 0 0 3px;
+    color: #657771;
+    font-size: 10px;
+    font-weight: 900;
+    text-transform: uppercase;
+}
+
+.fee-desk .student-fee-status-grid dd {
+    margin: 0;
+    color: #0f2e28;
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1.3;
+}
+
+.fee-desk .student-month-status {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 10px;
+}
+
+.fee-desk .student-month-status span {
+    display: inline-flex;
+    align-items: center;
+    min-height: 22px;
+    padding: 3px 7px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 900;
+    line-height: 1.2;
+}
+
+.fee-desk .student-month-status .is-clear {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.fee-desk .student-month-status .is-due {
+    background: #fee2e2;
+    color: #b91c1c;
+}
+
+.fee-desk .student-month-status .is-credit {
+    background: #dbeafe;
+    color: #1d4ed8;
 }
 
 .fee-desk .student-due-card.is-due {
@@ -6029,9 +6098,23 @@ body.dashboard-page .page {
 
 .fee-desk .student-due-card button {
     white-space: nowrap;
+    margin-top: 22px;
 }
 
 .fee-desk .student-due-card button:disabled {
     cursor: not-allowed;
     opacity: .55;
+}
+
+@media (max-width: 900px) {
+    .fee-desk .student-due-card {
+        flex-direction: column;
+    }
+    .fee-desk .student-fee-status-grid {
+        grid-template-columns: 1fr;
+    }
+    .fee-desk .student-due-card button {
+        margin-top: 0;
+        width: 100%;
+    }
 }

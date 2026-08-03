@@ -1310,6 +1310,8 @@ class FeeReceiptTests(AuthenticatedClientMixin, TestCase):
             student=student,
             session=session,
             receipt_date=date(2026, 7, 13),
+            from_month="APR",
+            to_month="JUL",
             received_amount=Decimal("1000.00"),
         )
 
@@ -1325,6 +1327,16 @@ class FeeReceiptTests(AuthenticatedClientMixin, TestCase):
         self.assertEqual(data["due_status"]["gross_demand"], "2800.00")
         self.assertEqual(data["due_status"]["received_amount"], "1000.00")
         self.assertEqual(data["due_status"]["due_amount"], "1800.00")
+        self.assertEqual(data["due_status"]["clear_through"], "")
+        self.assertEqual(data["due_status"]["next_due_month"], "APR")
+        self.assertEqual(data["due_status"]["last_payment"]["receipt_no"], "BAL-PAID-1")
+        self.assertEqual(data["due_status"]["last_payment"]["date"], "13/07/2026")
+        self.assertEqual(data["due_status"]["last_payment"]["month_range"], "APR to JUL")
+        self.assertEqual(len(data["due_status"]["month_results"]), 4)
+        self.assertEqual(data["due_status"]["month_results"][0]["month"], "APR")
+        self.assertEqual(data["due_status"]["month_results"][0]["status"], "due")
+        self.assertEqual(data["due_status"]["month_results"][-1]["month"], "JUL")
+        self.assertEqual(data["due_status"]["month_results"][-1]["due_amount"], "1800.00")
 
     def test_fee_defaults_uses_new_engine_even_when_legacy_receipt_due_differs(self):
         session = AcademicSession.objects.create(
@@ -1381,6 +1393,11 @@ class FeeReceiptTests(AuthenticatedClientMixin, TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "data-student-due-card")
         self.assertContains(response, "data-student-current-due")
+        self.assertContains(response, "Latest receipt range")
+        self.assertContains(response, "data-student-paid-through")
+        self.assertContains(response, "data-student-next-due")
+        self.assertContains(response, "data-student-last-payment")
+        self.assertContains(response, "data-student-month-status")
         self.assertContains(response, "data-fill-balance-fee")
         self.assertContains(response, "Balance / Due Fee")
     def test_backup_helper_prefers_desktop_live_db_when_env_path_is_missing(self):
