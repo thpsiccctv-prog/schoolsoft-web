@@ -153,9 +153,17 @@ if errorlevel 1 (
 echo.
 echo [5/6] Online Render DB me fast batch load ho raha hai...
 set "DATABASE_URL=%RENDER_DATABASE_URL%"
-"%PYTHON_EXE%" fast_load_data.py data.json >>"%SYNC_LOG%" 2>&1
+set "LOAD_SUCCESS_MARKER=sync-backups\sync-load-success.tmp"
+if exist "%LOAD_SUCCESS_MARKER%" del "%LOAD_SUCCESS_MARKER%" >nul 2>&1
+set "SCHOOLSOFT_SYNC_LOAD_MARKER=%cd%\%LOAD_SUCCESS_MARKER%"
+"%PYTHON_EXE%" -u fast_load_data.py data.json >>"%SYNC_LOG%" 2>&1
 if errorlevel 1 (
     echo ERROR: Online DB load fail hua. Details: %SYNC_LOG%
+    goto :fail
+)
+if not exist "%LOAD_SUCCESS_MARKER%" (
+    echo ERROR: Online DB load success marker nahi bana. Details: %SYNC_LOG%
+    >>"%SYNC_LOG%" echo ERROR: fast_load_data did not create success marker.
     goto :fail
 )
 

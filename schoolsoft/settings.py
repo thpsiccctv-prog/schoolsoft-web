@@ -136,6 +136,12 @@ if _database_url:
     DATABASES = {
         "default": dj_database_url.parse(_database_url, conn_max_age=600, ssl_require=not DEBUG)
     }
+    DATABASES["default"]["OPTIONS"] = {
+        "keepalives": 1,
+        "keepalives_idle": 30,
+        "keepalives_interval": 10,
+        "keepalives_count": 3,
+    }
 else:
     DATABASES = {
         'default': {

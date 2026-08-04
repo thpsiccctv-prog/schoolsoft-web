@@ -1,6 +1,7 @@
 import json
 import os
 import sys
+import time
 from collections import OrderedDict
 from pathlib import Path
 
@@ -8,11 +9,22 @@ import django
 from django.apps import apps
 from django.core import serializers
 from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.core.management.color import no_style
-from django.db import connection, transaction
+from django.db import InterfaceError, OperationalError, connection, transaction
 
 
-BATCH_SIZE = 250
+BATCH_SIZE = int(os.environ.get("SCHOOLSOFT_SYNC_BATCH_SIZE", "100"))
+DB_PHASE_ATTEMPTS = int(os.environ.get("SCHOOLSOFT_SYNC_DB_ATTEMPTS", "3"))
+BATCH_PAUSE_SECONDS = float(os.environ.get("SCHOOLSOFT_SYNC_BATCH_PAUSE_SECONDS", "0.02"))
+
+# Keep parent rows before child rows when committing in small batches.  The
+# fixture is dumped app-by-app, so auth rows naturally appear after core rows,
+# but FeeReceipt rows can reference auth.User through edit/cancel audit fields.
+MODEL_LOAD_PRIORITY = {
+    "auth.group": 10,
+    "auth.user": 20,
+}
 
 
 def fixture_path():
@@ -39,14 +51,109 @@ def load_objects(path):
         return list(serializers.deserialize("json", stream))
 
 
+def run_db_phase(label, callback):
+    """Render free DB can close stale local connections; reopen and retry phases."""
+    for attempt in range(1, DB_PHASE_ATTEMPTS + 1):
+        connection.close()
+        try:
+            return callback()
+        except (OperationalError, InterfaceError, CommandError) as exc:
+            connection.close()
+            if attempt >= DB_PHASE_ATTEMPTS:
+                raise
+            wait_seconds = attempt * 5
+            print(f"    {label} failed ({exc.__class__.__name__}). Retry {attempt + 1}/{DB_PHASE_ATTEMPTS} in {wait_seconds}s...")
+            time.sleep(wait_seconds)
+
+
+def bulk_create_batch(model, batch, model_name):
+    for attempt in range(1, DB_PHASE_ATTEMPTS + 1):
+        connection.close()
+        try:
+            with transaction.atomic():
+                apply_postgres_batch_timeouts()
+                model.objects.bulk_create(
+                    batch,
+                    batch_size=BATCH_SIZE,
+                    # If Render drops the connection during COMMIT, PostgreSQL
+                    # may still have committed that batch. Retrying with
+                    # ignore_conflicts avoids duplicate-PK aborts while still
+                    # surfacing FK or constraint mistakes.
+                    ignore_conflicts=attempt > 1,
+                )
+            connection.close()
+            if BATCH_PAUSE_SECONDS:
+                time.sleep(BATCH_PAUSE_SECONDS)
+            return
+        except (OperationalError, InterfaceError) as exc:
+            connection.close()
+            if attempt >= DB_PHASE_ATTEMPTS:
+                raise
+            wait_seconds = attempt * 5
+            print(
+                f"    {model_name} batch failed ({exc.__class__.__name__}). "
+                f"Retry {attempt + 1}/{DB_PHASE_ATTEMPTS} in {wait_seconds}s..."
+            )
+            cleanup_stale_load_sessions(model_name)
+            time.sleep(wait_seconds)
+
+
+def apply_postgres_batch_timeouts():
+    if connection.vendor != "postgresql":
+        return
+
+    with connection.cursor() as cursor:
+        cursor.execute("SET LOCAL lock_timeout = '20s'")
+        cursor.execute("SET LOCAL statement_timeout = '120s'")
+        cursor.execute("SET LOCAL idle_in_transaction_session_timeout = '60s'")
+
+
+def cleanup_stale_load_sessions(model_name):
+    try:
+        terminate_stale_postgres_load_sessions()
+    except (OperationalError, InterfaceError) as cleanup_exc:
+        connection.close()
+        print(
+            f"    {model_name} stale-session cleanup skipped "
+            f"({cleanup_exc.__class__.__name__})."
+        )
+
+
+def terminate_stale_postgres_load_sessions():
+    if connection.vendor != "postgresql":
+        return
+
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            select pg_terminate_backend(pid)
+            from pg_stat_activity
+            where datname = current_database()
+              and pid <> pg_backend_pid()
+              and (
+                    state = 'idle in transaction'
+                    or query like 'INSERT INTO "core_%'
+                    or query like 'TRUNCATE "%'
+                  );
+            """
+        )
+        terminated = sum(1 for row in cursor.fetchall() if row[0])
+    if terminated:
+        print(f"    Stale PostgreSQL load sessions terminated: {terminated}")
+    connection.close()
+
+
 def reset_database_tables():
     print("[1/5] Remote database tables clear ho rahe hain...")
-    call_command("flush", "--noinput", verbosity=0)
+    run_db_phase("terminate stale sessions", terminate_stale_postgres_load_sessions)
+    run_db_phase("flush", lambda: call_command("flush", "--noinput", verbosity=0))
+    connection.close()
 
 
 def migrate_database():
     print("[2/5] Migrations apply/check ho rahe hain...")
-    call_command("migrate", "--noinput", verbosity=1)
+    run_db_phase("migrate", lambda: call_command("migrate", "--noinput", verbosity=1))
+    connection.close()
 
 
 def bulk_insert(deserialized):
@@ -61,31 +168,40 @@ def bulk_insert(deserialized):
 
     inserted = 0
     loaded_models = []
-    with transaction.atomic():
-        with connection.constraint_checks_disabled():
-            for model, objects in grouped.items():
-                loaded_models.append(model)
-                model_name = model._meta.label
-                for batch in batched(objects, BATCH_SIZE):
-                    model.objects.bulk_create(batch, batch_size=BATCH_SIZE)
-                    inserted += len(batch)
-                    print(f"    {model_name}: {inserted} total objects inserted")
+    with connection.constraint_checks_disabled():
+        ordered_groups = [
+            item
+            for item in sorted(
+                grouped.items(),
+                key=lambda item: MODEL_LOAD_PRIORITY.get(item[0]._meta.label_lower, 100),
+            )
+        ]
 
-            # Most SchoolSoft fixture models have no M2M data, but auth.User can.
-            for item in m2m_rows:
-                obj = item.object
-                for field_name, values in item.m2m_data.items():
+        for model, objects in ordered_groups:
+            loaded_models.append(model)
+            model_name = model._meta.label
+            for batch in batched(objects, BATCH_SIZE):
+                bulk_create_batch(model, batch, model_name)
+                inserted += len(batch)
+                print(f"    {model_name}: {inserted} total objects inserted")
+
+        # Most SchoolSoft fixture models have no M2M data, but auth.User can.
+        for item in m2m_rows:
+            obj = item.object
+            for field_name, values in item.m2m_data.items():
+                with transaction.atomic():
                     getattr(obj, field_name).set(values)
 
-        print("[4/5] Constraints check ho raha hai...")
-        connection.check_constraints()
+    print("[4/5] Constraints check ho raha hai...")
+    connection.check_constraints()
 
-        sequence_sql = connection.ops.sequence_reset_sql(no_style(), loaded_models)
-        if sequence_sql:
-            with connection.cursor() as cursor:
-                for statement in sequence_sql:
-                    cursor.execute(statement)
+    sequence_sql = connection.ops.sequence_reset_sql(no_style(), loaded_models)
+    if sequence_sql:
+        with connection.cursor() as cursor:
+            for statement in sequence_sql:
+                cursor.execute(statement)
 
+    connection.close()
     print(f"    Total loaded objects: {inserted}")
 
 
@@ -124,6 +240,9 @@ def main():
     reset_database_tables()
     bulk_insert(data)
     print_counts()
+    marker_path = os.environ.get("SCHOOLSOFT_SYNC_LOAD_MARKER")
+    if marker_path:
+        Path(marker_path).write_text("fast_load_data complete\n", encoding="utf-8")
     print("SAB HO GAYA - Render site refresh karke counts verify kijiye.")
 
 
