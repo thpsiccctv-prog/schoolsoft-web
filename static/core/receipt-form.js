@@ -426,6 +426,9 @@
             if (sessionSelect && sessionSelect.value) {
                 query.push("session=" + encodeURIComponent(sessionSelect.value));
             }
+            if (fromSelect && fromSelect.value) {
+                query.push("from_month=" + encodeURIComponent(fromSelect.value));
+            }
             query.push("month=" + encodeURIComponent(selectedTargetMonth()));
             url += "?" + query.join("&");
 

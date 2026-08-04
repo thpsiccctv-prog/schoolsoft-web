@@ -88,6 +88,28 @@ def _fixed_month_installments(total, months):
     return {month: _money(amount) for month, amount in amounts.items()}
 
 
+def _normalised_class_name(school_class):
+    return "".join(ch for ch in (getattr(school_class, "name", "") or "").lower() if ch.isalnum())
+
+
+def _is_ix_x_lab_fee(structure):
+    head_name = (structure.fee_head.name or "").strip().lower()
+    class_name = _normalised_class_name(structure.school_class)
+    return head_name == "lab fee" and class_name in {"ix", "x", "9", "9th", "10", "10th"}
+
+
+def _effective_charge_rule_and_months(structure, *, is_new_student):
+    if _is_ix_x_lab_fee(structure):
+        return FeeHead.ChargeRule.FIXED_MONTHS, ["DEC"]
+
+    head = structure.fee_head
+    cohort = "new" if is_new_student else "old"
+    return (
+        getattr(head, f"{cohort}_student_charge_rule"),
+        getattr(head, f"{cohort}_student_charge_months") or [],
+    )
+
+
 def _scheduled_structure_demand(structure, *, is_new_student, student, session, cutoff, target_index):
     head = structure.fee_head
     if head.applies_to == FeeHead.AppliesTo.NEW and not is_new_student:
@@ -95,9 +117,7 @@ def _scheduled_structure_demand(structure, *, is_new_student, student, session, 
     if head.applies_to == FeeHead.AppliesTo.OLD and is_new_student:
         return ZERO
 
-    cohort = "new" if is_new_student else "old"
-    rule = getattr(head, f"{cohort}_student_charge_rule")
-    months = getattr(head, f"{cohort}_student_charge_months") or []
+    rule, months = _effective_charge_rule_and_months(structure, is_new_student=is_new_student)
     amount = _money(structure.amount)
 
     if rule == FeeHead.ChargeRule.NOT_APPLICABLE:
@@ -125,6 +145,49 @@ def _scheduled_structure_demand(structure, *, is_new_student, student, session, 
             )
         )
     raise ValidationError(f"Fee head {head.name} has unsupported charge rule {rule}.")
+
+
+def calculate_structure_receipt_amount(*, structure, student: Student, session: AcademicSession, from_month: str, to_month: str):
+    from_month = str(from_month or "").strip().upper()
+    to_month = str(to_month or "").strip().upper()
+    if from_month not in ACADEMIC_MONTHS:
+        raise ValidationError(f"Invalid academic month: {from_month or '(blank)' }.")
+    if to_month not in ACADEMIC_MONTHS:
+        raise ValidationError(f"Invalid academic month: {to_month or '(blank)' }.")
+    if not student.admission_date:
+        raise ValidationError("Student admission date is required to derive New/Old status.")
+    if not session.starts_on or not session.ends_on:
+        raise ValidationError("Academic session must have starts_on and ends_on dates.")
+
+    start_index = ACADEMIC_MONTHS.index(from_month)
+    end_index = ACADEMIC_MONTHS.index(to_month)
+    if start_index > end_index:
+        start_index, end_index = end_index, start_index
+
+    is_new_student = session.starts_on <= student.admission_date <= session.ends_on
+    end_cutoff = _academic_month_cutoff(session, ACADEMIC_MONTHS[end_index])
+    end_amount = _scheduled_structure_demand(
+        structure,
+        is_new_student=is_new_student,
+        student=student,
+        session=session,
+        cutoff=end_cutoff,
+        target_index=end_index,
+    )
+    if start_index == 0:
+        return _money(end_amount)
+
+    previous_month = ACADEMIC_MONTHS[start_index - 1]
+    previous_cutoff = _academic_month_cutoff(session, previous_month)
+    previous_amount = _scheduled_structure_demand(
+        structure,
+        is_new_student=is_new_student,
+        student=student,
+        session=session,
+        cutoff=previous_cutoff,
+        target_index=start_index - 1,
+    )
+    return _money(end_amount - previous_amount)
 
 
 def _transport_demand(student, session, target_index):

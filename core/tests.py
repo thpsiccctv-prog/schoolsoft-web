@@ -20,6 +20,7 @@ from reportlab.lib.pagesizes import A4, A5, landscape
 from .access import READONLY_GROUP
 
 from .forms import FeeReceiptEditForm, FeeReceiptEntryForm, VoucherForm
+from .fee_engine import calculate_student_due
 from .whatsapp import build_wa_link, fee_due_message, normalize_indian_mobile
 from .models import (
     AccountGroup,
@@ -988,10 +989,23 @@ class FeeReceiptTests(AuthenticatedClientMixin, TestCase):
         self.assertFalse(FeeReceipt.objects.filter(remarks="Should not save").exists())
         self.assertContains(post_response, "At least one fee head amount is required")
     def test_student_fee_defaults_api(self):
-        session = AcademicSession.objects.create(name="2026-27", is_active=True)
+        session = AcademicSession.objects.create(
+            name="2026-27",
+            starts_on=date(2026, 4, 1),
+            ends_on=date(2027, 3, 31),
+            is_active=True,
+        )
         school_class = SchoolClass.objects.create(name="I", display_order=1)
-        student = Student.objects.create(full_name="Test Student", current_class=school_class)
-        fee_head = FeeHead.objects.create(name="Tuition Fee")
+        student = Student.objects.create(
+            full_name="Test Student",
+            current_class=school_class,
+            admission_date=date(2025, 4, 1),
+        )
+        fee_head = FeeHead.objects.create(
+            name="Tuition Fee",
+            new_student_charge_rule=FeeHead.ChargeRule.MONTHLY,
+            old_student_charge_rule=FeeHead.ChargeRule.MONTHLY,
+        )
         FeeStructure.objects.create(
             session=session,
             school_class=school_class,
@@ -1002,7 +1016,7 @@ class FeeReceiptTests(AuthenticatedClientMixin, TestCase):
 
         response = self.client.get(
             reverse("core:student_fee_defaults", args=[student.id]),
-            {"session": session.id},
+            {"session": session.id, "from_month": "APR", "month": "APR"},
         )
 
         self.assertEqual(response.status_code, 200)
@@ -1032,9 +1046,18 @@ class FeeReceiptTests(AuthenticatedClientMixin, TestCase):
         self.assertContains(response, reverse("core:due_up_to_month_report"))
     def test_fee_defaults_does_not_expose_previous_due(self):
         old_session = AcademicSession.objects.create(name="2025-26")
-        new_session = AcademicSession.objects.create(name="2026-27", is_active=True)
+        new_session = AcademicSession.objects.create(
+            name="2026-27",
+            starts_on=date(2026, 4, 1),
+            ends_on=date(2027, 3, 31),
+            is_active=True,
+        )
         school_class = SchoolClass.objects.create(name="IV", display_order=4)
-        student = Student.objects.create(full_name="Opening Balance Student", current_class=school_class)
+        student = Student.objects.create(
+            full_name="Opening Balance Student",
+            current_class=school_class,
+            admission_date=date(2025, 4, 1),
+        )
         FeeReceipt.objects.create(
             receipt_no="OLD-1",
             student=student,
@@ -1050,11 +1073,30 @@ class FeeReceiptTests(AuthenticatedClientMixin, TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertNotIn("previous_due", response.json())
     def test_fee_defaults_excludes_inactive_structures(self):
-        session = AcademicSession.objects.create(name="2026-27", is_active=True)
+        session = AcademicSession.objects.create(
+            name="2026-27",
+            starts_on=date(2026, 4, 1),
+            ends_on=date(2027, 3, 31),
+            is_active=True,
+        )
         school_class = SchoolClass.objects.create(name="IV", display_order=4)
-        student = Student.objects.create(full_name="Active Structure Student", current_class=school_class)
-        active_head = FeeHead.objects.create(name="Tuition Fee")
-        stale_head = FeeHead.objects.create(name="Development Fee")
+        student = Student.objects.create(
+            full_name="Active Structure Student",
+            current_class=school_class,
+            admission_date=date(2025, 4, 1),
+        )
+        active_head = FeeHead.objects.create(
+            name="Tuition Fee",
+            new_student_charge_rule=FeeHead.ChargeRule.MONTHLY,
+            old_student_charge_rule=FeeHead.ChargeRule.MONTHLY,
+        )
+        stale_head = FeeHead.objects.create(
+            name="Development Fee",
+            new_student_charge_rule=FeeHead.ChargeRule.FIXED_MONTHS,
+            old_student_charge_rule=FeeHead.ChargeRule.FIXED_MONTHS,
+            new_student_charge_months=["JUL"],
+            old_student_charge_months=["JUL"],
+        )
         FeeStructure.objects.create(
             session=session,
             school_class=school_class,
@@ -1072,12 +1114,108 @@ class FeeReceiptTests(AuthenticatedClientMixin, TestCase):
 
         response = self.client.get(
             reverse("core:student_fee_defaults", args=[student.id]),
-            {"session": session.id},
+            {"session": session.id, "from_month": "APR", "month": "APR"},
         )
 
         amounts = response.json()["amounts"]
         self.assertEqual(amounts[f"fee_head_{active_head.id}"], "700.00")
         self.assertNotIn(f"fee_head_{stale_head.id}", amounts)
+    def test_fee_defaults_respects_old_student_new_only_admission_rule(self):
+        session = AcademicSession.objects.create(
+            name="2026-27",
+            starts_on=date(2026, 4, 1),
+            ends_on=date(2027, 3, 31),
+            is_active=True,
+        )
+        school_class = SchoolClass.objects.create(name="VIII", display_order=8)
+        student = Student.objects.create(
+            full_name="Old Student",
+            current_class=school_class,
+            admission_date=date(2021, 9, 21),
+        )
+        admission = FeeHead.objects.create(
+            name="Admission Fee",
+            applies_to=FeeHead.AppliesTo.NEW,
+            new_student_charge_rule=FeeHead.ChargeRule.ADMISSION_MONTH,
+            old_student_charge_rule=FeeHead.ChargeRule.NOT_APPLICABLE,
+        )
+        tuition = FeeHead.objects.create(
+            name="Tuition Fee",
+            new_student_charge_rule=FeeHead.ChargeRule.MONTHLY,
+            old_student_charge_rule=FeeHead.ChargeRule.MONTHLY,
+        )
+        FeeStructure.objects.create(
+            session=session,
+            school_class=school_class,
+            fee_head=admission,
+            amount=Decimal("800.00"),
+            is_active=True,
+        )
+        FeeStructure.objects.create(
+            session=session,
+            school_class=school_class,
+            fee_head=tuition,
+            amount=Decimal("900.00"),
+            is_active=True,
+        )
+
+        response = self.client.get(
+            reverse("core:student_fee_defaults", args=[student.id]),
+            {"session": session.id, "from_month": "APR", "month": "JUN"},
+        )
+
+        amounts = response.json()["amounts"]
+        self.assertNotIn(f"fee_head_{admission.id}", amounts)
+        self.assertEqual(amounts[f"fee_head_{tuition.id}"], "2700.00")
+
+    def test_ix_x_lab_fee_defaults_and_due_start_in_december(self):
+        session = AcademicSession.objects.create(
+            name="2026-27",
+            starts_on=date(2026, 4, 1),
+            ends_on=date(2027, 3, 31),
+            is_active=True,
+        )
+        school_class = SchoolClass.objects.create(name="IX", display_order=9)
+        student = Student.objects.create(
+            full_name="Class IX Student",
+            current_class=school_class,
+            admission_date=date(2026, 7, 29),
+        )
+        lab = FeeHead.objects.create(
+            name="Lab Fee",
+            applies_to=FeeHead.AppliesTo.BOTH,
+            new_student_charge_rule=FeeHead.ChargeRule.ADMISSION_MONTH,
+            old_student_charge_rule=FeeHead.ChargeRule.FIXED_MONTHS,
+            old_student_charge_months=["JUL"],
+        )
+        FeeStructure.objects.create(
+            session=session,
+            school_class=school_class,
+            fee_head=lab,
+            amount=Decimal("600.00"),
+            is_active=True,
+        )
+
+        september = self.client.get(
+            reverse("core:student_fee_defaults", args=[student.id]),
+            {"session": session.id, "from_month": "APR", "month": "SEP"},
+        )
+        december = self.client.get(
+            reverse("core:student_fee_defaults", args=[student.id]),
+            {"session": session.id, "from_month": "APR", "month": "DEC"},
+        )
+
+        self.assertNotIn(f"fee_head_{lab.id}", september.json()["amounts"])
+        self.assertEqual(december.json()["amounts"][f"fee_head_{lab.id}"], "600.00")
+        self.assertEqual(
+            calculate_student_due(student=student, session=session, through_month="SEP").gross_demand,
+            Decimal("0.00"),
+        )
+        self.assertEqual(
+            calculate_student_due(student=student, session=session, through_month="DEC").gross_demand,
+            Decimal("600.00"),
+        )
+
     def test_posted_previous_due_is_ignored_and_prior_receipt_is_not_carried_forward(self):
         session = AcademicSession.objects.create(name="2026-27")
         school_class = SchoolClass.objects.create(name="V", display_order=5)
@@ -1117,11 +1255,24 @@ class FeeReceiptTests(AuthenticatedClientMixin, TestCase):
         self.assertFalse(old_receipt.carried_forward)
     def test_fee_defaults_without_session_uses_active_session_only(self):
         old_session = AcademicSession.objects.create(name="2025-26", is_active=False)
-        active_session = AcademicSession.objects.create(name="2026-27", is_active=True)
+        active_session = AcademicSession.objects.create(
+            name="2026-27",
+            starts_on=date(2026, 4, 1),
+            ends_on=date(2027, 3, 31),
+            is_active=True,
+        )
         school_class = SchoolClass.objects.create(name="VII", display_order=7)
-        student = Student.objects.create(full_name="Session Defaults Student", current_class=school_class)
+        student = Student.objects.create(
+            full_name="Session Defaults Student",
+            current_class=school_class,
+            admission_date=date(2025, 4, 1),
+        )
         old_head = FeeHead.objects.create(name="Old Tuition")
-        active_head = FeeHead.objects.create(name="Current Tuition")
+        active_head = FeeHead.objects.create(
+            name="Current Tuition",
+            new_student_charge_rule=FeeHead.ChargeRule.MONTHLY,
+            old_student_charge_rule=FeeHead.ChargeRule.MONTHLY,
+        )
         FeeStructure.objects.create(
             session=old_session,
             school_class=school_class,

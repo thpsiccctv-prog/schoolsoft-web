@@ -27,7 +27,7 @@ from .access import (
     user_can_manage_users,
     user_is_readonly,
 )
-from .fee_engine import calculate_student_due
+from .fee_engine import calculate_student_due, calculate_structure_receipt_amount
 from .forms import DisciplineRecordForm, FamilyForm, FeeReceiptEditForm, FeeReceiptEntryForm, FeeReceiptLineEntryForm, InventoryIssueForm, InventoryItemForm, SalaryPaymentForm, StudentForm, TransferCertificateForm
 from .models import (
     ACADEMIC_MONTHS,
@@ -1801,19 +1801,32 @@ def student_fee_defaults(request, pk):
     else:
         structures = structures.none()
 
-    amounts = {
-        f"fee_head_{structure.fee_head_id}": str(structure.amount)
-        for structure in structures
-        if structure.amount > Decimal("0.00")
-    }
-
-    balance_head = FeeHead.objects.filter(name="Balance Fee", is_active=True).first()
-
-
     due_status = None
     target_month = _normalise_academic_month(request.GET.get("month")) or ACADEMIC_MONTHS[-1]
     if target_month not in ACADEMIC_MONTHS:
         target_month = ACADEMIC_MONTHS[-1]
+    from_month = _normalise_academic_month(request.GET.get("from_month")) or target_month
+    if from_month not in ACADEMIC_MONTHS:
+        from_month = target_month
+
+    amounts = {}
+    if selected_session:
+        for structure in structures:
+            try:
+                amount = calculate_structure_receipt_amount(
+                    structure=structure,
+                    student=student,
+                    session=selected_session,
+                    from_month=from_month,
+                    to_month=target_month,
+                )
+            except ValidationError:
+                continue
+            if amount > Decimal("0.00"):
+                amounts[f"fee_head_{structure.fee_head_id}"] = str(amount)
+
+    balance_head = FeeHead.objects.filter(name="Balance Fee", is_active=True).first()
+
     if selected_session:
         try:
             due_status = _student_due_status_payload(
