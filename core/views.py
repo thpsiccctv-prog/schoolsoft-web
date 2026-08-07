@@ -533,13 +533,7 @@ def dashboard(request):
                 payment_date=today,
                 is_cancelled=False,
                 payment_mode=SalaryPayment.PaymentMode.CASH,
-            ).aggregate(
-                total=Sum(
-                    F("basic_pay") + F("da") + F("other_allowances")
-                    - F("pf_deduction") - F("esi_deduction")
-                    - F("other_deduction") - F("advance_recovery")
-                )
-            )["total"] or Decimal("0.00")
+            ).aggregate(total=Sum("amount_paid"))["total"] or Decimal("0.00")
         kpis.append({
             "label": "Today's Expense",
             "value": today_expenses,
@@ -2614,43 +2608,62 @@ def salary_payment_create(request):
         form = SalaryPaymentForm(request.POST)
         if form.is_valid():
             payment = form.save(commit=False)
-            if SalaryPayment.objects.filter(staff=payment.staff, pay_month=payment.pay_month, is_cancelled=False).exists():
-                form.add_error(None, f"A valid salary payment for {payment.staff.full_name} for this month already exists.")
+            payment.slip_no = next_slip_no()
+            payment.save()
+            SalaryPaymentAuditLog.objects.create(
+                payment=payment,
+                action=SalaryPaymentAuditLog.ActionChoices.CREATED,
+                changed_by=request.user if request.user.is_authenticated else None,
+                reason="Initial generation"
+            )
+            # Build post-save status message for the clerk
+            monthly = payment.staff.basic_pay + payment.staff.da + payment.staff.other_allowances
+            total_paid = SalaryPayment.objects.filter(
+                staff=payment.staff, pay_month=payment.pay_month, is_cancelled=False
+            ).aggregate(t=Sum("amount_paid"))["t"] or Decimal("0.00")
+            remaining = monthly - total_paid
+            month_label = payment.pay_month.strftime("%B %Y")
+            if monthly <= 0:
+                salary_msg = f"{month_label} ki payment ₹{payment.amount_paid:,.0f} save ho gayi."
+            elif remaining <= 0:
+                salary_msg = f"{month_label} ki salary ₹{monthly:,.0f} poori tarah paid ho gayi. ✅"
+            elif remaining < 0:
+                advance_amt = abs(remaining)
+                salary_msg = f"{month_label} ki salary ₹{monthly:,.0f} se ₹{advance_amt:,.0f} advance diya gaya. 🔵"
             else:
-                payment.slip_no = next_slip_no()
-                payment.save()
-                SalaryPaymentAuditLog.objects.create(
-                    payment=payment,
-                    action=SalaryPaymentAuditLog.ActionChoices.CREATED,
-                    changed_by=request.user if request.user.is_authenticated else None,
-                    reason="Initial generation"
+                salary_msg = (
+                    f"{month_label} ki salary ₹{monthly:,.0f} mein se ₹{total_paid:,.0f} paid. "
+                    f"₹{remaining:,.0f} abhi bhi baaki hai. 🟡"
                 )
-                return redirect("core:salary_payment_detail", pk=payment.pk)
+            request.session["salary_msg"] = salary_msg
+            return redirect("core:salary_payment_detail", pk=payment.pk)
     else:
         form = SalaryPaymentForm()
 
     active_staff = Staff.objects.filter(is_active=True)
     staff_defaults = {}
     pending_advances = {}
-    
+
     for staff in active_staff:
+        monthly_salary = float(staff.basic_pay + staff.da + staff.other_allowances)
         staff_defaults[staff.id] = {
             "basic_pay": str(staff.basic_pay),
             "da": str(staff.da),
             "other_allowances": str(staff.other_allowances),
+            "monthly_salary": monthly_salary,
         }
-        
+
         adv_given = Voucher.objects.filter(
             staff=staff,
             debit_account__group__name__iexact="Advance Given",
             is_cancelled=False
         ).aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
-        
+
         adv_recovered = SalaryPayment.objects.filter(
             staff=staff,
             is_cancelled=False
         ).aggregate(total=Sum("advance_recovery"))["total"] or Decimal("0.00")
-        
+
         pending_advances[staff.id] = float(adv_given - adv_recovered)
 
     return render(
@@ -2662,6 +2675,28 @@ def salary_payment_create(request):
             "pending_advances": pending_advances,
         },
     )
+
+
+def salary_status_api(request):
+    staff_id = request.GET.get("staff_id")
+    month = request.GET.get("month")
+    if not staff_id or not month:
+        return JsonResponse({"error": "Missing params"}, status=400)
+
+    try:
+        staff = Staff.objects.get(pk=staff_id)
+        monthly = staff.basic_pay + staff.da + staff.other_allowances
+        total_paid = SalaryPayment.objects.filter(
+            staff=staff, pay_month=month, is_cancelled=False
+        ).aggregate(t=Sum("amount_paid"))["t"] or Decimal("0.00")
+
+        return JsonResponse({
+            "monthly_salary": float(monthly),
+            "total_paid": float(total_paid),
+            "remaining": float(monthly - total_paid)
+        })
+    except Exception:
+        return JsonResponse({"error": "Invalid data"}, status=400)
 
 
 def salary_payslip_pdf(request, pk):
@@ -3374,13 +3409,12 @@ def cash_book(request):
             payment_mode=FeeReceipt.PaymentMode.CASH
         ).aggregate(total=Sum("received_amount"))["total"] or Decimal("0.00")
         
-        from django.db.models import F
         sal_sum = SalaryPayment.objects.filter(
             payment_date__gte=ob_date,
             payment_date__lt=from_date,
             payment_mode=SalaryPayment.PaymentMode.CASH,
             is_cancelled=False
-        ).aggregate(total=Sum(F('basic_pay') + F('da') + F('other_allowances') - F('pf_deduction') - F('esi_deduction') - F('other_deduction') - F('advance_recovery')))["total"] or Decimal("0.00")
+        ).aggregate(total=Sum("amount_paid"))["total"] or Decimal("0.00")
         
         # 3. Voucher in/out
         v_in_sum = Voucher.objects.filter(
@@ -3443,7 +3477,7 @@ def cash_book(request):
                 "date": s.payment_date,
                 "desc": " ".join(desc_parts),
                 "in_amt": Decimal("0.00"),
-                "out_amt": s.net_pay,
+                "out_amt": s.amount_paid,
                 "sort_key": (s.payment_date, s.created_at)
             })
             
@@ -3571,9 +3605,11 @@ def salary_payment_list(request):
 def salary_payment_detail(request, pk):
     payment = get_object_or_404(SalaryPayment.objects.select_related("staff", "cancelled_by", "edited_by"), pk=pk)
     logs = payment.audit_logs.select_related("changed_by").all()
+    salary_msg = request.session.pop("salary_msg", None)
     return render(request, "core/salary_detail.html", {
         "payment": payment,
-        "audit_logs": logs
+        "audit_logs": logs,
+        "salary_msg": salary_msg,
     })
 
 
@@ -3590,52 +3626,43 @@ def salary_payment_edit(request, pk):
             form.add_error(None, "An edit reason is required.")
             
         if form.is_valid():
-            if SalaryPayment.objects.filter(staff=form.cleaned_data["staff"], pay_month=form.cleaned_data["pay_month"], is_cancelled=False).exclude(pk=pk).exists():
-                form.add_error(None, "A valid salary payment for this staff for this month already exists.")
-            else:
-                updated_payment = form.save(commit=False)
-                
-                original_payment = SalaryPayment.objects.get(pk=pk)
-                # Snapshot before
-                before_snapshot = {
-                    "basic_pay": str(original_payment.basic_pay),
-                    "da": str(original_payment.da),
-                    "other_allowances": str(original_payment.other_allowances),
-                    "pf_deduction": str(original_payment.pf_deduction),
-                    "esi_deduction": str(original_payment.esi_deduction),
-                    "other_deduction": str(original_payment.other_deduction),
-                    "advance_recovery": str(original_payment.advance_recovery),
-                    "net_pay": str(original_payment.net_pay),
-                }
-                
-                updated_payment.is_edited = True
-                updated_payment.edited_at = timezone.now()
-                updated_payment.edited_by = request.user if request.user.is_authenticated else None
-                updated_payment.edit_reason = edit_reason
-                updated_payment.edit_count += 1
-                updated_payment.save()
-                
-                after_snapshot = {
-                    "basic_pay": str(updated_payment.basic_pay),
-                    "da": str(updated_payment.da),
-                    "other_allowances": str(updated_payment.other_allowances),
-                    "pf_deduction": str(updated_payment.pf_deduction),
-                    "esi_deduction": str(updated_payment.esi_deduction),
-                    "other_deduction": str(updated_payment.other_deduction),
-                    "advance_recovery": str(updated_payment.advance_recovery),
-                    "net_pay": str(updated_payment.net_pay),
-                }
-                
-                SalaryPaymentAuditLog.objects.create(
-                    payment=updated_payment,
-                    action=SalaryPaymentAuditLog.ActionChoices.EDITED,
-                    changed_by=request.user if request.user.is_authenticated else None,
-                    reason=edit_reason,
-                    before_snapshot=before_snapshot,
-                    after_snapshot=after_snapshot
-                )
-                messages.success(request, "Salary payment updated successfully.")
-                return redirect("core:salary_payment_detail", pk=updated_payment.pk)
+            updated_payment = form.save(commit=False)
+
+            original_payment = SalaryPayment.objects.get(pk=pk)
+            # Snapshot before
+            before_snapshot = {
+                "basic_pay": str(original_payment.basic_pay),
+                "da": str(original_payment.da),
+                "other_allowances": str(original_payment.other_allowances),
+                "amount_paid": str(original_payment.amount_paid),
+                "net_pay": str(original_payment.net_pay),
+            }
+
+            updated_payment.is_edited = True
+            updated_payment.edited_at = timezone.now()
+            updated_payment.edited_by = request.user if request.user.is_authenticated else None
+            updated_payment.edit_reason = edit_reason
+            updated_payment.edit_count += 1
+            updated_payment.save()
+
+            after_snapshot = {
+                "basic_pay": str(updated_payment.basic_pay),
+                "da": str(updated_payment.da),
+                "other_allowances": str(updated_payment.other_allowances),
+                "amount_paid": str(updated_payment.amount_paid),
+                "net_pay": str(updated_payment.net_pay),
+            }
+
+            SalaryPaymentAuditLog.objects.create(
+                payment=updated_payment,
+                action=SalaryPaymentAuditLog.ActionChoices.EDITED,
+                changed_by=request.user if request.user.is_authenticated else None,
+                reason=edit_reason,
+                before_snapshot=before_snapshot,
+                after_snapshot=after_snapshot
+            )
+            messages.success(request, "Salary payment updated successfully.")
+            return redirect("core:salary_payment_detail", pk=updated_payment.pk)
     else:
         form = SalaryPaymentForm(instance=payment)
 

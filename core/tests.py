@@ -469,6 +469,7 @@ class DashboardExpenseKpiTests(TestCase):
             payment_date=self.today,
             payment_mode=SalaryPayment.PaymentMode.CASH,
             basic_pay=Decimal(basic),
+            amount_paid=Decimal(basic),
         )
         defaults.update(overrides)
         return SalaryPayment.objects.create(**defaults)
@@ -526,7 +527,7 @@ class DashboardExpenseKpiTests(TestCase):
         kpi = self._expense_kpi()
         self.assertEqual(kpi["value"], Decimal("1000.00"))
 
-    def test_salary_counts_net_pay_not_gross(self):
+    def test_salary_counts_amount_paid_not_gross(self):
         admin = get_user_model().objects.create_superuser(
             username="expense_admin3", email="c@example.com", password="pw12345"
         )
@@ -535,6 +536,7 @@ class DashboardExpenseKpiTests(TestCase):
             "SAL-T5", "5000.00",
             da=Decimal("500.00"), pf_deduction=Decimal("600.00"),
             advance_recovery=Decimal("400.00"),
+            amount_paid=Decimal("4500.00")
         )
 
         kpi = self._expense_kpi()
@@ -2401,6 +2403,7 @@ class StaffTests(AuthenticatedClientMixin, TestCase):
                 "esi_deduction": "0.00",
                 "other_deduction": "0.00",
                 "advance_recovery": "0.00",
+                "amount_paid": "15300.00",
                 "remarks": "July salary",
             },
         )
@@ -2438,12 +2441,13 @@ class StaffTests(AuthenticatedClientMixin, TestCase):
                 "esi_deduction": "0.00",
                 "other_deduction": "0.00",
                 "advance_recovery": "0.00",
+                "amount_paid": "10000.00",
                 "remarks": "July salary",
             },
         )
         self.assertContains(post_response, "Net pay cannot be negative")
 
-    def test_salary_duplicate_prevention(self):
+    def test_salary_multiple_payments_allowed(self):
         staff = Staff.objects.create(
             full_name="Duplicate Teacher",
             designation="Teacher",
@@ -2455,6 +2459,7 @@ class StaffTests(AuthenticatedClientMixin, TestCase):
             payment_date="2026-07-05",
             payment_mode=SalaryPayment.PaymentMode.CASH,
             basic_pay=Decimal("10000.00"),
+            amount_paid=Decimal("5000.00"),
         )
         
         post_response = self.client.post(
@@ -2462,7 +2467,7 @@ class StaffTests(AuthenticatedClientMixin, TestCase):
             data={
                 "staff": staff.id,
                 "pay_month": "2026-07-01",
-                "payment_date": "2026-07-05",
+                "payment_date": "2026-07-15",
                 "payment_mode": SalaryPayment.PaymentMode.CASH,
                 "basic_pay": "10000.00",
                 "da": "0.00",
@@ -2471,9 +2476,10 @@ class StaffTests(AuthenticatedClientMixin, TestCase):
                 "esi_deduction": "0.00",
                 "other_deduction": "0.00",
                 "advance_recovery": "0.00",
+                "amount_paid": "5000.00",
             },
         )
-        self.assertContains(post_response, "already exists")
+        self.assertEqual(post_response.status_code, 302)
 
 
 class TransportTests(AuthenticatedClientMixin, TestCase):

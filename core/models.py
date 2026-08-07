@@ -906,6 +906,12 @@ class SalaryPayment(TimeStampedModel):
     esi_deduction = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
     other_deduction = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
     advance_recovery = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
+    # Actual cash disbursed in this payment (may be partial).
+    # For old records this is backfilled from net_pay during migration.
+    amount_paid = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal("0.00"),
+        help_text="Actual amount handed to staff in this payment slip."
+    )
     remarks = models.CharField(max_length=255, blank=True)
     
     is_cancelled = models.BooleanField(default=False)
@@ -934,13 +940,6 @@ class SalaryPayment(TimeStampedModel):
 
     class Meta:
         ordering = ["-pay_month", "-id"]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["staff", "pay_month"],
-                condition=models.Q(is_cancelled=False),
-                name="unique_active_salary"
-            )
-        ]
 
     @property
     def gross_pay(self):

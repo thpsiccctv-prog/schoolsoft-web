@@ -1,157 +1,343 @@
 {% extends "base.html" %}
 
-{% block title %}New Salary Payment | SchoolSoft Modernization{% endblock %}
+{% block title %}New Salary Payment | SchoolSoft{% endblock %}
 
 {% block content %}
 <section class="section">
     <div class="section-heading with-actions">
         <div>
-            <h2>New Salary Payment</h2>
-            <p>Record a monthly salary payslip for a staff member.</p>
+            <h2>Salary Payment</h2>
+            <p>Staff ko salary dene ke liye Staff aur Month select karein.</p>
         </div>
-        <a class="button secondary" href="{% url 'core:staff_list' %}">Back</a>
+        <a class="button secondary" href="{% url 'core:salary_payment_list' %}">← Back</a>
     </div>
 
     {{ staff_defaults|json_script:"staff-defaults-data" }}
     {{ pending_advances|json_script:"pending-advances-data" }}
+
+    <!-- ═══════════════════════════════════════════════════════════
+         SALARY STATUS BANNER — staff + month select hote hi live
+         ═══════════════════════════════════════════════════════════ -->
+    <div id="salary-status-banner" class="salary-status-banner" style="display:none;">
+        <div class="salary-status-staff" id="banner-staff-name"></div>
+        <div class="salary-status-grid">
+            <div class="salary-status-item">
+                <span class="status-label">Monthly Salary</span>
+                <span class="status-value monthly" id="banner-monthly">₹0</span>
+            </div>
+            <div class="salary-status-item paid">
+                <span class="status-label">✅ Already Paid</span>
+                <span class="status-value already-paid" id="banner-paid">₹0</span>
+            </div>
+            <div class="salary-status-item remaining">
+                <span class="status-label">→ Remaining</span>
+                <span class="status-value remaining-amt" id="banner-remaining">₹0</span>
+            </div>
+        </div>
+        <div id="prev-payments-list" class="prev-payments"></div>
+    </div>
+
+    <!-- Overpaid Warning Modal -->
+    <div id="overpaid-modal" class="modal-overlay" style="display:none;">
+        <div class="modal-box warning">
+            <div class="modal-icon">⚠️</div>
+            <h3>Zyada Payment?</h3>
+            <p id="overpaid-msg"></p>
+            <div class="modal-actions">
+                <button id="overpaid-confirm" class="button danger">Haan, Save Karo</button>
+                <button id="overpaid-cancel" class="button secondary">Theek Karo</button>
+            </div>
+        </div>
+    </div>
 
     <form class="entry-form" method="post" id="salary-payment-form">
         {% csrf_token %}
         {% if form.non_field_errors %}
             <div class="form-errors">{{ form.non_field_errors }}</div>
         {% endif %}
-        
-        <div class="kpi-grid" style="margin-bottom: 2rem;">
-            <div class="kpi-card" style="border-left-color: var(--amber-500);">
-                <span>Pending Advance</span>
-                <strong id="kpi-pending-advance">Rs.  0.00</strong>
-            </div>
-            <div class="kpi-card" style="border-left-color: var(--blue-500);">
-                <span>Gross Pay</span>
-                <strong id="kpi-gross-pay">Rs.  0.00</strong>
-            </div>
-            <div class="kpi-card" style="border-left-color: var(--rose-500);">
-                <span>Total Deductions</span>
-                <strong id="kpi-deductions">Rs.  0.00</strong>
-            </div>
-            <div class="kpi-card" style="border-left-color: var(--emerald-500);">
-                <span>Net Payable</span>
-                <strong id="kpi-net-pay">Rs.  0.00</strong>
-            </div>
-        </div>
 
+        <!-- ── SECTION 1: Core fields (clerk sees only these) ── -->
         <section class="form-panel">
-            <h3>Payslip Details</h3>
-            <div class="form-grid">
-                {% for field in form %}
-                    <label>
-                        <span>{{ field.label }}</span>
-                        {{ field }}
-                        {% if field.errors %}<small>{{ field.errors|striptags }}</small>{% endif %}
-                    </label>
-                {% endfor %}
+            <h3>Payment Details</h3>
+            <div class="form-grid col-3">
+                <label>
+                    <span>Staff Member</span>
+                    {{ form.staff }}
+                    {% if form.staff.errors %}<small class="error">{{ form.staff.errors|striptags }}</small>{% endif %}
+                </label>
+                <label>
+                    <span>Salary Month</span>
+                    {{ form.pay_month }}
+                    {% if form.pay_month.errors %}<small class="error">{{ form.pay_month.errors|striptags }}</small>{% endif %}
+                </label>
+                <label>
+                    <span>Payment Date</span>
+                    {{ form.payment_date }}
+                </label>
+            </div>
+
+            <div class="form-grid col-3" style="margin-top:1rem;">
+                <label class="highlight-field">
+                    <span>💵 Aaj ka Payment (₹)</span>
+                    {{ form.amount_paid }}
+                    {% if form.amount_paid.errors %}<small class="error">{{ form.amount_paid.errors|striptags }}</small>{% endif %}
+                </label>
+                <label>
+                    <span>Payment Mode</span>
+                    {{ form.payment_mode }}
+                </label>
+                <label>
+                    <span>Remarks (Optional)</span>
+                    {{ form.remarks }}
+                </label>
             </div>
         </section>
+
+        <!-- ── SECTION 2: Advanced/Accounting (collapsed by default) ── -->
+        <details class="form-panel advanced-section">
+            <summary>⚙️ Advanced: Accounting Details (Optional)</summary>
+            <p style="color:var(--muted);font-size:0.85rem;margin-bottom:1rem;">
+                Yeh fields Staff Master se automatic fill ho jaate hain. Zaroorat na ho to mat badlein.
+            </p>
+            <div class="form-grid col-3">
+                <label>
+                    <span>Basic Pay</span>
+                    {{ form.basic_pay }}
+                </label>
+                <label>
+                    <span>DA</span>
+                    {{ form.da }}
+                </label>
+                <label>
+                    <span>Other Allowances</span>
+                    {{ form.other_allowances }}
+                </label>
+                <label>
+                    <span>PF Deduction</span>
+                    {{ form.pf_deduction }}
+                </label>
+                <label>
+                    <span>ESI Deduction</span>
+                    {{ form.esi_deduction }}
+                </label>
+                <label>
+                    <span>Other Deduction</span>
+                    {{ form.other_deduction }}
+                </label>
+                <label>
+                    <span>Advance Recovery</span>
+                    {{ form.advance_recovery }}
+                </label>
+            </div>
+        </details>
+
         <div class="form-actions">
-            <button type="submit" id="save-btn">Save &amp; Generate Payslip</button>
-            <a class="button secondary" href="{% url 'core:staff_list' %}">Cancel</a>
+            <button type="submit" id="save-btn" class="button primary">💾 Save &amp; Generate Slip</button>
+            <a class="button secondary" href="{% url 'core:salary_payment_list' %}">Cancel</a>
         </div>
     </form>
 </section>
+
+<style>
+/* ── Status Banner ── */
+.salary-status-banner {
+    background: linear-gradient(135deg, #0f4c3a 0%, #1a6b52 100%);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    color: #fff;
+    box-shadow: 0 4px 20px rgba(0,0,0,.15);
+    animation: slideDown .3s ease;
+}
+@keyframes slideDown { from { opacity:0; transform:translateY(-10px); } to { opacity:1; transform:translateY(0); } }
+.salary-status-staff {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+    opacity: .9;
+    letter-spacing: .5px;
+}
+.salary-status-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+}
+.salary-status-item {
+    background: rgba(255,255,255,.12);
+    border-radius: 8px;
+    padding: .75rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: .25rem;
+}
+.salary-status-item.remaining {
+    background: rgba(255,215,0,.18);
+    border: 1px solid rgba(255,215,0,.4);
+}
+.status-label { font-size: .78rem; opacity: .8; text-transform: uppercase; letter-spacing: .5px; }
+.status-value { font-size: 1.4rem; font-weight: 800; }
+.status-value.remaining-amt { color: #ffd700; }
+.prev-payments {
+    margin-top: 1rem;
+    font-size: .82rem;
+    opacity: .75;
+    border-top: 1px solid rgba(255,255,255,.2);
+    padding-top: .75rem;
+}
+/* Highlight the main clerk field */
+.highlight-field span { color: var(--primary, #1a6b52); font-weight: 700; font-size: 1rem; }
+.highlight-field input { font-size: 1.2rem; font-weight: 700; border: 2px solid var(--primary, #1a6b52); }
+/* Advanced section */
+.advanced-section { margin-top: 1rem; }
+.advanced-section summary {
+    cursor: pointer; font-weight: 600; color: var(--muted);
+    padding: .75rem; background: #f8f8f8; border-radius: 8px;
+}
+/* Overpaid modal */
+.modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,.5);
+    display: flex; align-items: center; justify-content: center; z-index: 9999;
+}
+.modal-box {
+    background: #fff; border-radius: 16px; padding: 2rem;
+    max-width: 420px; width: 90%; text-align: center;
+    box-shadow: 0 20px 60px rgba(0,0,0,.3);
+}
+.modal-icon { font-size: 3rem; margin-bottom: .5rem; }
+.modal-box h3 { margin: 0 0 .5rem; }
+.modal-actions { display: flex; gap: 1rem; justify-content: center; margin-top: 1.5rem; }
+.button.danger { background: #dc2626; color: #fff; border: none; }
+/* Form grid 3 cols */
+.form-grid.col-3 { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 700px) {
+    .salary-status-grid, .form-grid.col-3 { grid-template-columns: 1fr; }
+}
+</style>
 {% endblock %}
 
 {% block scripts %}
 <script>
 (function () {
-    var dataEl = document.getElementById("staff-defaults-data");
-    var advEl = document.getElementById("pending-advances-data");
-    if (!dataEl || !advEl) return;
-    
-    var staffDefaults = JSON.parse(dataEl.textContent);
-    var pendingAdvances = JSON.parse(advEl.textContent);
-    
-    var form = document.getElementById("salary-payment-form");
-    var staffField = form.querySelector("#id_staff");
-    
-    var basicField = form.querySelector("#id_basic_pay");
-    var daField = form.querySelector("#id_da");
-    var allowField = form.querySelector("#id_other_allowances");
-    
-    var pfField = form.querySelector("#id_pf_deduction");
-    var esiField = form.querySelector("#id_esi_deduction");
-    var otherDedField = form.querySelector("#id_other_deduction");
-    var advRecField = form.querySelector("#id_advance_recovery");
-    
-    var saveBtn = document.getElementById("save-btn");
+    var staffDefaultsEl = document.getElementById("staff-defaults-data");
+    var pendingAdvEl    = document.getElementById("pending-advances-data");
+    if (!staffDefaultsEl) return;
 
-    function parseAmt(val) {
-        var num = parseFloat(val);
-        return isNaN(num) ? 0 : num;
-    }
+    var staffDefaults   = JSON.parse(staffDefaultsEl.textContent);
+    var pendingAdvances = JSON.parse(pendingAdvEl.textContent);
 
-    function calculateLive() {
-        var basic = parseAmt(basicField.value);
-        var da = parseAmt(daField.value);
-        var allow = parseAmt(allowField.value);
-        
-        var pf = parseAmt(pfField.value);
-        var esi = parseAmt(esiField.value);
-        var otherDed = parseAmt(otherDedField.value);
-        var advRec = parseAmt(advRecField.value);
-        
-        var gross = basic + da + allow;
-        var deductions = pf + esi + otherDed + advRec;
-        var net = gross - deductions;
-        
-        document.getElementById("kpi-gross-pay").textContent = "Rs.  " + gross.toFixed(2);
-        document.getElementById("kpi-deductions").textContent = "Rs.  " + deductions.toFixed(2);
-        document.getElementById("kpi-net-pay").textContent = "Rs.  " + net.toFixed(2);
-        
-        var staffId = staffField.value;
-        var pending = 0;
-        if (staffId && pendingAdvances[staffId]) {
-            pending = pendingAdvances[staffId];
+    var form        = document.getElementById("salary-payment-form");
+    var staffField  = form.querySelector("#id_staff");
+    var monthField  = form.querySelector("#id_pay_month");
+    var amtField    = form.querySelector("#id_amount_paid");
+    var basicField  = form.querySelector("#id_basic_pay");
+    var daField     = form.querySelector("#id_da");
+    var allowField  = form.querySelector("#id_other_allowances");
+    var banner      = document.getElementById("salary-status-banner");
+    var saveBtn     = document.getElementById("save-btn");
+
+    var currentMonthly  = 0;
+    var currentPaid     = 0;
+    var currentRemaining = 0;
+    var overpaidConfirmed = false;
+
+    function fmt(n) { return "₹" + Math.abs(n).toLocaleString("en-IN"); }
+
+    function fetchSalaryStatus() {
+        var sid = staffField.value;
+        var month = monthField.value;
+        if (!sid || !month) { banner.style.display = "none"; return; }
+
+        var defaults = staffDefaults[sid] || {};
+        var staffName = staffField.options[staffField.selectedIndex].text;
+        var monthLabel = new Date(month + "T00:00:00").toLocaleString("default", {month: "long", year: "numeric"});
+
+        document.getElementById("banner-staff-name").textContent =
+            staffName + " — " + monthLabel;
+
+        // Fill accounting fields from staff master
+        if (basicField && (!basicField.value || basicField.value === "0" || basicField.value === "0.00")) {
+            basicField.value = defaults.basic_pay || "0.00";
         }
-        document.getElementById("kpi-pending-advance").textContent = "Rs.  " + pending.toFixed(2);
-        
-        if (net < 0) {
-            document.getElementById("kpi-net-pay").style.color = "var(--rose-600)";
-            saveBtn.disabled = true;
-            saveBtn.textContent = "Net Pay Cannot Be Negative";
-        } else {
-            document.getElementById("kpi-net-pay").style.color = "";
-            saveBtn.disabled = false;
-            saveBtn.textContent = "Save & Generate Payslip";
+        if (daField && (!daField.value || daField.value === "0" || daField.value === "0.00")) {
+            daField.value = defaults.da || "0.00";
         }
+        if (allowField && (!allowField.value || allowField.value === "0" || allowField.value === "0.00")) {
+            allowField.value = defaults.other_allowances || "0.00";
+        }
+
+        // AJAX fetch: how much already paid this month
+        var url = "/core/staff/salary/status/?staff_id=" + sid + "&month=" + month;
+        fetch(url, {headers: {"X-Requested-With": "XMLHttpRequest"}})
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                currentMonthly   = data.monthly_salary || 0;
+                currentPaid      = data.total_paid || 0;
+                currentRemaining = data.remaining;
+
+                document.getElementById("banner-monthly").textContent   = fmt(currentMonthly);
+                document.getElementById("banner-paid").textContent      = fmt(currentPaid);
+                document.getElementById("banner-remaining").textContent = fmt(currentRemaining);
+
+                // Auto-fill amount_paid with remaining if field is empty or zero
+                if (!amtField.value || parseFloat(amtField.value) === 0) {
+                    amtField.value = Math.max(0, currentRemaining).toFixed(2);
+                }
+
+                banner.style.display = "block";
+
+                // Previous payments list
+                var prevDiv = document.getElementById("prev-payments-list");
+                if (currentPaid > 0) {
+                    prevDiv.textContent = "Is mahine pehle ₹" + currentPaid.toLocaleString("en-IN") + " diya ja chuka hai.";
+                } else {
+                    prevDiv.textContent = "Is mahine abhi tak koi payment nahi ki gayi.";
+                }
+            })
+            .catch(function() {
+                // fallback from JS defaults if API fails
+                currentMonthly = defaults.monthly_salary || 0;
+                currentPaid = 0;
+                currentRemaining = currentMonthly;
+                document.getElementById("banner-monthly").textContent   = fmt(currentMonthly);
+                document.getElementById("banner-paid").textContent      = "₹0";
+                document.getElementById("banner-remaining").textContent = fmt(currentMonthly);
+                if (!amtField.value || parseFloat(amtField.value) === 0) {
+                    amtField.value = currentMonthly.toFixed(2);
+                }
+                banner.style.display = "block";
+            });
     }
 
-    if (staffField) {
-        staffField.addEventListener("change", function () {
-            var defaults = staffDefaults[staffField.value];
-            if (defaults) {
-                if (basicField && (!basicField.value || basicField.value === "0" || basicField.value === "0.00")) {
-                    basicField.value = defaults.basic_pay;
-                }
-                if (daField && (!daField.value || daField.value === "0" || daField.value === "0.00")) {
-                    daField.value = defaults.da;
-                }
-                if (allowField && (!allowField.value || allowField.value === "0" || allowField.value === "0.00")) {
-                    allowField.value = defaults.other_allowances;
-                }
-            }
-            calculateLive();
-        });
-    }
-
-    var fieldsToWatch = [basicField, daField, allowField, pfField, esiField, otherDedField, advRecField];
-    fieldsToWatch.forEach(function(f) {
-        if (f) {
-            f.addEventListener("input", calculateLive);
-            f.addEventListener("change", calculateLive);
+    // Overpaid warning on form submit
+    form.addEventListener("submit", function(e) {
+        if (overpaidConfirmed) return; // user already said yes
+        var amt = parseFloat(amtField.value) || 0;
+        var totalAfter = currentPaid + amt;
+        if (currentMonthly > 0 && totalAfter > currentMonthly) {
+            e.preventDefault();
+            var excess = totalAfter - currentMonthly;
+            document.getElementById("overpaid-msg").textContent =
+                "Is payment ke baad total " + fmt(totalAfter) + " hoga, jo monthly salary " +
+                fmt(currentMonthly) + " se " + fmt(excess) + " zyada hai. Kya yeh advance payment hai?";
+            document.getElementById("overpaid-modal").style.display = "flex";
         }
     });
 
-    calculateLive();
+    document.getElementById("overpaid-confirm").addEventListener("click", function() {
+        document.getElementById("overpaid-modal").style.display = "none";
+        overpaidConfirmed = true;
+        form.submit();
+    });
+    document.getElementById("overpaid-cancel").addEventListener("click", function() {
+        document.getElementById("overpaid-modal").style.display = "none";
+        amtField.focus();
+    });
+
+    staffField.addEventListener("change", function() { overpaidConfirmed = false; fetchSalaryStatus(); });
+    monthField.addEventListener("change", function() { overpaidConfirmed = false; fetchSalaryStatus(); });
+
+    // Initial call if editing with pre-filled values
+    if (staffField.value && monthField.value) fetchSalaryStatus();
 })();
 </script>
 {% endblock %}

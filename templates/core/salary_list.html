@@ -75,13 +75,13 @@
                 <tr>
                     <th>Slip No</th>
                     <th>Month</th>
-                    <th>Payment Date</th>
+                    <th>Date</th>
                     <th>Staff</th>
-                    <th class="text-right">Gross</th>
-                    <th class="text-right">Ded+Adv</th>
-                    <th class="text-right">Net Paid</th>
+                    <th class="text-right">Monthly Salary</th>
+                    <th class="text-right">💵 Paid (This Slip)</th>
+                    <th>Payment Status</th>
                     <th>Mode</th>
-                    <th>Status</th>
+                    <th>Slip Status</th>
                     <th>Actions</th>
                 </tr>
             </thead>
@@ -92,9 +92,15 @@
                         <td>{{ p.pay_month|date:"M Y" }}</td>
                         <td>{{ p.payment_date|date:"d M Y" }}</td>
                         <td>{{ p.staff.full_name }}</td>
-                        <td class="text-right">Rs.  {{ p.gross_pay }}</td>
-                        <td class="text-right">Rs.  {{ p.total_deductions|add:p.advance_recovery }}</td>
-                        <td class="text-right"><strong>Rs.  {{ p.net_pay }}</strong></td>
+                        <td class="text-right">Rs. {{ p.staff.basic_pay|add:p.staff.da|add:p.staff.other_allowances }}</td>
+                        <td class="text-right"><strong>Rs. {{ p.amount_paid }}</strong></td>
+                        <td>
+                            {% if not p.is_cancelled %}
+                                <span class="badge badge-info pay-status" data-amount-paid="{{ p.amount_paid }}" data-monthly="0">—</span>
+                            {% else %}
+                                <span style="color:var(--muted);font-size:.8rem;">cancelled</span>
+                            {% endif %}
+                        </td>
                         <td>{{ p.get_payment_mode_display }}</td>
                         <td>
                             {% if p.is_cancelled %}

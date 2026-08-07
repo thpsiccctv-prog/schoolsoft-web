@@ -91,6 +91,7 @@ urlpatterns = [
     path("staff/<int:pk>/", module_required("staff")(views.staff_detail), name="staff_detail"),
     path("staff/salary/", module_required("staff")(views.salary_payment_list), name="salary_payment_list"),
     path("staff/salary/new/", module_required("staff", write=True)(views.salary_payment_create), name="salary_payment_create"),
+    path("staff/salary/status/", views.salary_status_api, name="salary_status_api"),
     path("staff/salary/<int:pk>/", module_required("staff")(views.salary_payment_detail), name="salary_payment_detail"),
     path("staff/salary/<int:pk>/edit/", module_required("staff", write=True)(views.salary_payment_edit), name="salary_payment_edit"),
     path("staff/salary/<int:pk>/cancel/", module_required("staff", write=True)(views.salary_payment_cancel), name="salary_payment_cancel"),

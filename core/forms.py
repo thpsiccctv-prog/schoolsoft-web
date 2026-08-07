@@ -459,6 +459,9 @@ class SalaryPaymentForm(forms.ModelForm):
             "pay_month",
             "payment_date",
             "payment_mode",
+            "amount_paid",      # actual cash given — primary clerk field
+            "remarks",
+            # accounting/advanced fields (pre-filled from staff master)
             "basic_pay",
             "da",
             "other_allowances",
@@ -466,7 +469,6 @@ class SalaryPaymentForm(forms.ModelForm):
             "esi_deduction",
             "other_deduction",
             "advance_recovery",
-            "remarks",
         ]
         widgets = {
             "pay_month": forms.DateInput(attrs={"type": "date"}),
@@ -479,6 +481,12 @@ class SalaryPaymentForm(forms.ModelForm):
         self.fields["staff"].queryset = Staff.objects.filter(is_active=True).order_by("full_name")
         self.fields["staff"].empty_label = "Select staff"
         self.fields["payment_date"].initial = timezone.localdate()
+        self.fields["amount_paid"].label = "Aaj ka Payment (₹)"
+        self.fields["amount_paid"].required = True
+        # Advanced accounting fields are optional — pre-filled via JS from staff master
+        for fname in ["basic_pay", "da", "other_allowances", "pf_deduction", "esi_deduction",
+                      "other_deduction", "advance_recovery"]:
+            self.fields[fname].required = False
         for field in self.fields.values():
             field.widget.attrs.setdefault("class", "form-control")
 
@@ -486,25 +494,25 @@ class SalaryPaymentForm(forms.ModelForm):
         cleaned_data = super().clean()
         if not cleaned_data:
             return cleaned_data
-            
+
         gross = sum([
             cleaned_data.get("basic_pay", Decimal("0.00")),
             cleaned_data.get("da", Decimal("0.00")),
             cleaned_data.get("other_allowances", Decimal("0.00"))
         ])
-        
+
         deductions = sum([
             cleaned_data.get("pf_deduction", Decimal("0.00")),
             cleaned_data.get("esi_deduction", Decimal("0.00")),
             cleaned_data.get("other_deduction", Decimal("0.00"))
         ])
-        
+
         advance_recovery = cleaned_data.get("advance_recovery", Decimal("0.00"))
         net_pay = gross - deductions - advance_recovery
-        
+
         if net_pay < 0:
             self.add_error("advance_recovery", "Net pay cannot be negative. Advance recovery is too high.")
-            
+
         return cleaned_data
 
 
