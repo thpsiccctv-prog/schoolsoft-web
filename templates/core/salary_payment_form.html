@@ -127,6 +127,7 @@
                 <label>
                     <span>Advance Recovery</span>
                     {{ form.advance_recovery }}
+                    {% if form.advance_recovery.errors %}<small class="error">{{ form.advance_recovery.errors|striptags }}</small>{% endif %}
                 </label>
             </div>
         </details>

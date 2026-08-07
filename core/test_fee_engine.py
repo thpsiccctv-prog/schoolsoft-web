@@ -207,6 +207,42 @@ class FeeEngineTestCase(TestCase):
         self.assertEqual(result.concession_amount, Decimal("100.00"))
         self.assertEqual(result.due_amount, Decimal("2950.00"))
 
+    def test_backdated_fee_month_receipt_counts_by_fee_range_not_receipt_date(self):
+        FeeReceipt.objects.create(
+            receipt_no="JUL-COLLECTED-JUN-FEE",
+            student=self.old_student,
+            session=self.session,
+            receipt_date=date(2026, 7, 28),
+            from_month="APR",
+            to_month="JUN",
+            received_amount=Decimal("2000.00"),
+        )
+        FeeReceipt.objects.create(
+            receipt_no="JUL-COLLECTED-SEP-FEE",
+            student=self.old_student,
+            session=self.session,
+            receipt_date=date(2026, 7, 28),
+            from_month="SEP",
+            to_month="SEP",
+            received_amount=Decimal("999.00"),
+        )
+
+        june = calculate_student_due(
+            student=self.old_student,
+            session=self.session,
+            through_month="JUN",
+        )
+        september = calculate_student_due(
+            student=self.old_student,
+            session=self.session,
+            through_month="SEP",
+        )
+
+        self.assertEqual(june.gross_demand, Decimal("2100.00"))
+        self.assertEqual(june.received_amount, Decimal("2000.00"))
+        self.assertEqual(june.due_amount, Decimal("100.00"))
+        self.assertEqual(september.received_amount, Decimal("2999.00"))
+
     def test_exam_amount_is_annual_total_split_across_three_months(self):
         august = calculate_student_due(
             student=self.old_student,

@@ -223,6 +223,49 @@ def _transport_demand(student, session, target_index):
     return _money(total)
 
 
+def _normalise_receipt_month(value):
+    value = str(value or "").strip().upper()
+    if not value:
+        return ""
+    value = value[:3]
+    return value if value in ACADEMIC_MONTHS else ""
+
+
+def _receipt_counts_towards_month(receipt, *, target_index, cutoff):
+    from_month = _normalise_receipt_month(receipt.from_month)
+    to_month = _normalise_receipt_month(receipt.to_month)
+
+    if from_month:
+        return ACADEMIC_MONTHS.index(from_month) <= target_index
+    if to_month:
+        return ACADEMIC_MONTHS.index(to_month) <= target_index
+    return receipt.receipt_date <= cutoff
+
+
+def _receipt_totals_for_due(*, student, session, target_index, cutoff):
+    receipts = FeeReceipt.objects.filter(
+        student=student,
+        session=session,
+        is_cancelled=False,
+    ).only(
+        "from_month",
+        "to_month",
+        "receipt_date",
+        "received_amount",
+        "concession_amount",
+        "late_fee_amount",
+    )
+
+    totals = {"received": ZERO, "concession": ZERO, "late_fee": ZERO}
+    for receipt in receipts:
+        if not _receipt_counts_towards_month(receipt, target_index=target_index, cutoff=cutoff):
+            continue
+        totals["received"] += receipt.received_amount
+        totals["concession"] += receipt.concession_amount
+        totals["late_fee"] += receipt.late_fee_amount
+    return {key: _money(value) for key, value in totals.items()}
+
+
 def calculate_student_due(*, student: Student, session: AcademicSession, through_month: str) -> DueResult:
     through_month = str(through_month or "").strip().upper()
     if through_month not in ACADEMIC_MONTHS:
@@ -268,15 +311,11 @@ def calculate_student_due(*, student: Student, session: AcademicSession, through
             "total"
         ]
     )
-    receipt_totals = FeeReceipt.objects.filter(
+    receipt_totals = _receipt_totals_for_due(
         student=student,
         session=session,
-        is_cancelled=False,
-        receipt_date__lte=cutoff,
-    ).aggregate(
-        received=Sum("received_amount"),
-        concession=Sum("concession_amount"),
-        late_fee=Sum("late_fee_amount"),
+        target_index=target_index,
+        cutoff=cutoff,
     )
     received_amount = _money(receipt_totals["received"])
     concession_amount = _money(receipt_totals["concession"])
