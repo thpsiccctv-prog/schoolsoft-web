@@ -1,4 +1,4 @@
-import csv
+﻿import csv
 import os
 import shutil
 import sqlite3
@@ -2651,16 +2651,16 @@ def salary_payment_create(request):
             remaining = monthly - total_paid
             month_label = payment.pay_month.strftime("%B %Y")
             if monthly <= 0:
-                salary_msg = f"{month_label} ki payment ₹{payment.amount_paid:,.0f} save ho gayi."
+                salary_msg = f"{month_label} ki payment â‚¹{payment.amount_paid:,.0f} save ho gayi."
             elif remaining <= 0:
-                salary_msg = f"{month_label} ki salary ₹{monthly:,.0f} poori tarah paid ho gayi. ✅"
+                salary_msg = f"{month_label} ki salary â‚¹{monthly:,.0f} poori tarah paid ho gayi. âœ…"
             elif remaining < 0:
                 advance_amt = abs(remaining)
-                salary_msg = f"{month_label} ki salary ₹{monthly:,.0f} se ₹{advance_amt:,.0f} advance diya gaya. 🔵"
+                salary_msg = f"{month_label} ki salary â‚¹{monthly:,.0f} se â‚¹{advance_amt:,.0f} advance diya gaya. ðŸ”µ"
             else:
                 salary_msg = (
-                    f"{month_label} ki salary ₹{monthly:,.0f} mein se ₹{total_paid:,.0f} paid. "
-                    f"₹{remaining:,.0f} abhi bhi baaki hai. 🟡"
+                    f"{month_label} ki salary â‚¹{monthly:,.0f} mein se â‚¹{total_paid:,.0f} paid. "
+                    f"â‚¹{remaining:,.0f} abhi bhi baaki hai. ðŸŸ¡"
                 )
             request.session["salary_msg"] = salary_msg
             return redirect("core:salary_payment_detail", pk=payment.pk)
@@ -2713,10 +2713,12 @@ def salary_status_api(request):
     try:
         from datetime import datetime
         # Parse DD/MM/YYYY to a standard YYYY-MM-DD date object
-        try:
-            parsed_month = datetime.strptime(month, "%d/%m/%Y").date()
-        except ValueError:
-            parsed_month = datetime.strptime(month, "%Y-%m-%d").date()
+        for fmt in ["%d/%m/%Y", "%Y-%m-%d", "%Y-%m"]:
+                try:
+                    parsed_month = datetime.strptime(month, fmt).date()
+                    break
+                except ValueError:
+                    continue
 
         staff = Staff.objects.get(pk=staff_id)
         monthly = staff.basic_pay + staff.da + staff.other_allowances
@@ -2733,11 +2735,15 @@ def salary_status_api(request):
         except Exception:
             pass
 
-        return JsonResponse({
+        response = JsonResponse({
             "monthly_salary": float(monthly),
             "total_paid": float(total_paid),
-            "remaining": float(monthly - total_paid)
+            "remaining": float(monthly - total_paid),
         })
+        response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response['Pragma'] = 'no-cache'
+        response['Expires'] = '0'
+        return response
     except Exception:
         return JsonResponse({"error": "Invalid data"}, status=400)
 
@@ -3762,3 +3768,6 @@ def salary_payment_cancel(request, pk):
             return redirect("core:salary_payment_detail", pk=pk)
 
     return render(request, "core/salary_cancel_confirm.html", {"payment": payment})
+
+
+
