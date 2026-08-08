@@ -267,7 +267,7 @@
         }
 
         // AJAX fetch: how much already paid this month
-        var url = "/core/staff/salary/status/?staff_id=" + sid + "&month=" + month + "&_=" + new Date().getTime();
+        var url = "/staff/salary/status/?staff_id=" + sid + "&month=" + month + "&_=" + new Date().getTime();
         fetch(url, {headers: {"X-Requested-With": "XMLHttpRequest"}})
             .then(function(r) { return r.json(); })
             .then(function(data) {
