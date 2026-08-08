@@ -2711,10 +2711,17 @@ def salary_status_api(request):
         return JsonResponse({"error": "Missing params"}, status=400)
 
     try:
+        from datetime import datetime
+        # Parse DD/MM/YYYY to a standard YYYY-MM-DD date object
+        try:
+            parsed_month = datetime.strptime(month, "%d/%m/%Y").date()
+        except ValueError:
+            parsed_month = datetime.strptime(month, "%Y-%m-%d").date()
+
         staff = Staff.objects.get(pk=staff_id)
         monthly = staff.basic_pay + staff.da + staff.other_allowances
         total_paid = SalaryPayment.objects.filter(
-            staff=staff, pay_month=month, is_cancelled=False
+            staff=staff, pay_month=parsed_month, is_cancelled=False
         ).aggregate(t=Sum("amount_paid"))["t"] or Decimal("0.00")
 
         return JsonResponse({
