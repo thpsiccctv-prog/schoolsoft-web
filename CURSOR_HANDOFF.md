@@ -1,4 +1,4 @@
-﻿# SchoolSoft Project Ã¢â‚¬â€ Full Context Handoff
+# SchoolSoft Project Ã¢â‚¬â€ Full Context Handoff
 
 ## Agent Rules (sabse pehle ye padho)
 1. **Ek kaam, ek scope** Ã¢â‚¬â€ is file ko padho, phir sirf wahi ek specific task karo jo user ne diya hai; poora project explore mat karo.
@@ -18,28 +18,28 @@ Kaam khatam hone par exact numbers/output dikhao, taaki main Claude ko dikha kar
 Ye THPS English Medium School, Dudahi, Kushinagar ka apna school-management software hai (SchoolSoft), Django 6 par bana hua. Do jagah chalta hai: (1) school ke computer par ek Windows EXE (PyInstaller se banaya gaya, SQLite database, ye hi asli/live data hai), aur (2) online ek Render.com website (PostgreSQL database, sirf dekhne ke liye/backup ke liye, desktop se ek-tarafa sync hoti hai Ã¢â‚¬â€ online se kabhi desktop me wapas nahi aati).
 
 ## Ab tak kya-kya bana hai:
-Student records, marks, fee collection/receipts, transport, staff/salary, TC/certificates, ID cards â€” ye sab pehle se stable hain. Sabse bada recent kaam ek naya "demand-based due calculation engine" tha â€” matlab kisi bhi student ka exact bakaya (due) nikalne ka naya, saaf formula (`core/fee_engine.py`), jo purane receipt-based tarike ki jagah leta hai. 
+Student records, marks, fee collection/receipts, transport, staff/salary, TC/certificates, ID cards — ye sab pehle se stable hain. Sabse bada recent kaam ek naya "demand-based due calculation engine" tha — matlab kisi bhi student ka exact bakaya (due) nikalne ka naya, saaf formula (`core/fee_engine.py`), jo purane receipt-based tarike ki jagah leta hai. 
 
 Sabse abhi-abhi (August 2026) complete hua kaam:
 1. **Person/Ledger UI:** School ke "personal ledger" accounts (loans, advances, vendor balances) ko `Person` model se link kiya gaya. Iska UI (`/accounts/persons/`) ban chuka hai aur verify ho chuka hai.
 2. **Student Search & Fee Status:** Fee collection search me ab bachche ka naam ke saath SID, Class-Section, Admission No, Father Name, Mobile bhi dikhta hai taaki operator confuse na ho. Fee status panel me total due, advance, last receipt wagaira ekdum clear dikh raha hai.
-3. **Salary Module Redesign (Clerk-Friendly):** Salary module ko puri tarah redesign kiya gaya hai taaki partial (thoda-thoda) payment multiple times diya ja sake. Clerk ko koi hisaab nahi karna padta, system "Aaj ka Payment" ke liye remaining balance auto-fill karta hai aur status banner (Paid/Remaining) dikhata hai. Cash book aur dashboard aggregate ab directly `amount_paid` field se link hain.
+3. **Salary Module Redesign (Clerk-Friendly):** Salary module ko puri tarah redesign kiya gaya hai taaki partial (thoda-thoda) payment multiple times diya ja sake. Clerk ko koi hisaab nahi karna padta, system "Aaj ka Payment" ke liye remaining balance auto-fill karta hai aur status banner (Paid/Remaining) dikhata hai. (✅ Fully tested and verified by User).
+4. **Online Sync Timeout Fix:** `fast_load_data.py` ka batch size 100 se 50 kar diya gaya hai aur Render Database par 7000+ receipts successfully sync ho gaye hain (No timeouts!).
 
 ## Kaam karne ka tareeka (bahut zaroori):
-Main (Claude/Cowork) is project me sirf **read-only verifier** hoon â€” main file padh sakta hoon, live database ki backup copy padh kar numbers check kar sakta hoon, lekin main khud live database ko chhoo nahi sakta. Tum (naya agent) jo bhi actual code likhoge/migration chalaoge, wo live machine par ho, aur har risky step (schema change, data import, DB write) se pehle: (1) ek fresh backup lo, (2) chhote test/dry-run pe try karo, (3) mujhe result dikhao verify karne ke liye, (4) tabhi aage badho. 
+Main (Claude/Cowork) is project me sirf **read-only verifier** hoon — main file padh sakta hoon, live database ki backup copy padh kar numbers check kar sakta hoon, lekin main khud live database ko chhoo nahi sakta. Tum (naya agent) jo bhi actual code likhoge/migration chalaoge, wo live machine par ho, aur har risky step (schema change, data import, DB write) se pehle: (1) ek fresh backup lo, (2) chhote test/dry-run pe try karo, (3) mujhe result dikhao verify karne ke liye, (4) tabhi aage badho. 
 
 ## Aage kya karna hai (Pending Work):
-1. **[HIGH / PENDING] Staff Master Salary Setup:** Har staff ka `basic_pay + da + other_allowances` sahi monthly salary ke barabar set karo. Example: SATYAM VERMA CLEARK ka total monthly salary Rs. 15,000 hona chahiye. Iske bina salary status banner galat amount dikhayega.
-2. **[HIGH / BLOCKED BY #1] Salary Banner Test + Production EXE Replace:** Staff master salary set hone ke baad SATYAM par partial salary flow test karo: May salary Rs. 15,000, already paid Rs. 5,000, remaining Rs. 10,000. Test pass hone ke baad production EXE replace/build flow complete karo.
-3. **[MEDIUM / PENDING] Old Wrong Receipt Audit:** SAIF RAZA (SID 2179) ki purani wrong receipt `MR-20260728110300` jaise historical/manual wrong receipts ka audit alag se karna hai. Ye engine bug nahi, manual old-entry cleanup hai.
-4. **[LOW / DONE BUT MONITOR] Online Sync Robustness:** Render sync loader harden ho chuka hai (small batches, retry, TCP keepalives, success marker). Future sync me counts match verify karte rehna.
-5. **[LOW / PENDING] Dashboard Polish:** Dashboard ka front-design thoda polish karna (KPI cards me trend dikhana, ek chhota collection-chart).
-6. **[DONE]** Render (online) ka DB password rotate karna
-7. **[DONE]** Online view par "Last Backup"/"Last Sync" jaise cards hide karna
+1. **[MEDIUM / PENDING] Old Wrong Receipt Audit:** SAIF RAZA (SID 2179) ki purani wrong receipt `MR-20260728110300` jaise historical/manual wrong receipts ka audit alag se karna hai. Ye engine bug nahi, manual old-entry cleanup hai.
+2. **[LOW / PENDING] Dashboard Polish:** Dashboard ka front-design thoda polish karna (KPI cards me trend dikhana, ek chhota collection-chart).
+3. **[DONE]** Staff Master Salary Setup & Salary Banner Test: Tests complete, rule established ("Paisa jab haath mein aaye, tab entry").
+4. **[DONE]** Online Sync Robustness: Batch size reduced to 50, successfully pushed 7000+ receipts to Render free tier without timeouts.
+5. **[DONE]** Render (online) ka DB password rotate karna
+6. **[DONE]** Online view par "Last Backup"/"Last Sync" jaise cards hide karna
 
 **Important correction:** Admission Fee engine bug is **DONE**. New fee engine old students par Admission Fee auto-apply nahi karta. Remaining SAIF RAZA case ek purani wrong receipt/manual audit item hai, code engine bug nahi.
 
-**Status as of last update:** Salary module redesign, partial payments, student search details, fee status panel improvements, and Render sync hardening are complete and verified. Desktop EXE has been rebuilt. Ab sabse pehla practical kaam Staff Master me salary amount set karna hai, phir SATYAM salary flow test karna hai.
+**Status as of last update:** Salary module redesign, partial payments rule establishment, and Desktop-to-Online Sync (with batch size fix) are fully complete and verified. Desktop EXE has been rebuilt and is in use. Code has been pushed to GitHub. Next task is the Old Wrong Receipt Audit (SAIF RAZA) or Dashboard Polish.
 
 ---
 **Note for any agent:**

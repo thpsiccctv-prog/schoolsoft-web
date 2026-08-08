@@ -14,7 +14,7 @@ from django.core.management.color import no_style
 from django.db import InterfaceError, OperationalError, connection, transaction
 
 
-BATCH_SIZE = int(os.environ.get("SCHOOLSOFT_SYNC_BATCH_SIZE", "100"))
+BATCH_SIZE = int(os.environ.get("SCHOOLSOFT_SYNC_BATCH_SIZE", "50"))
 DB_PHASE_ATTEMPTS = int(os.environ.get("SCHOOLSOFT_SYNC_DB_ATTEMPTS", "3"))
 BATCH_PAUSE_SECONDS = float(os.environ.get("SCHOOLSOFT_SYNC_BATCH_PAUSE_SECONDS", "0.02"))
 
