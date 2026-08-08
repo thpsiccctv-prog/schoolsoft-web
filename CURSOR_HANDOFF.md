@@ -46,3 +46,5 @@ Main (Claude/Cowork) is project me sirf **read-only verifier** hoon — main fil
 Always take a backup before touching the live database and wait for the verifier's (Claude's) confirmation on numbers. Follow `CURSOR_HANDOFF.md` instructions stringently.
 
 
+
+- **Salary entry rule**: Basic Pay = fixed contractual amount. LWP/absent = Other Deduction field. Never change Basic Pay for deductions.
