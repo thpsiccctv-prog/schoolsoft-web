@@ -1242,8 +1242,17 @@ def defaulter_list(request):
     ).values("student_id").annotate(last_date=Max("receipt_date"))
     last_payment_map = {item["student_id"]: item["last_date"] for item in last_payments}
 
+    ytd_payments = FeeReceipt.objects.filter(
+        student_id__in=candidate_ids,
+        is_cancelled=False,
+        session=active_session
+    ).values("student_id").annotate(total_paid=Sum("received_amount"))
+    ytd_payment_map = {item["student_id"]: item["total_paid"] for item in ytd_payments}
+
     defaulters = []
     total_due = Decimal("0.00")
+    
+    target_idx = available_months.index(selected_month) if selected_month in available_months else 0
 
     for student in candidates:
         try:
@@ -1260,10 +1269,28 @@ def defaulter_list(request):
             if student.current_section:
                 class_name = f"{class_name}-{student.current_section.name}"
 
+            # Calculate Arrears (Previous month due or Opening Balance)
+            if target_idx > 0:
+                prev_month = available_months[target_idx - 1]
+                try:
+                    prev_result = calculate_student_due(
+                        student=student,
+                        session=active_session,
+                        through_month=prev_month,
+                    )
+                    arrears = prev_result.due_amount
+                except ValidationError:
+                    arrears = Decimal("0.00")
+            else:
+                ytd = ytd_payment_map.get(student.id) or Decimal("0.00")
+                arrears = max(Decimal("0.00"), result.opening_balance_amount - ytd)
+
             defaulters.append({
                 "student": student,
                 "class_name": class_name,
                 "due_amount": result.due_amount,
+                "arrears": arrears,
+                "ytd_paid": ytd_payment_map.get(student.id) or Decimal("0.00"),
                 "last_payment_date": last_payment_map.get(student.id)
             })
             total_due += result.due_amount

@@ -133,6 +133,8 @@
                                     <th>Adm. No.</th>
                                     <th>Parent Phone</th>
                                     <th>Last Payment</th>
+                                    <th class="text-end text-muted">YTD Paid</th>
+                                    <th class="text-end text-danger">Arrears</th>
                                     <th class="text-end">Due Amount</th>
                                 </tr>
                             </thead>
@@ -148,6 +150,8 @@
                                     <td>{{ d.student.admission_no|default:"-" }}</td>
                                     <td>{{ d.student.mobile_primary|default:"-" }}</td>
                                     <td>{{ d.last_payment_date|date:"d-M-Y"|default:"-" }}</td>
+                                    <td class="text-end text-muted">Rs. {{ d.ytd_paid }}</td>
+                                    <td class="text-end text-danger">Rs. {{ d.arrears }}</td>
                                     <td class="text-end text-danger fw-bold">Rs. {{ d.due_amount }}</td>
                                 </tr>
                                 {% endfor %}
@@ -167,6 +171,8 @@
                                 <th>Class</th>
                                 <th>Parent Phone</th>
                                 <th>Last Payment</th>
+                                <th class="text-end text-muted">YTD Paid</th>
+                                <th class="text-end text-danger">Arrears</th>
                                 <th class="text-end">Due Amount</th>
                             </tr>
                         </thead>
@@ -183,6 +189,8 @@
                                 <td>{{ d.class_name }}</td>
                                 <td>{{ d.student.mobile_primary|default:"-" }}</td>
                                 <td>{{ d.last_payment_date|date:"d-M-Y"|default:"-" }}</td>
+                                <td class="text-end text-muted">Rs. {{ d.ytd_paid }}</td>
+                                <td class="text-end text-danger">Rs. {{ d.arrears }}</td>
                                 <td class="text-end text-danger fw-bold">Rs. {{ d.due_amount }}</td>
                             </tr>
                             {% endfor %}
