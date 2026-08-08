@@ -2721,8 +2721,17 @@ def salary_status_api(request):
         staff = Staff.objects.get(pk=staff_id)
         monthly = staff.basic_pay + staff.da + staff.other_allowances
         total_paid = SalaryPayment.objects.filter(
-            staff=staff, pay_month=parsed_month, is_cancelled=False
+            staff=staff,
+            pay_month__year=parsed_month.year,
+            pay_month__month=parsed_month.month,
+            is_cancelled=False,
         ).aggregate(t=Sum("amount_paid"))["t"] or Decimal("0.00")
+
+        try:
+            with open(r"C:\Users\THPSIC THINKCLINTE2\.gemini\antigravity\scratch\api_debug.txt", "a") as f:
+                f.write(f"API CALL: staff_id={staff_id}, month={month}, parsed_month={parsed_month}, total_paid={total_paid}\n")
+        except Exception:
+            pass
 
         return JsonResponse({
             "monthly_salary": float(monthly),

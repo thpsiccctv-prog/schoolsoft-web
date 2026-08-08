@@ -36,7 +36,7 @@ set DJANGO_SUPERUSER_PASSWORD=
 set SCHOOLSOFT_SQLITE_PATH=
 
 echo [4/4] Building EXE with PyInstaller...
-"%PYTHON_EXE%" -m PyInstaller --noconfirm SchoolSoft.spec
+"%PYTHON_EXE%" -m PyInstaller --clean --noconfirm SchoolSoft.spec
 if errorlevel 1 goto :fail
 
 REM Workaround for PyInstaller with Python 3.14+ failing to bundle the base Python DLL
