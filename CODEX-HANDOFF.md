@@ -1,4 +1,4 @@
-﻿# SchoolSoft Project â€” Status Handoff (July 2, 2026)
+# SchoolSoft Project â€” Status Handoff (July 2, 2026)
 
 You are joining an in-progress project. Read this fully before changing anything.
 Everything below was completed and verified today. Do not redo finished work.
@@ -3266,6 +3266,18 @@ after confirming no further forensic comparison is needed.
 6. Add a small dashboard card for "Today's Salary Paid" separately if the owner later wants expense and
    salary split visually. For now, the combined Today's Expense card is correct for cash-out awareness.
 
+## ID Card Module
+
+An ID Card Module has been added to support high-quality, print-ready PDF ID cards for both Students and Staff. 
+Features implemented in `core/pdf.py`:
+- **Student ID Cards**: Enhanced with a 6mm top safe zone for lanyard hole punch, QR codes encoding basic info (Privacy maintained: phone/address excluded), and Blood Group badge (if available).
+- **Staff ID Cards**: Added entirely new Staff ID card layout with QR code, Designation, Employee Code, and DOB.
+- **Bulk Printing**: Support for generating A4 bulk PDFs (8 cards per page in a 2x4 grid).
+
+Views and UI integration:
+- `staff_list.html` includes a "Print ID Cards" button for bulk Staff IDs.
+- `staff_detail.html` includes a "Print ID Card" button for individual Staff IDs.
+- Removed `--clean` from `build-desktop.bat` to avoid PyInstaller permission errors on locked background DLLs, and successfully pushed the new `.exe` update.
 
 
 
