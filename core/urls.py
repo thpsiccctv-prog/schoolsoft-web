@@ -88,7 +88,9 @@ urlpatterns = [
     path("families/<int:pk>/remove-student/<int:student_id>/", module_required("family", write=True)(views.family_remove_student), name="family_remove_student"),
 
     path("staff/", module_required("staff")(views.staff_list), name="staff_list"),
+    path("staff/id-cards/pdf/", module_required("staff")(views.staff_id_card_batch_pdf), name="staff_id_card_batch_pdf"),
     path("staff/<int:pk>/", module_required("staff")(views.staff_detail), name="staff_detail"),
+    path("staff/<int:pk>/id-card/pdf/", module_required("staff")(views.staff_id_card_pdf), name="staff_id_card_pdf"),
     path("staff/salary/", module_required("staff")(views.salary_payment_list), name="salary_payment_list"),
     path("staff/salary/new/", module_required("staff", write=True)(views.salary_payment_create), name="salary_payment_create"),
     path("staff/salary/status/", views.salary_status_api, name="salary_status_api"),

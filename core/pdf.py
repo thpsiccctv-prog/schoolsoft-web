@@ -2870,151 +2870,542 @@ def build_voucher_pdf(voucher, school_profile=None):
 
 
 # ---- ID Cards ----
-_ID_CARD_WIDTH = 85.6 * mm  # standard CR80 card size
-_ID_CARD_HEIGHT = 54 * mm
+_ID_CARD_WIDTH  = 85.6 * mm   # CR80 standard card width
+_ID_CARD_HEIGHT = 54   * mm   # CR80 standard card height
+
+# Premium design colour palette (Option A — deep teal + gold)
+_C_ID_TEAL_LT   = colors.HexColor("#f0fdf9")   # lanyard zone / photo bg
+_C_ID_TEAL_PALE = colors.HexColor("#ccfbf1")   # footer subtext
+_C_ID_TEAL_DK2  = colors.HexColor("#134e4a")   # staff header (darker teal)
+_C_ID_GOLD      = colors.HexColor("#d97706")   # gold rule + badge fill
+_C_ID_SLATE     = colors.HexColor("#475569")   # info label colour
+_C_ID_TEXT_DK   = colors.HexColor("#1e293b")   # info value colour
+_C_ID_DIVIDER   = colors.HexColor("#e2e8f0")   # horizontal divider line
+_C_ID_RED       = colors.HexColor("#dc2626")   # blood group text
+_C_ID_RED_LT    = colors.HexColor("#fff1f2")   # blood badge background
 
 
-def _id_card_photo_flowable(student):
-    photo_path = None
-    if student.photo:
-        try:
-            candidate = student.photo.path
-            if os.path.exists(candidate):
-                photo_path = candidate
-        except (ValueError, NotImplementedError, OSError):
-            photo_path = None
-    if photo_path:
-        try:
-            return Image(photo_path, width=20 * mm, height=24 * mm)
-        except Exception:
-            pass
-    return Paragraph(
-        "No<br/>Photo",
-        ParagraphStyle("IdNoPhoto", fontSize=7, leading=9, alignment=1, textColor=_C_MUTED),
-    )
+def _make_qr_drawing(data, size_pt):
+    """Return a ReportLab Drawing containing a QR code.
+    Uses reportlab's built-in QrCodeWidget — no external library required.
+    Returns None silently if QR generation fails for any reason."""
+    try:
+        from reportlab.graphics.shapes import Drawing
+        from reportlab.graphics.barcode.qr import QrCodeWidget
+        qr = QrCodeWidget(data)
+        bounds = qr.getBounds()
+        w = bounds[2] - bounds[0]
+        h = bounds[3] - bounds[1]
+        if w <= 0 or h <= 0:
+            return None
+        d = Drawing(size_pt, size_pt, transform=[size_pt / w, 0, 0, size_pt / h, 0, 0])
+        d.add(qr)
+        return d
+    except Exception:
+        return None
 
 
-def _id_card_flowable(student, school_profile):
-    school_name = (school_profile.name if school_profile else "SCHOOLSOFT").upper()
+def _make_circular_photo(photo_path, size_px=80):
+    """Crop a student photo to a circle and return a transparent-corner PNG BytesIO.
+    Requires PIL/Pillow which is already a project dependency."""
+    try:
+        from PIL import ImageDraw as _PIDraw
+        img  = PILImage.open(photo_path).convert("RGBA")
+        side = min(img.width, img.height)
+        left = (img.width  - side) // 2
+        top  = (img.height - side) // 2
+        img  = img.crop((left, top, left + side, top + side))
+        img  = img.resize((size_px, size_px), PILImage.LANCZOS)
+        mask = PILImage.new("L", (size_px, size_px), 0)
+        _PIDraw.Draw(mask).ellipse((0, 0, size_px - 1, size_px - 1), fill=255)
+        result = PILImage.new("RGBA", (size_px, size_px), (255, 255, 255, 0))
+        result.paste(img, mask=mask)
+        buf = BytesIO()
+        result.save(buf, format="PNG")
+        buf.seek(0)
+        return buf
+    except Exception:
+        return None
 
-    header_style = ParagraphStyle(
-        "IdHeader", fontSize=8.5, leading=10, fontName="Helvetica-Bold",
-        textColor=colors.white, alignment=1,
-    )
-    name_style = ParagraphStyle("IdName", fontSize=10, leading=12, fontName="Helvetica-Bold", textColor=_C_BRAND_DK)
-    info_style = ParagraphStyle("IdInfo", fontSize=7.5, leading=9.5)
-    footer_style = ParagraphStyle("IdFooter", fontSize=6.5, leading=8, alignment=1, textColor=colors.white)
 
-    class_label = student.current_class.name if student.current_class else ""
-    if student.current_section:
-        class_label = f"{class_label}-{student.current_section.name}" if class_label else student.current_section.name
+class _IDCardBase(Flowable):
+    """Shared canvas-drawing utilities for premium student and staff ID cards."""
 
-    info_cell = [
-        Paragraph(student.full_name, name_style),
-        Paragraph(f"Class: {class_label or '-'}  |  Roll: {student.roll_no or '-'}", info_style),
-        Paragraph(f"House: {student.house.name if student.house else '-'}", info_style),
-        Paragraph(f"DOB: {student.date_of_birth.strftime('%d-%m-%Y') if student.date_of_birth else '-'}", info_style),
-        Paragraph(f"Father: {student.father_name or '-'}", info_style),
-        Paragraph(f"Ph: {student.mobile_primary or '-'}", info_style),
-    ]
+    _W = _ID_CARD_WIDTH
+    _H = _ID_CARD_HEIGHT
 
-    body = Table(
-        [[_id_card_photo_flowable(student), info_cell]],
-        colWidths=[22 * mm, _ID_CARD_WIDTH - 26 * mm],
-    )
-    body.setStyle(TableStyle([
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 3),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 2),
-        ("TOPPADDING", (0, 0), (-1, -1), 3),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
-    ]))
+    # Fixed zone heights (points)
+    _LANYARD_H = 7  * mm    # safe zone for hole punch
+    _HEADER_H  = 14 * mm    # teal header band
+    _GOLD_H    = 2.0         # gold accent rule
+    _FOOTER_H  = 9  * mm    # teal footer band
 
-    session_label = getattr(school_profile, "current_year", "") if school_profile else ""
-    footer_text = f"Adm No: {student.admission_no or '-'}" + (f"  |  Session {session_label}" if session_label else "")
+    def __init__(self, school_profile):
+        Flowable.__init__(self)
+        self.school_profile = school_profile
+        self.width  = self._W
+        self.height = self._H
 
-    card = Table(
-        [
-            [Paragraph(school_name, header_style)],
-            [body],
-            [Paragraph(footer_text, footer_style)],
-        ],
-        colWidths=[_ID_CARD_WIDTH],
-    )
-    card.setStyle(TableStyle([
-        ("BOX", (0, 0), (-1, -1), 1, _C_BRAND),
-        ("BACKGROUND", (0, 0), (0, 0), _C_BRAND),
-        ("BACKGROUND", (0, 2), (0, 2), _C_BRAND),
-        ("TOPPADDING", (0, 0), (0, 0), 3),
-        ("BOTTOMPADDING", (0, 0), (0, 0), 3),
-        ("TOPPADDING", (0, 2), (0, 2), 2),
-        ("BOTTOMPADDING", (0, 2), (0, 2), 2),
-    ]))
-    return card
+    def _zones(self):
+        """Return y-positions and heights of every layout zone."""
+        footer_y  = 0
+        gold_y    = self._FOOTER_H
+        body_y    = gold_y + self._GOLD_H
+        body_h    = self._H - self._LANYARD_H - self._HEADER_H - body_y
+        header_y  = body_y + body_h
+        lanyard_y = header_y + self._HEADER_H
+        return dict(
+            footer_y=footer_y,   footer_h=self._FOOTER_H,
+            gold_y=gold_y,       gold_h=self._GOLD_H,
+            body_y=body_y,       body_h=body_h,
+            header_y=header_y,   header_h=self._HEADER_H,
+            lanyard_y=lanyard_y, lanyard_h=self._LANYARD_H,
+        )
 
+    @staticmethod
+    def _fit_str(text, font, size, max_w):
+        """Shrink font, then truncate, until text fits within max_w."""
+        while size > 4.0 and pdfmetrics.stringWidth(text, font, size) > max_w:
+            size -= 0.5
+        while len(text) > 1 and pdfmetrics.stringWidth(text + "…", font, size) > max_w:
+            text = text[:-1]
+        return size, text
+
+    def _draw_silhouette(self, c, cx, cy, r, col):
+        """Simple head-and-body silhouette for photo placeholder."""
+        c.setFillColor(col)
+        c.circle(cx, cy + r * 0.18, r * 0.33, fill=1, stroke=0)
+        c.ellipse(cx - r * 0.42, cy - r * 0.55, cx + r * 0.42, cy, fill=1, stroke=0)
+
+    def _draw_lanyard_zone(self, c, z):
+        c.saveState()
+        c.setFillColor(_C_ID_TEAL_LT)
+        c.rect(0, z['lanyard_y'], self._W, z['lanyard_h'], fill=1, stroke=0)
+        c.setStrokeColor(_C_BRAND)
+        c.setLineWidth(0.4)
+        c.setDash([1.5, 1.5])
+        c.circle(self._W / 2, z['lanyard_y'] + z['lanyard_h'] / 2, 2.8 * mm, fill=0, stroke=1)
+        c.restoreState()
+
+    def _draw_header(self, c, z, header_color, badge_label):
+        c.saveState()
+        c.setFillColor(header_color)
+        c.rect(0, z['header_y'], self._W, z['header_h'], fill=1, stroke=0)
+
+        # Circular school emblem
+        emb_r  = 5.2 * mm
+        emb_cx = 3.5 * mm + emb_r
+        emb_cy = z['header_y'] + z['header_h'] / 2
+        c.setFillColor(colors.white)
+        c.circle(emb_cx, emb_cy, emb_r, fill=1, stroke=0)
+        c.setStrokeColor(_C_ID_GOLD)
+        c.setLineWidth(0.8)
+        c.circle(emb_cx, emb_cy, emb_r, fill=0, stroke=1)
+        c.setFillColor(header_color)
+        emb_fs = emb_r * 0.72
+        c.setFont("Helvetica-Bold", emb_fs)
+        c.drawCentredString(emb_cx, emb_cy - emb_r * 0.30, "TH")
+
+        # STUDENT / STAFF badge
+        b_fs  = 5.0
+        b_pad = 3.0
+        b_w   = pdfmetrics.stringWidth(badge_label, "Helvetica-Bold", b_fs) + b_pad * 2
+        b_h   = 9.5
+        b_x   = self._W - b_w - 3 * mm
+        b_y   = z['header_y'] + (z['header_h'] - b_h) / 2
+        c.setFillColor(_C_ID_GOLD)
+        c.roundRect(b_x, b_y, b_w, b_h, 2, fill=1, stroke=0)
+        c.setFillColor(colors.white)
+        c.setFont("Helvetica-Bold", b_fs)
+        c.drawCentredString(b_x + b_w / 2, b_y + (b_h - b_fs) / 2 - 0.5, badge_label)
+
+        # School name + location text
+        name_x      = emb_cx + emb_r + 1.8 * mm
+        avail_w     = b_x - name_x - 1.5 * mm
+        school_name = (self.school_profile.name if self.school_profile else "THPS ENGLISH MEDIUM SCHOOL").upper()
+        school_addr = ""
+        if self.school_profile:
+            raw_addr = getattr(self.school_profile, 'address', None) or ""
+            school_addr = raw_addr.replace('\n', ', ').strip()
+        if not school_addr:
+            school_addr = "Dudahi, Kushinagar (U.P.)  ·  Est. 2005"
+        if len(school_addr) > 45:
+            school_addr = school_addr[:44].rstrip() + "…"
+
+        c.setFillColor(colors.white)
+        fs_n, name_fit = self._fit_str(school_name, "Helvetica-Bold", 7.5, avail_w)
+        c.setFont("Helvetica-Bold", fs_n)
+        c.drawString(name_x, z['header_y'] + z['header_h'] * 0.58, name_fit)
+
+        c.setFillColor(_C_ID_TEAL_PALE)
+        fs_a, addr_fit = self._fit_str(school_addr, "Helvetica", 5.5, avail_w)
+        c.setFont("Helvetica", fs_a)
+        c.drawString(name_x, z['header_y'] + z['header_h'] * 0.24, addr_fit)
+        c.restoreState()
+
+    def _draw_gold_rule(self, c, z):
+        c.saveState()
+        c.setFillColor(_C_ID_GOLD)
+        c.rect(0, z['gold_y'], self._W, z['gold_h'], fill=1, stroke=0)
+        c.restoreState()
+
+    def _draw_footer(self, c, z, qr_data, footer_text, footer_color=None):
+        c.saveState()
+        c.setFillColor(footer_color or _C_BRAND)
+        c.rect(0, z['footer_y'], self._W, z['footer_h'], fill=1, stroke=0)
+
+        qr_size = 7.5 * mm
+        qr_x    = 2.0 * mm
+        qr_y    = (z['footer_h'] - qr_size) / 2
+        qr_drw  = _make_qr_drawing(qr_data, qr_size)
+        if qr_drw:
+            from reportlab.graphics import renderPDF as _rpdf
+            _rpdf.draw(qr_drw, c, qr_x, qr_y)
+
+        c.setFillColor(_C_ID_TEAL_PALE)
+        c.setFont("Helvetica", 5.5)
+        c.drawString(qr_x + qr_size + 1.5 * mm,
+                     z['footer_y'] + z['footer_h'] * 0.54, footer_text)
+
+        c.setFillColor(colors.white)
+        c.setFont("Helvetica-Bold", 5.2)
+        c.drawRightString(self._W - 2 * mm,
+                          z['footer_y'] + z['footer_h'] * 0.32, "thpsic.com")
+        c.restoreState()
+
+    def _draw_card_border(self, c, border_color=None):
+        c.saveState()
+        c.setStrokeColor(border_color or _C_BRAND)
+        c.setLineWidth(0.5)
+        c.rect(0, 0, self._W, self._H, fill=0, stroke=1)
+        c.restoreState()
+
+
+class _StudentIDCardPremium(_IDCardBase):
+    """World-class student ID card — deep teal + gold + circular photo."""
+
+    def __init__(self, student, school_profile):
+        super().__init__(school_profile)
+        self.student = student
+
+    def draw(self):
+        c = self.canv
+        s = self.student
+        z = self._zones()
+
+        # White base
+        c.setFillColor(colors.white)
+        c.rect(0, 0, self._W, self._H, fill=1, stroke=0)
+
+        self._draw_lanyard_zone(c, z)
+        self._draw_header(c, z, _C_BRAND, "STUDENT")
+        self._draw_gold_rule(c, z)
+
+        # ── Body ──────────────────────────────────────────────────────────────
+        c.saveState()
+
+        class_label = s.current_class.name if s.current_class else ""
+        if s.current_section:
+            sect = s.current_section.name
+            class_label = f"{class_label}-{sect}" if class_label else sect
+        adm    = s.admission_no or "-"
+        blood  = s.blood_group or ""
+        dob    = s.date_of_birth.strftime('%d-%m-%Y') if s.date_of_birth else "-"
+        father = s.father_name or "-"
+        phone  = s.mobile_primary or "-"
+
+        # Circular photo
+        ph_r   = 8 * mm
+        ph_cx  = 3.5 * mm + ph_r
+        b_gap  = (8 + 1.5 * mm) if blood else 0   # vertical space for blood badge
+        ph_cy  = z['body_y'] + z['body_h'] / 2 + b_gap / 2 + 1
+
+        c.setFillColor(_C_ID_TEAL_LT)
+        c.circle(ph_cx, ph_cy, ph_r, fill=1, stroke=0)
+
+        photo_drawn = False
+        if s.photo:
+            try:
+                from reportlab.lib.utils import ImageReader as _IR
+                path = s.photo.path
+                if os.path.exists(path):
+                    buf = _make_circular_photo(path, size_px=80)
+                    if buf:
+                        c.drawImage(_IR(buf), ph_cx - ph_r, ph_cy - ph_r,
+                                    ph_r * 2, ph_r * 2, mask="auto")
+                        photo_drawn = True
+            except Exception:
+                pass
+        if not photo_drawn:
+            self._draw_silhouette(c, ph_cx, ph_cy, ph_r, _C_BRAND)
+
+        # Photo border ring
+        c.setFillColor(colors.transparent)
+        c.setStrokeColor(_C_BRAND)
+        c.setLineWidth(1.2)
+        c.circle(ph_cx, ph_cy, ph_r, fill=0, stroke=1)
+
+        # Blood group badge
+        if blood:
+            bb_w = ph_r * 2
+            bb_h = 8
+            bb_x = ph_cx - ph_r
+            bb_y = ph_cy - ph_r - 1.2 * mm - bb_h
+            if bb_y >= z['body_y']:
+                c.setFillColor(_C_ID_RED_LT)
+                c.roundRect(bb_x, bb_y, bb_w, bb_h, 1.5, fill=1, stroke=0)
+                c.setStrokeColor(_C_ID_RED)
+                c.setLineWidth(0.4)
+                c.roundRect(bb_x, bb_y, bb_w, bb_h, 1.5, fill=0, stroke=1)
+                c.setFillColor(_C_ID_RED)
+                c.setFont("Helvetica-Bold", 5.5)
+                c.drawCentredString(bb_x + bb_w / 2, bb_y + (bb_h - 5.5) / 2 - 0.5, blood)
+
+        # Info column
+        info_x  = ph_cx + ph_r + 2.5 * mm
+        info_w  = self._W - info_x - 2 * mm
+        row_top = z['body_y'] + z['body_h'] - 3.5
+
+        # Name
+        c.setFillColor(_C_BRAND_DK)
+        fs_n, n_fit = self._fit_str(s.full_name.upper(), "Helvetica-Bold", 9.0, info_w)
+        c.setFont("Helvetica-Bold", fs_n)
+        c.drawString(info_x, row_top - fs_n, n_fit)
+
+        # Class + Adm
+        cur_y = row_top - fs_n - 1.5
+        c.setFillColor(_C_BRAND)
+        c.setFont("Helvetica-Bold", 6.5)
+        c.drawString(info_x, cur_y - 6.5, f"Class {class_label or '-'}  ·  Adm: {adm}")
+        cur_y = cur_y - 6.5 - 3.5
+
+        # Divider
+        c.setStrokeColor(_C_ID_DIVIDER)
+        c.setLineWidth(0.4)
+        c.line(info_x, cur_y, info_x + info_w, cur_y)
+        cur_y -= 2.0
+
+        # Detail rows
+        for label, value in [("DOB", dob), ("Father", father), ("Ph", phone)]:
+            cur_y -= 7.5
+            if cur_y < z['body_y'] + 1:
+                break
+            lbl_w = pdfmetrics.stringWidth(label, "Helvetica", 5.5)
+            c.setFont("Helvetica", 5.5)
+            c.setFillColor(_C_ID_SLATE)
+            c.drawString(info_x, cur_y, label)
+            c.setFillColor(_C_ID_TEXT_DK)
+            val_fs, val_fit = self._fit_str(value, "Helvetica", 5.5, info_w - lbl_w - 2.5)
+            c.setFont("Helvetica", val_fs)
+            c.drawString(info_x + lbl_w + 2.5, cur_y, val_fit)
+
+        c.restoreState()
+
+        # Footer + outer border (drawn last so border is on top)
+        sid     = s.legacy_sid or s.pk
+        qr_data = f"THPS-STUDENT|SID={sid}|ADM={adm}|NAME={s.full_name}|CLS={class_label}"
+        session = getattr(self.school_profile, "current_year", "") if self.school_profile else ""
+        ft_text = f"Adm: {adm}" + (f"  ·  Session {session}" if session else "")
+        self._draw_footer(c, z, qr_data, ft_text)
+        self._draw_card_border(c)
+
+
+class _StaffIDCardPremium(_IDCardBase):
+    """World-class staff ID card — darker teal + gold + rounded-square placeholder."""
+
+    def __init__(self, staff, school_profile):
+        super().__init__(school_profile)
+        self.staff = staff
+
+    def draw(self):
+        c  = self.canv
+        st = self.staff
+        z  = self._zones()
+
+        # White base
+        c.setFillColor(colors.white)
+        c.rect(0, 0, self._W, self._H, fill=1, stroke=0)
+
+        self._draw_lanyard_zone(c, z)
+        self._draw_header(c, z, _C_ID_TEAL_DK2, "STAFF")
+        self._draw_gold_rule(c, z)
+
+        # ── Body ──────────────────────────────────────────────────────────────
+        c.saveState()
+
+        emp_code = st.legacy_emp_code or st.pk
+        desig    = st.designation or st.get_staff_type_display()
+        dob      = st.date_of_birth.strftime('%d-%m-%Y') if st.date_of_birth else "-"
+        phone    = st.phone or "-"
+        join_dt  = (st.date_of_joining.strftime('%d-%m-%Y')
+                    if getattr(st, 'date_of_joining', None) else "-")
+
+        # Rounded-square photo placeholder — centred vertically in body
+        ph_size = 16 * mm
+        ph_x    = 3.5 * mm
+        ph_cy   = z['body_y'] + z['body_h'] / 2
+        ph_y    = ph_cy - ph_size / 2
+
+        c.setFillColor(_C_ID_TEAL_LT)
+        c.roundRect(ph_x, ph_y, ph_size, ph_size, 2 * mm, fill=1, stroke=0)
+        self._draw_silhouette(c, ph_x + ph_size / 2, ph_y + ph_size / 2,
+                              ph_size / 2 * 0.88, _C_ID_TEAL_DK2)
+        c.setFillColor(colors.transparent)
+        c.setStrokeColor(_C_ID_TEAL_DK2)
+        c.setLineWidth(1.2)
+        c.roundRect(ph_x, ph_y, ph_size, ph_size, 2 * mm, fill=0, stroke=1)
+
+        # Info column — emp code moved here as first detail row
+        info_x  = ph_x + ph_size + 2.5 * mm
+        info_w  = self._W - info_x - 2 * mm
+        row_top = z['body_y'] + z['body_h'] - 3.5
+
+        # Name
+        c.setFillColor(_C_BRAND_DK)
+        fs_n, n_fit = self._fit_str(st.full_name.upper(), "Helvetica-Bold", 9.0, info_w)
+        c.setFont("Helvetica-Bold", fs_n)
+        c.drawString(info_x, row_top - fs_n, n_fit)
+
+        # Designation (gold — stands out as role)
+        cur_y = row_top - fs_n - 1.5
+        c.setFillColor(_C_ID_GOLD)
+        fs_d, d_fit = self._fit_str(desig.upper(), "Helvetica-Bold", 7.0, info_w)
+        c.setFont("Helvetica-Bold", fs_d)
+        c.drawString(info_x, cur_y - fs_d, d_fit)
+        cur_y = cur_y - fs_d - 3.5
+
+        # Divider
+        c.setStrokeColor(_C_ID_DIVIDER)
+        c.setLineWidth(0.4)
+        c.line(info_x, cur_y, info_x + info_w, cur_y)
+        cur_y -= 2.0
+
+        # Detail rows — Code / DOB / Joining / Ph
+        for label, value in [("Code", str(emp_code)), ("DOB", dob), ("Joining", join_dt), ("Ph", phone)]:
+            cur_y -= 7.5
+            if cur_y < z['body_y'] + 1:
+                break
+            lbl_w = pdfmetrics.stringWidth(label, "Helvetica", 5.5)
+            c.setFont("Helvetica", 5.5)
+            c.setFillColor(_C_ID_SLATE)
+            c.drawString(info_x, cur_y, label)
+            c.setFillColor(_C_ID_TEXT_DK)
+            val_fs, val_fit = self._fit_str(value, "Helvetica", 5.5, info_w - lbl_w - 2.5)
+            c.setFont("Helvetica", val_fs)
+            c.drawString(info_x + lbl_w + 2.5, cur_y, val_fit)
+
+        c.restoreState()
+
+        # Footer + border
+        qr_data = f"THPS-STAFF|CODE={emp_code}|NAME={st.full_name}|DESIG={desig}"
+        session = getattr(self.school_profile, "current_year", "") if self.school_profile else ""
+        ft_text = f"Code: {emp_code}" + (f"  ·  Session {session}" if session else "")
+        self._draw_footer(c, z, qr_data, ft_text, footer_color=_C_ID_TEAL_DK2)
+        self._draw_card_border(c, border_color=_C_ID_TEAL_DK2)
+
+
+# ── Public builder functions ───────────────────────────────────────────────────
 
 def build_id_card_pdf(student, school_profile=None):
-    """Single ID card, one per A4 page (print + cut + laminate)."""
+    """Single student ID card, centred on an A4 page."""
     buffer = BytesIO()
-    document = SimpleDocTemplate(
-        buffer,
-        pagesize=A4,
-        rightMargin=14 * mm,
-        leftMargin=14 * mm,
-        topMargin=14 * mm,
-        bottomMargin=14 * mm,
+    doc = SimpleDocTemplate(
+        buffer, pagesize=A4,
+        rightMargin=14 * mm, leftMargin=14 * mm,
+        topMargin=14 * mm,   bottomMargin=14 * mm,
         title=f"ID Card - {student.full_name}",
     )
-    story = [Spacer(1, 100 * mm)]
-    card = _id_card_flowable(student, school_profile)
-    wrapper = Table([[card]], colWidths=[document.width])
+    card    = _StudentIDCardPremium(student, school_profile)
+    wrapper = Table([[card]], colWidths=[doc.width])
     wrapper.setStyle(TableStyle([("ALIGN", (0, 0), (-1, -1), "CENTER")]))
-    story.append(wrapper)
-    document.build(story)
+    doc.build([Spacer(1, 80 * mm), wrapper])
     buffer.seek(0)
     return buffer.getvalue()
 
 
 def build_id_card_batch_pdf(students, school_profile=None):
-    """Grid of ID cards (2 per row) across as many A4 pages as needed - for
-    printing a whole class/section at once, then cutting apart."""
+    """Grid of student ID cards — 2 columns × 4 rows = 8 per A4 page.
+    Lanyard safe zone is built into each card (no extra top-padding needed)."""
     buffer = BytesIO()
-    document = SimpleDocTemplate(
-        buffer,
-        pagesize=A4,
-        rightMargin=12 * mm,
-        leftMargin=12 * mm,
-        topMargin=10 * mm,
-        bottomMargin=10 * mm,
-        title="ID Cards",
+    doc = SimpleDocTemplate(
+        buffer, pagesize=A4,
+        rightMargin=10 * mm, leftMargin=10 * mm,
+        topMargin=8  * mm,   bottomMargin=8 * mm,
+        title="Student ID Cards",
     )
-    story = []
-    cards = [_id_card_flowable(s, school_profile) for s in students]
-
+    cards = [_StudentIDCardPremium(s, school_profile) for s in students]
     if not cards:
-        story.append(Paragraph("No students matched the current filter.", getSampleStyleSheet()["Normal"]))
+        doc.build([Paragraph("No students matched the current filter.",
+                             getSampleStyleSheet()["Normal"])])
     else:
-        cols = 2
+        cols      = 2
         rows_data = []
         for i in range(0, len(cards), cols):
             row = cards[i:i + cols]
             while len(row) < cols:
                 row.append("")
             rows_data.append(row)
-        grid = Table(
-            rows_data,
-            colWidths=[_ID_CARD_WIDTH] * cols,
-        )
+        grid = Table(rows_data, colWidths=[_ID_CARD_WIDTH] * cols)
         grid.setStyle(TableStyle([
-            ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-            ("TOPPADDING", (0, 0), (-1, -1), 5),
+            ("VALIGN",        (0, 0), (-1, -1), "TOP"),
+            ("ALIGN",         (0, 0), (-1, -1), "CENTER"),
+            ("TOPPADDING",    (0, 0), (-1, -1), 5),
             ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-            ("LEFTPADDING", (0, 0), (-1, -1), 4),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+            ("LEFTPADDING",   (0, 0), (-1, -1), 4),
+            ("RIGHTPADDING",  (0, 0), (-1, -1), 4),
         ]))
-        story.append(grid)
+        doc.build([grid])
+    buffer.seek(0)
+    return buffer.getvalue()
 
-    document.build(story)
+
+def build_staff_id_card_pdf(staff, school_profile=None):
+    """Single staff ID card, centred on an A4 page."""
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer, pagesize=A4,
+        rightMargin=14 * mm, leftMargin=14 * mm,
+        topMargin=14 * mm,   bottomMargin=14 * mm,
+        title=f"ID Card - {staff.full_name}",
+    )
+    card    = _StaffIDCardPremium(staff, school_profile)
+    wrapper = Table([[card]], colWidths=[doc.width])
+    wrapper.setStyle(TableStyle([("ALIGN", (0, 0), (-1, -1), "CENTER")]))
+    doc.build([Spacer(1, 80 * mm), wrapper])
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+def build_staff_id_card_batch_pdf(staff_list, school_profile=None):
+    """Grid of staff ID cards — 2 columns × 4 rows = 8 per A4 page.
+    Lanyard safe zone is built into each card."""
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer, pagesize=A4,
+        rightMargin=10 * mm, leftMargin=10 * mm,
+        topMargin=8  * mm,   bottomMargin=8 * mm,
+        title="Staff ID Cards",
+    )
+    cards = [_StaffIDCardPremium(s, school_profile) for s in staff_list]
+    if not cards:
+        doc.build([Paragraph("No staff found.", getSampleStyleSheet()["Normal"])])
+    else:
+        cols      = 2
+        rows_data = []
+        for i in range(0, len(cards), cols):
+            row = cards[i:i + cols]
+            while len(row) < cols:
+                row.append("")
+            rows_data.append(row)
+        grid = Table(rows_data, colWidths=[_ID_CARD_WIDTH] * cols)
+        grid.setStyle(TableStyle([
+            ("VALIGN",        (0, 0), (-1, -1), "TOP"),
+            ("ALIGN",         (0, 0), (-1, -1), "CENTER"),
+            ("TOPPADDING",    (0, 0), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ("LEFTPADDING",   (0, 0), (-1, -1), 4),
+            ("RIGHTPADDING",  (0, 0), (-1, -1), 4),
+        ]))
+        doc.build([grid])
     buffer.seek(0)
     return buffer.getvalue()

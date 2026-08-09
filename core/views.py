@@ -67,6 +67,8 @@ from .pdf import (
     build_fee_receipt_pdf,
     build_id_card_batch_pdf,
     build_id_card_pdf,
+    build_staff_id_card_pdf,
+    build_staff_id_card_batch_pdf,
     build_marksheet_pdf,
     build_salary_payslip_pdf,
     build_scholar_register_book_pdf,
@@ -2000,6 +2002,22 @@ def id_card_batch_pdf(request):
     pdf_bytes = build_id_card_batch_pdf(list(students), get_active_school_profile())
     response = HttpResponse(pdf_bytes, content_type="application/pdf")
     response["Content-Disposition"] = 'inline; filename="id-cards.pdf"'
+    return response
+
+
+def staff_id_card_pdf(request, pk):
+    staff = get_object_or_404(Staff, pk=pk)
+    pdf_bytes = build_staff_id_card_pdf(staff, get_active_school_profile())
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
+    response["Content-Disposition"] = f'inline; filename="id-card-staff-{staff.legacy_emp_code or staff.pk}.pdf"'
+    return response
+
+
+def staff_id_card_batch_pdf(request):
+    staff_qs = Staff.objects.filter(is_active=True).order_by("full_name")
+    pdf_bytes = build_staff_id_card_batch_pdf(list(staff_qs), get_active_school_profile())
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
+    response["Content-Disposition"] = 'inline; filename="id-cards-staff.pdf"'
     return response
 
 
