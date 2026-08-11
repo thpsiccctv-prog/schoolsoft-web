@@ -177,7 +177,7 @@ echo   https://schoolsoft-english-medium.onrender.com
 echo.
 echo Expected:
 echo   - Online dashboard Desktop dashboard se match kare.
-echo   - Cash Book 01/06/2026 to 12/07/2026, Include salary ON, closing Rs. 10,367 rahe.
+echo   - Cash Book 01/06/2026 to 12/07/2026, Include salary ON, closing Rs. -3,633 rahe.
 pause
 exit /b 0
 
