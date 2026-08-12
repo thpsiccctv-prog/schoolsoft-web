@@ -3305,21 +3305,28 @@ def voucher_edit(request, pk):
         messages.error(request, "Cannot edit a cancelled voucher.")
         return redirect("core:voucher_detail", pk=voucher.pk)
         
+    def _json_safe(d):
+        """Convert model_to_dict output to a JSON-serializable dict.
+        DjangoJSONEncoder handles date, datetime, Decimal, UUID, etc."""
+        import json
+        from django.core.serializers.json import DjangoJSONEncoder
+        return json.loads(json.dumps(d, cls=DjangoJSONEncoder, default=str))
+
     if request.method == "POST":
         form = VoucherEditForm(request.POST, instance=voucher)
         if form.is_valid():
-            before_snapshot = model_to_dict(voucher)
-            
+            before_snapshot = _json_safe(model_to_dict(voucher))
+
             updated = form.save(commit=False)
             updated.is_edited = True
             updated.edited_at = timezone.now()
             updated.edited_by = request.user
             updated.edit_count += 1
             updated.edit_reason = form.cleaned_data["edit_reason"]
-            
+
             with transaction.atomic():
                 updated.save()
-                after_snapshot = model_to_dict(updated)
+                after_snapshot = _json_safe(model_to_dict(updated))
                 
                 # compute changes
                 changes = {}
