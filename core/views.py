@@ -1,4 +1,4 @@
-﻿import csv
+import csv
 import os
 import shutil
 import sqlite3
@@ -3313,9 +3313,9 @@ def voucher_edit(request, pk):
         return json.loads(json.dumps(d, cls=DjangoJSONEncoder, default=str))
 
     if request.method == "POST":
+        before_snapshot = _json_safe(model_to_dict(voucher))
         form = VoucherEditForm(request.POST, instance=voucher)
         if form.is_valid():
-            before_snapshot = _json_safe(model_to_dict(voucher))
 
             updated = form.save(commit=False)
             updated.is_edited = True

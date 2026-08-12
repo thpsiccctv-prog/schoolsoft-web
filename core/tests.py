@@ -2937,8 +2937,61 @@ class FamilyLedgerTests(AuthenticatedClientMixin, TestCase):
 
     def test_family_list_does_not_crash_when_empty(self):
         response = self.client.get(reverse("core:family_list"))
-
         self.assertEqual(response.status_code, 200)
 
 
-# Create your tests here.
+class VoucherEditAuditTrailTests(AuthenticatedClientMixin, TestCase):
+    def setUp(self):
+        super().setUp()
+        from core.models import LedgerAccount, AccountGroup
+        self.group = AccountGroup.objects.create(name="Cash Group", group_type="asset")
+        self.cash_acct = LedgerAccount.objects.create(name="Cash in Hand", group=self.group)
+        self.expense_acct = LedgerAccount.objects.create(name="Tea Expense", group=self.group)
+
+    def test_voucher_edit_date_json_safe(self):
+        from core.models import Voucher, VoucherAuditLog, AcademicSession
+        
+        session = AcademicSession.objects.create(name="2026-27", starts_on=date(2026, 4, 1), ends_on=date(2027, 3, 31), is_active=True)
+        
+        # Create a voucher with a date object
+        voucher = Voucher.objects.create(
+            session=session,
+            voucher_no="CPMT-2026-27-TEST",
+            voucher_date=date(2026, 8, 12),
+            voucher_type="CASH_PAYMENT",
+            debit_account=self.expense_acct,
+            credit_account=self.cash_acct,
+            amount=Decimal("150.00"),
+            payment_mode="cash",
+            created_by=self.user
+        )
+        
+        edit_url = reverse("core:voucher_edit", kwargs={"pk": voucher.pk})
+        
+        # POST data to edit the voucher (change date to 2026-08-10)
+        post_data = {
+            "voucher_date": "2026-08-10",
+            "voucher_type": "CASH_PAYMENT",
+            "debit_account": self.expense_acct.pk,
+            "credit_account": self.cash_acct.pk,
+            "amount": "150.00",
+            "payment_mode": "cash",
+            "edit_reason": "Date correction",
+        }
+        
+        response = self.client.post(edit_url, post_data)
+        
+        # Assert no 500 error, should redirect back to voucher detail
+        self.assertEqual(response.status_code, 302)
+        
+        # Verify the audit log was created successfully
+        voucher.refresh_from_db()
+        self.assertTrue(voucher.is_edited)
+        
+        audit_log = VoucherAuditLog.objects.get(voucher=voucher)
+        self.assertEqual(audit_log.reason, "Date correction")
+        
+        # The key assertion: date fields must be stored as strings in JSON, not throwing serialization errors
+        self.assertEqual(audit_log.before_snapshot["voucher_date"], "2026-08-12")
+        self.assertEqual(audit_log.after_snapshot["voucher_date"], "2026-08-10")
+
