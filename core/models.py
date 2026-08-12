@@ -1390,3 +1390,136 @@ class ModuleAccess(models.Model):
             ("access_inventory", "SchoolSoft: Inventory (uniform/books)"),
             ("access_family", "SchoolSoft: Family Ledger (siblings)"),
         ]
+
+from django.core.validators import MinValueValidator, MaxValueValidator
+
+class StudentConcession(models.Model):
+    """Approved fee concession/waiver for a student - session based."""
+    
+    CONCESSION_TYPE_CHOICES = [
+        ('monthly_waiver', 'Monthly Fee Waiver'),
+        ('one_time', 'One-time Concession'),
+        ('full_free', 'Full Free'),
+        ('sibling_discount', 'Sibling Discount'),
+    ]
+    
+    AMOUNT_TYPE_CHOICES = [
+        ('fixed', 'Fixed Amount'),
+        ('percent', 'Percentage'),
+        ('full', '100% Free'),
+    ]
+    
+    student = models.ForeignKey(
+        'Student',
+        on_delete=models.CASCADE,
+        related_name='concessions',
+        verbose_name='Student'
+    )
+    session = models.ForeignKey(
+        'AcademicSession',
+        on_delete=models.CASCADE,
+        related_name='concessions',
+        verbose_name='Session'
+    )
+    
+    concession_type = models.CharField(
+        max_length=20,
+        choices=CONCESSION_TYPE_CHOICES,
+        default='monthly_waiver',
+        verbose_name='Concession Type'
+    )
+    amount_type = models.CharField(
+        max_length=10,
+        choices=AMOUNT_TYPE_CHOICES,
+        default='fixed',
+        verbose_name='Amount Type'
+    )
+    amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0)],
+        verbose_name='Amount / Percentage',
+        help_text='For fixed: rupees. For percent: e.g. 50. Leave blank for Full Free.'
+    )
+    
+    reason = models.TextField(verbose_name='Reason')
+    approved_by_name = models.CharField(
+        max_length=100,
+        verbose_name='Approved By'
+    )
+    
+    is_active = models.BooleanField(default=True, verbose_name='Active')
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='concessions_created'
+    )
+    
+    class Meta:
+        verbose_name = 'Student Concession'
+        verbose_name_plural = 'Student Concessions'
+        ordering = ['-created_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['student', 'session'],
+                condition=models.Q(is_active=True),
+                name='unique_active_concession_per_student_session'
+            )
+        ]
+    
+    def __str__(self):
+        return f"{self.student} - {self.get_concession_type_display()} ({self.session})"
+    
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        if self.amount_type == 'full':
+            self.amount = None
+        elif self.amount is None:
+            raise ValidationError({'amount': 'Amount is required for Fixed and Percentage types.'})
+        
+        if self.amount_type == 'percent' and self.amount is not None:
+            if self.amount > 100:
+                raise ValidationError({'amount': 'Percentage cannot exceed 100.'})
+        
+        if hasattr(self.student, 'date_of_leaving') and self.student.date_of_leaving:
+            if self.is_active:
+                raise ValidationError(
+                    'This student has a leaving date. Cannot activate concession for a left student.'
+                )
+    
+    def get_monthly_discount_amount(self, monthly_fee):
+        if not self.is_active:
+            return Decimal('0.00')
+        
+        if hasattr(self.student, 'date_of_leaving') and self.student.date_of_leaving:
+            return Decimal('0.00')
+        
+        if self.amount_type == 'full':
+            return monthly_fee
+        elif self.amount_type == 'fixed':
+            return min(self.amount or Decimal('0.00'), monthly_fee)
+        elif self.amount_type == 'percent':
+            pct = (self.amount or Decimal('0.00')) / Decimal('100.00')
+            return (monthly_fee * pct).quantize(Decimal('0.01'))
+        
+        return Decimal('0.00')
+
+from django.db.models.signals import pre_save
+from django.dispatch import receiver
+
+@receiver(pre_save, sender=Student)
+def deactivate_concession_on_leave(sender, instance, **kwargs):
+    if instance.pk:
+        try:
+            old = Student.objects.get(pk=instance.pk)
+            if not old.date_of_leaving and instance.date_of_leaving:
+                instance.concessions.filter(is_active=True).update(is_active=False)
+        except Student.DoesNotExist:
+            pass

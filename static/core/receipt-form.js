@@ -360,6 +360,20 @@
 
         function showDueStatus(data) {
             currentDefaults = data;
+            var concessionBanner = document.getElementById('concession-banner');
+            var concessionType = document.getElementById('concession-type');
+            var concessionAmount = document.getElementById('concession-amount');
+            var concessionReason = document.getElementById('concession-reason');
+
+            if (data && data.active_concession) {
+                if (concessionType) concessionType.textContent = data.active_concession.type;
+                if (concessionAmount) concessionAmount.textContent = data.active_concession.amount;
+                if (concessionReason) concessionReason.textContent = data.active_concession.reason;
+                if (concessionBanner) concessionBanner.style.display = 'block';
+            } else {
+                if (concessionBanner) concessionBanner.style.display = 'none';
+            }
+
             if (!dueCard || !dueValue || !dueNote) return;
             var status = data && data.due_status;
             if (!status) {

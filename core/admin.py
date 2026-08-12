@@ -308,3 +308,37 @@ class LegacyImportBatchAdmin(admin.ModelAdmin):
     search_fields = ("source_database", "source_table", "notes")
 
 # Register your models here.
+
+from .models import StudentConcession
+
+@admin.register(StudentConcession)
+class StudentConcessionAdmin(admin.ModelAdmin):
+    list_display = [
+        'student', 'session', 'concession_type', 
+        'amount_type', 'amount', 'is_active', 
+        'approved_by_name', 'created_at'
+    ]
+    list_filter = ['session', 'concession_type', 'amount_type', 'is_active', 'created_at']
+    search_fields = ['student__full_name', 'student__admission_no', 'reason', 'approved_by_name']
+    readonly_fields = ['created_at', 'updated_at']
+    
+    fieldsets = (
+        ('Student & Session', {
+            'fields': ('student', 'session')
+        }),
+        ('Concession Details', {
+            'fields': ('concession_type', 'amount_type', 'amount', 'reason', 'approved_by_name')
+        }),
+        ('Status', {
+            'fields': ('is_active',)
+        }),
+        ('Audit', {
+            'fields': ('created_by', 'created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def save_model(self, request, obj, form, change):
+        if not change:  # New object
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)

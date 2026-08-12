@@ -48,6 +48,7 @@ class DueResult:
     gross_demand: Decimal
     received_amount: Decimal
     concession_amount: Decimal
+    policy_concession_amount: Decimal
     raw_balance: Decimal
     due_amount: Decimal
     credit_amount: Decimal
@@ -320,11 +321,28 @@ def calculate_student_due(*, student: Student, session: AcademicSession, through
     received_amount = _money(receipt_totals["received"])
     concession_amount = _money(receipt_totals["concession"])
     late_fee_amount = _money(receipt_totals["late_fee"])
+    policy_concession_amount = ZERO
+    if hasattr(student, '_prefetched_objects_cache') and 'concessions' in student._prefetched_objects_cache:
+        concessions = student._prefetched_objects_cache['concessions']
+        concession = next((c for c in concessions if c.session_id == session.id and c.is_active), None)
+    else:
+        concession = student.concessions.filter(session=session, is_active=True).first()
+        
+    if concession:
+        if concession.concession_type in ('monthly_waiver', 'sibling_discount'):
+            monthly_fee = sum(s.amount for s in structures if s.fee_head.charge_rule == FeeHead.ChargeRule.MONTHLY)
+            policy_concession_amount = _money(concession.get_monthly_discount_amount(monthly_fee) * (target_index + 1))
+        elif concession.concession_type == 'full_free':
+            policy_concession_amount = _money(scheduled_fee_demand + transport_demand)
+        elif concession.concession_type == 'one_time':
+            monthly_fee = sum(s.amount for s in structures if s.fee_head.charge_rule == FeeHead.ChargeRule.MONTHLY)
+            policy_concession_amount = _money(concession.get_monthly_discount_amount(monthly_fee))
+
 
     gross_demand = _money(
         scheduled_fee_demand + transport_demand + opening_balance_amount + late_fee_amount
     )
-    raw_balance = _money(gross_demand - received_amount - concession_amount)
+    raw_balance = _money(gross_demand - received_amount - concession_amount - policy_concession_amount)
     due_amount = max(raw_balance, ZERO)
     credit_amount = max(-raw_balance, ZERO)
 
@@ -339,6 +357,7 @@ def calculate_student_due(*, student: Student, session: AcademicSession, through
         gross_demand=gross_demand,
         received_amount=received_amount,
         concession_amount=concession_amount,
+        policy_concession_amount=policy_concession_amount,
         raw_balance=raw_balance,
         due_amount=_money(due_amount),
         credit_amount=_money(credit_amount),

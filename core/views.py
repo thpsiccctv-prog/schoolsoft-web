@@ -1848,6 +1848,17 @@ def student_fee_defaults(request, pk):
             if amount > Decimal("0.00"):
                 amounts[f"fee_head_{structure.fee_head_id}"] = str(amount)
 
+
+    active_concession = None
+    if selected_session:
+        concession = student.concessions.filter(session=selected_session, is_active=True).first()
+        if concession:
+            active_concession = {
+                "type": concession.get_concession_type_display(),
+                "amount": f"{concession.amount} %" if concession.amount_type == 'percent' else (f"Rs. {concession.amount}" if concession.amount_type == 'fixed' else "100%"),
+                "reason": concession.reason,
+            }
+
     balance_head = FeeHead.objects.filter(name="Balance Fee", is_active=True).first()
 
     if selected_session:
@@ -1890,6 +1901,7 @@ def student_fee_defaults(request, pk):
             "amounts": amounts,
             "balance_fee_field": f"fee_head_{balance_head.id}" if balance_head else "",
             "due_status": due_status,
+            "active_concession": active_concession,
         }
     )
 
