@@ -30,6 +30,16 @@
             <div class="fee-left-stack">
                 <section class="classic-panel student-console">
                     <div class="classic-panel-title">Student & Receipt</div>
+                    <div id="concession-banner" style="display:none; padding:10px 12px; margin-bottom:12px; border-radius:4px; background:#d1fae5; color:#065f46; border:1px solid #6ee7b7; font-size:13px; line-height:1.5;">
+                        <strong>✓ Policy Concession Active:</strong>
+                        <span id="concession-type"></span> —
+                        <span id="concession-amount"></span>
+                        (<span id="concession-month-range"></span>)<br>
+                        <span style="font-size:12px; opacity:0.85;">Reason: <i id="concession-reason"></i> &nbsp;|&nbsp; Approved by: <span id="concession-approved-by"></span></span>
+                    </div>
+                    <div id="concession-double-count-warning" style="display:none; padding:10px 12px; margin-bottom:12px; border-radius:4px; background:#fef3c7; color:#92400e; border:1px solid #fcd34d; font-size:13px;">
+                        ⚠️ <strong>Double-count risk:</strong> A policy concession is already applied automatically. Entering a manual Concession Amount here will deduct it <em>in addition</em> to the policy concession. Only do this if you intend an extra, separate adjustment.
+                    </div>
                     <div class="student-filter classic-search">
                         <label for="student-filter-box">Student Search</label>
                         <input id="student-filter-box" class="form-control" type="search" data-student-filter placeholder="Name, SID, admission no, father, class, mobile">

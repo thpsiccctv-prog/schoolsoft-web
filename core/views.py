@@ -1853,10 +1853,21 @@ def student_fee_defaults(request, pk):
     if selected_session:
         concession = student.concessions.filter(session=selected_session, is_active=True).first()
         if concession:
+            if concession.amount_type == 'percent':
+                amount_display = f"{concession.amount}%"
+            elif concession.amount_type == 'fixed':
+                amount_display = f"₹{concession.amount}/month"
+            else:
+                amount_display = "100% Free"
+            from_lbl = concession.from_month or "APR"
+            to_lbl = concession.to_month or "MAR"
+            month_range = f"{from_lbl} → {to_lbl}" if (concession.from_month or concession.to_month) else "Full session"
             active_concession = {
                 "type": concession.get_concession_type_display(),
-                "amount": f"{concession.amount} %" if concession.amount_type == 'percent' else (f"Rs. {concession.amount}" if concession.amount_type == 'fixed' else "100%"),
+                "amount": amount_display,
+                "month_range": month_range,
                 "reason": concession.reason,
+                "approved_by": concession.approved_by_name,
             }
 
     balance_head = FeeHead.objects.filter(name="Balance Fee", is_active=True).first()

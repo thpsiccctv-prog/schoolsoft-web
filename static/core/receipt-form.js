@@ -358,21 +358,48 @@
             if (monthStatus) monthStatus.innerHTML = "";
         }
 
+        // Track whether a policy concession is currently active for the selected student.
+        var policyConcessionActive = false;
+
+        function updateDoubleCountWarning() {
+            var warning = document.getElementById('concession-double-count-warning');
+            if (!warning) return;
+            var concessionInput = document.querySelector("#id_concession_amount");
+            var manualAmt = concessionInput ? toNumber(concessionInput.value) : 0;
+            warning.style.display = (policyConcessionActive && manualAmt > 0) ? 'block' : 'none';
+        }
+
+        // Attach double-count warning listener to the concession input.
+        (function () {
+            var concessionInput = document.querySelector("#id_concession_amount");
+            if (concessionInput) {
+                concessionInput.addEventListener("input", updateDoubleCountWarning);
+            }
+        })();
+
         function showDueStatus(data) {
             currentDefaults = data;
             var concessionBanner = document.getElementById('concession-banner');
             var concessionType = document.getElementById('concession-type');
             var concessionAmount = document.getElementById('concession-amount');
+            var concessionMonthRange = document.getElementById('concession-month-range');
             var concessionReason = document.getElementById('concession-reason');
+            var concessionApprovedBy = document.getElementById('concession-approved-by');
 
             if (data && data.active_concession) {
-                if (concessionType) concessionType.textContent = data.active_concession.type;
-                if (concessionAmount) concessionAmount.textContent = data.active_concession.amount;
-                if (concessionReason) concessionReason.textContent = data.active_concession.reason;
+                var ac = data.active_concession;
+                if (concessionType) concessionType.textContent = ac.type;
+                if (concessionAmount) concessionAmount.textContent = ac.amount;
+                if (concessionMonthRange) concessionMonthRange.textContent = ac.month_range || '';
+                if (concessionReason) concessionReason.textContent = ac.reason || '';
+                if (concessionApprovedBy) concessionApprovedBy.textContent = ac.approved_by || '';
                 if (concessionBanner) concessionBanner.style.display = 'block';
+                policyConcessionActive = true;
             } else {
                 if (concessionBanner) concessionBanner.style.display = 'none';
+                policyConcessionActive = false;
             }
+            updateDoubleCountWarning();
 
             if (!dueCard || !dueValue || !dueNote) return;
             var status = data && data.due_status;
