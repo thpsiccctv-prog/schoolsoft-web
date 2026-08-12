@@ -1488,7 +1488,7 @@ class StudentConcession(models.Model):
             if self.amount > 100:
                 raise ValidationError({'amount': 'Percentage cannot exceed 100.'})
         
-        if hasattr(self.student, 'date_of_leaving') and self.student.date_of_leaving:
+        if not self.student.is_active:
             if self.is_active:
                 raise ValidationError(
                     'This student has a leaving date. Cannot activate concession for a left student.'
@@ -1498,7 +1498,7 @@ class StudentConcession(models.Model):
         if not self.is_active:
             return Decimal('0.00')
         
-        if hasattr(self.student, 'date_of_leaving') and self.student.date_of_leaving:
+        if not self.student.is_active:
             return Decimal('0.00')
         
         if self.amount_type == 'full':
@@ -1519,7 +1519,7 @@ def deactivate_concession_on_leave(sender, instance, **kwargs):
     if instance.pk:
         try:
             old = Student.objects.get(pk=instance.pk)
-            if not old.date_of_leaving and instance.date_of_leaving:
+            if old.is_active and not instance.is_active:
                 instance.concessions.filter(is_active=True).update(is_active=False)
         except Student.DoesNotExist:
             pass
