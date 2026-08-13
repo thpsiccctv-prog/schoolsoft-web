@@ -39,6 +39,7 @@ urlpatterns = [
     path("students/<int:pk>/edit/", module_required("students", write=True)(views.student_update), name="student_update"),
     path("students/<int:pk>/delete/", module_required("students", write=True)(views.student_delete), name="student_delete"),
     path("api/students/check-duplicate/", module_required("students")(views.check_student_duplicate), name="check_student_duplicate"),
+    path("api/students/check-siblings/", module_required("students")(views.check_siblings), name="check_siblings"),
     path("receipts/", module_required("receipts")(views.receipt_list), name="receipt_list"),
     path("receipts/new/", module_required("fee_collection", write=True)(views.receipt_create), name="receipt_create"),
     path("dues-up-to-month/", module_required("dues")(views.due_up_to_month_report), name="due_up_to_month_report"),

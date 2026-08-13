@@ -217,6 +217,48 @@
         </div>
         
         <div class="profile-card">
+            <h3 style="display: flex; justify-content: space-between; align-items: center;">
+                💰 Fee Concessions (Current Session)
+            </h3>
+            <div class="profile-info-list" style="display: block;">
+                {% if concessions %}
+                    <div class="table-wrap compact-table-wrap" style="margin-top: 10px;">
+                        <table class="recent-admissions-table" style="width: 100%;">
+                            <thead>
+                                <tr>
+                                    <th>Type</th>
+                                    <th>Amount</th>
+                                    <th>Period</th>
+                                    <th>Status</th>
+                                    <th>Reason</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for con in concessions %}
+                                <tr>
+                                    <td>{{ con.get_concession_type_display }}</td>
+                                    <td>₹{{ con.amount }}</td>
+                                    <td>{{ con.get_from_month_display }} - {{ con.get_to_month_display }}</td>
+                                    <td>
+                                        {% if con.is_active %}
+                                            <span class="badge" style="background-color: #d4edda; color: #155724; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem;">Active</span>
+                                        {% else %}
+                                            <span class="badge" style="background-color: #f8d7da; color: #721c24; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem;">Inactive</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ con.reason|default:"-" }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <p class="text-muted" style="margin: 0; padding: 10px 0;">No concessions assigned to this student for the current session.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="profile-card">
             <h3>Send WhatsApp Message</h3>
             <div class="profile-info-list">
                 <div class="info-item info-item-full">

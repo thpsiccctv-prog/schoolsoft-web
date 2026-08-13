@@ -50,6 +50,7 @@ from .models import (
     Section,
     Staff,
     Student,
+    StudentConcession,
     StudentTransport,
     TransferCertificate,
     TransportBus,
@@ -739,6 +740,10 @@ def student_detail(request, pk):
     due_total = FeeReceipt.objects.filter(
         student=student, is_cancelled=False, carried_forward=False, legacy_due_amount__gt=0
     ).aggregate(total=Sum("legacy_due_amount"))["total"] or 0
+    
+    active_session = AcademicSession.objects.filter(is_active=True).order_by("-starts_on").first()
+    concessions = StudentConcession.objects.filter(student=student, session=active_session).order_by("-id") if active_session else []
+    
     school_profile = get_active_school_profile()
     return render(
         request,
@@ -747,6 +752,7 @@ def student_detail(request, pk):
             "student": student,
             "due_total": due_total,
             "school_name": school_profile.name if school_profile else "",
+            "concessions": concessions,
         },
     )
 
@@ -2827,12 +2833,58 @@ def _handle_student_transport(form, student):
             t.save()
 
 
+def _handle_student_concession(post_data, student):
+    """
+    Save or update a StudentConcession from the student create/edit form.
+    If concession_type is blank, do nothing (no concession to assign).
+    """
+    concession_type = post_data.get("concession_type", "").strip()
+    if not concession_type:
+        return  # No concession chosen — leave existing record untouched.
+
+    active_session = AcademicSession.objects.filter(is_active=True).order_by("-starts_on").first()
+    if not active_session:
+        return
+
+    is_full_free = concession_type == "full_free"
+
+    if is_full_free:
+        # Full Free: no amount needed, amount_type = 'full'.
+        amount = None
+        amount_type = "full"
+    else:
+        raw = post_data.get("concession_amount", "").strip()
+        try:
+            amount = Decimal(raw)
+            if amount < 0:
+                return  # Invalid amount — skip silently.
+        except (ValueError, TypeError, Exception):
+            return  # Can't parse — skip.
+        amount_type = "fixed"
+
+    StudentConcession.objects.update_or_create(
+        student=student,
+        session=active_session,
+        defaults={
+            "concession_type": concession_type,
+            "amount_type": amount_type,
+            "from_month": post_data.get("concession_from_month", "").strip(),
+            "to_month": post_data.get("concession_to_month", "").strip(),
+            "amount": amount,
+            "reason": post_data.get("concession_reason", "").strip(),
+            "approved_by_name": post_data.get("concession_approved_by", "").strip(),  # correct field name
+            "is_active": post_data.get("concession_is_active") == "on",
+        },
+    )
+
+
 def student_create(request):
     if request.method == "POST":
         form = StudentForm(request.POST, request.FILES)
         if form.is_valid():
             student = form.save()
             _handle_student_transport(form, student)
+            _handle_student_concession(request.POST, student)
             action = request.POST.get("action")
             if action == "save_new":
                 return redirect("core:student_create")
@@ -2856,16 +2908,26 @@ def student_update(request, pk):
         if form.is_valid():
             form.save()
             _handle_student_transport(form, student)
+            _handle_student_concession(request.POST, student)
             return redirect("core:student_detail", pk=student.pk)
     else:
         form = StudentForm(instance=student)
-        
+
+    # Pass existing active concession so the template can pre-fill fields.
+    active_session = AcademicSession.objects.filter(is_active=True).order_by("-starts_on").first()
+    existing_concession = None
+    if active_session:
+        existing_concession = StudentConcession.objects.filter(
+            student=student, session=active_session
+        ).first()
+
     recent_students = Student.objects.order_by("-id")[:5]
     context = {
         "form": form,
         "student": student,
         "recent_students": recent_students,
         "is_edit": True,
+        "existing_concession": existing_concession,
     }
     return render(request, "core/student_form.html", context)
 
@@ -3819,3 +3881,48 @@ def salary_payment_cancel(request, pk):
 
 
 
+
+
+def check_siblings(request):
+    """Async endpoint to check for siblings based on guardian info."""
+    from django.http import JsonResponse
+    from django.db.models import Q
+    from core.models import Student
+    import operator
+    from functools import reduce
+    
+    mobile = request.GET.get("mobile", "").strip()
+    father = request.GET.get("father", "").strip()
+    
+    if not mobile and len(father) < 3:
+        return JsonResponse({"siblings": []})
+        
+    query = Q(is_active=True)
+    
+    subqueries = []
+    if mobile and len(mobile) >= 10:
+        subqueries.append(Q(mobile_primary__icontains=mobile) | Q(mobile_secondary__icontains=mobile))
+    if father and len(father) >= 3:
+        subqueries.append(Q(father_name__iexact=father))
+        
+    if not subqueries:
+        return JsonResponse({"siblings": []})
+        
+    query &= reduce(operator.or_, subqueries)
+    
+    exclude_id = request.GET.get("exclude_id")
+    qs = Student.objects.filter(query)
+    if exclude_id and exclude_id.isdigit():
+        qs = qs.exclude(pk=exclude_id)
+        
+    siblings = []
+    for s in qs[:5]:
+        siblings.append({
+            "id": s.id,
+            "name": s.full_name,
+            "class_name": s.current_class.name if s.current_class else "N/A",
+            "section_name": s.current_section.name if s.current_section else "",
+            "sid": s.legacy_sid or s.admission_no or str(s.id),
+        })
+        
+    return JsonResponse({"siblings": siblings})

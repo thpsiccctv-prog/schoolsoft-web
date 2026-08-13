@@ -154,6 +154,15 @@
                             {% if form.father_aadhaar_no.errors %}<div class="error-text">{{ form.father_aadhaar_no.errors|striptags }}</div>{% endif %}
                         </div>
                     </div>
+                    
+                    <div id="sibling-detection-panel" class="alert alert-info" style="display: none; margin-top: 15px; background-color: #e2f0fb; border: 1px solid #b8daff; border-radius: 4px; padding: 12px; font-size: 14px;">
+                        <div style="font-weight: 600; margin-bottom: 5px; color: #004085;">🧒 Sibling Records Found:</div>
+                        <div style="margin-bottom: 5px; color: #004085;">This family already has enrolled students:</div>
+                        <ul id="sibling-list" style="margin: 0; padding-left: 20px; color: #004085;">
+                            <!-- Populated via JS -->
+                        </ul>
+                        <div style="margin-top: 8px; font-weight: 500; color: #004085;">You can assign a sibling concession for this new student in the Concession section below.</div>
+                    </div>
                 </section>
 
                 <section class="entry-card">
@@ -371,6 +380,95 @@
                         </div>
                     </div>
                 </section>
+
+                <section class="entry-card" id="concession-section">
+                    <div class="entry-card-title">💰 Concession / Waiver (Session-bound)</div>
+                    {% if existing_concession %}
+                    <div style="margin-bottom:10px; padding:8px 12px; background:#d1fae5; color:#065f46; border-radius:4px; font-size:13px; border:1px solid #6ee7b7;">
+                        ✓ Active concession found for current session —
+                        <strong>{{ existing_concession.get_concession_type_display }}</strong>
+                        {% if existing_concession.amount %}₹{{ existing_concession.amount }}{% endif %}
+                        ({{ existing_concession.from_month|default:"APR" }} → {{ existing_concession.to_month|default:"MAR" }}).
+                        Edit fields below to update, or leave blank to keep unchanged.
+                    </div>
+                    {% endif %}
+                    <div class="entry-grid entry-grid-three">
+                        <div class="entry-field">
+                            <label for="concession_type">Concession Type</label>
+                            <select name="concession_type" id="concession_type" class="form-control">
+                                <option value="">-- None --</option>
+                                {% with ct=existing_concession.concession_type|default:"" %}
+                                <option value="monthly_waiver" {% if ct == "monthly_waiver" %}selected{% endif %}>Monthly Fee Waiver</option>
+                                <option value="sibling_discount" {% if ct == "sibling_discount" %}selected{% endif %}>Sibling Discount (Monthly)</option>
+                                <option value="one_time" {% if ct == "one_time" %}selected{% endif %}>One-time Concession</option>
+                                <option value="full_free" {% if ct == "full_free" %}selected{% endif %}>100% Free</option>
+                                {% endwith %}
+                            </select>
+                        </div>
+                        {% with fm=existing_concession.from_month|default:"" %}
+                        <div class="entry-field">
+                            <label for="concession_from_month">From Month</label>
+                            <select name="concession_from_month" id="concession_from_month" class="form-control">
+                                <option value="">-- Start of Session --</option>
+                                <option value="APR" {% if fm == "APR" %}selected{% endif %}>April</option>
+                                <option value="MAY" {% if fm == "MAY" %}selected{% endif %}>May</option>
+                                <option value="JUN" {% if fm == "JUN" %}selected{% endif %}>June</option>
+                                <option value="JUL" {% if fm == "JUL" %}selected{% endif %}>July</option>
+                                <option value="AUG" {% if fm == "AUG" %}selected{% endif %}>August</option>
+                                <option value="SEP" {% if fm == "SEP" %}selected{% endif %}>September</option>
+                                <option value="OCT" {% if fm == "OCT" %}selected{% endif %}>October</option>
+                                <option value="NOV" {% if fm == "NOV" %}selected{% endif %}>November</option>
+                                <option value="DEC" {% if fm == "DEC" %}selected{% endif %}>December</option>
+                                <option value="JAN" {% if fm == "JAN" %}selected{% endif %}>January</option>
+                                <option value="FEB" {% if fm == "FEB" %}selected{% endif %}>February</option>
+                                <option value="MAR" {% if fm == "MAR" %}selected{% endif %}>March</option>
+                            </select>
+                        </div>
+                        {% endwith %}
+                        {% with tm=existing_concession.to_month|default:"" %}
+                        <div class="entry-field">
+                            <label for="concession_to_month">To Month</label>
+                            <select name="concession_to_month" id="concession_to_month" class="form-control">
+                                <option value="">-- End of Session --</option>
+                                <option value="APR" {% if tm == "APR" %}selected{% endif %}>April</option>
+                                <option value="MAY" {% if tm == "MAY" %}selected{% endif %}>May</option>
+                                <option value="JUN" {% if tm == "JUN" %}selected{% endif %}>June</option>
+                                <option value="JUL" {% if tm == "JUL" %}selected{% endif %}>July</option>
+                                <option value="AUG" {% if tm == "AUG" %}selected{% endif %}>August</option>
+                                <option value="SEP" {% if tm == "SEP" %}selected{% endif %}>September</option>
+                                <option value="OCT" {% if tm == "OCT" %}selected{% endif %}>October</option>
+                                <option value="NOV" {% if tm == "NOV" %}selected{% endif %}>November</option>
+                                <option value="DEC" {% if tm == "DEC" %}selected{% endif %}>December</option>
+                                <option value="JAN" {% if tm == "JAN" %}selected{% endif %}>January</option>
+                                <option value="FEB" {% if tm == "FEB" %}selected{% endif %}>February</option>
+                                <option value="MAR" {% if tm == "MAR" %}selected{% endif %}>March</option>
+                            </select>
+                        </div>
+                        {% endwith %}
+                        <div class="entry-field">
+                            <label for="concession_amount">Amount (₹) <small style="color:#6b7280;">(blank for 100% Free)</small></label>
+                            <input type="number" step="0.01" name="concession_amount" id="concession_amount" class="form-control"
+                                   placeholder="0.00" value="{{ existing_concession.amount|default:'' }}">
+                        </div>
+                        <div class="entry-field">
+                            <label for="concession_reason">Reason</label>
+                            <input type="text" name="concession_reason" id="concession_reason" class="form-control"
+                                   placeholder="e.g. Sibling of Rahul" value="{{ existing_concession.reason|default:'' }}">
+                        </div>
+                        <div class="entry-field">
+                            <label for="concession_approved_by">Approved By</label>
+                            <input type="text" name="concession_approved_by" id="concession_approved_by" class="form-control"
+                                   placeholder="e.g. Principal" value="{{ existing_concession.approved_by_name|default:'' }}">
+                        </div>
+                        <div class="entry-field">
+                            <label class="student-active-toggle" style="margin-top: 25px;">
+                                <input type="checkbox" name="concession_is_active" id="concession_is_active"
+                                       {% if not existing_concession or existing_concession.is_active %}checked{% endif %}>
+                                <span>Active Concession</span>
+                            </label>
+                        </div>
+                    </div>
+                </section>
             </div>
 
             <aside class="student-entry-rail">
@@ -565,6 +663,49 @@
                 checkDuplicate("mobile", this.value);
             });
         }
+        
+        // Sibling Detection
+        const fatherInput = document.getElementById("{{ form.father_name.id_for_label }}");
+        const siblingPanel = document.getElementById("sibling-detection-panel");
+        const siblingList = document.getElementById("sibling-list");
+
+        function checkSiblings() {
+            const mobile = mobileInput ? mobileInput.value.trim() : "";
+            const father = fatherInput ? fatherInput.value.trim() : "";
+            
+            if (mobile.length < 10 && father.length < 3) {
+                siblingPanel.style.display = "none";
+                return;
+            }
+            
+            let url = "{% url 'core:check_siblings' %}?mobile=" + encodeURIComponent(mobile) + "&father=" + encodeURIComponent(father);
+            {% if is_edit %}
+                url += "&exclude_id={{ student.pk }}";
+            {% endif %}
+            
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.siblings && data.siblings.length > 0) {
+                        siblingList.innerHTML = "";
+                        data.siblings.forEach(sib => {
+                            const li = document.createElement("li");
+                            li.innerHTML = `<strong>${sib.name}</strong> (${sib.class_name}${sib.section_name ? "-" + sib.section_name : ""}) — SID: ${sib.sid}`;
+                            siblingList.appendChild(li);
+                        });
+                        siblingPanel.style.display = "block";
+                    } else {
+                        siblingPanel.style.display = "none";
+                    }
+                })
+                .catch(err => console.error("Error checking siblings:", err));
+        }
+
+        if (mobileInput) { mobileInput.addEventListener("blur", checkSiblings); }
+        if (fatherInput) { fatherInput.addEventListener("blur", checkSiblings); }
+        
+        setTimeout(checkSiblings, 500);
+
     });
 </script>
 {% endblock %}
