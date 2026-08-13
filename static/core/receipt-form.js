@@ -557,6 +557,9 @@
         if (toSelect) {
             toSelect.addEventListener("change", loadDefaults);
         }
+        if (studentSelect.value) {
+            loadDefaults();
+        }
     }
     document.addEventListener("DOMContentLoaded", function () {
         setupStudentCustomDropdown();
