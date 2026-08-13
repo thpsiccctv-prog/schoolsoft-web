@@ -39,7 +39,13 @@ Main (Claude/Cowork) is project me sirf **read-only verifier** hoon — main fil
 
 **Important correction:** Admission Fee engine bug is **DONE**. New fee engine old students par Admission Fee auto-apply nahi karta. Remaining SAIF RAZA case ek purani wrong receipt/manual audit item hai, code engine bug nahi.
 
-**Status as of last update:** Salary module redesign, partial payments rule establishment, and Desktop-to-Online Sync (with batch size fix) are fully complete and verified. Desktop EXE has been rebuilt and is in use. Code has been pushed to GitHub. Next task is the Old Wrong Receipt Audit (SAIF RAZA) or Dashboard Polish.
+**Status as of last update:** Sibling Detection & Month-Range Concession UI (with double-count warning) are fully integrated into the Admission form and Student Profile. All backend month-range limits successfully implemented. Desktop EXE rebuilt (`f401f68..c2f4284`). Next tasks include Old Wrong Receipt Audit or Dashboard Polish.
+
+## Newly Completed Features (Sibling Detection & Concession UI)
+1. **Sibling Detection Check**: New admission form auto-suggests existing siblings when Father's Name or Mobile is typed.
+2. **Admission Form Concession**: Directly assign concessions (Type, Amount, Month Range) while adding a student. Backend auto-creates a session-bound `StudentConcession`.
+3. **Fee Collection Month-Range Logic**: Fee Engine respects `from_month` and `to_month`. Example: Concession JUL-MAR will show no discount in JUN, but deducts correctly in AUG. A green banner displays the active concession.
+4. **Double-Count Guard**: If a clerk manually types a concession amount for a student already receiving an automatic policy concession, an amber warning appears to prevent double discounts.
 
 ---
 **Note for any agent:**
