@@ -511,6 +511,36 @@ def dashboard(request):
             "trend_pct": trend_pct,
         })
 
+        current_month_start = today.replace(day=1)
+        current_month_collected = FeeReceipt.objects.filter(
+            receipt_date__gte=current_month_start,
+            receipt_date__lte=today,
+            is_cancelled=False
+        ).aggregate(total=Sum("received_amount"))["total"] or Decimal("0.00")
+
+        kpis.append({
+            "label": "This Month Collection",
+            "value": current_month_collected,
+            "tone": "success",
+            "icon": "collection",
+            "currency": True,
+            "caption": "Current calendar month",
+        })
+
+        receipts_today = FeeReceipt.objects.filter(
+            receipt_date=today,
+            is_cancelled=False
+        ).count()
+
+        kpis.append({
+            "label": "Receipts Issued Today",
+            "value": receipts_today,
+            "tone": "neutral",
+            "icon": "book",
+            "currency": False,
+            "caption": "Total receipts generated today",
+        })
+
     # "Today's Expense" is cash-basis, matching the Cash Book: Daily Expense
     # vouchers + today's cash salary payments. Salary IS kharcha for the
     # office - showing only diesel Rs 1,000 while a Rs 5,000 salary slip went

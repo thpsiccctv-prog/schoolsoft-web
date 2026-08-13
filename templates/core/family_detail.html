@@ -30,7 +30,7 @@
                     <th>Class</th>
                     <th class="amount">Due</th>
                     <th>WhatsApp</th>
-                    {% if not is_readonly %}<th>Remove</th>{% endif %}
+                    {% if not is_readonly %}<th>Actions</th>{% endif %}
                 </tr>
             </thead>
             <tbody>
@@ -47,6 +47,7 @@
                         </td>
                         {% if not is_readonly %}
                         <td>
+                            <a href="{% url 'core:student_update' row.student.pk %}#concession-section" class="button secondary" style="margin-right: 0.5rem;" title="Add/Edit Concession for this sibling">Add Concession</a>
                             <form method="post" action="{% url 'core:family_remove_student' family.pk row.student.pk %}" style="display:inline;" onsubmit="return confirm('Remove {{ row.student.full_name }} from this family?');">
                                 {% csrf_token %}
                                 <button type="submit" class="button secondary">Remove</button>
