@@ -31,7 +31,12 @@ class Command(BaseCommand):
             },
         )
 
-        class_names = ["VI", "VII", "VIII", "IX", "X", "XI", "XII"]
+        class_names = [
+            "VI", "VII", "VIII", "IX", "X",
+            "XI (ART)", "XI (BIO)", "XI (COM)", "XI (MATHS)",
+            "XII (ART)", "XII (BIO)", "XII (COM)", "XII (MATHS)"
+        ]
+
         fee_heads = [
             ("Admission Fee", "Admission Fee", FeeHead.Frequency.ONE_TIME, False),
             ("Annual Fee", "Annual Fee", FeeHead.Frequency.ANNUAL, False),
@@ -54,12 +59,24 @@ class Command(BaseCommand):
             )
             heads.append(head)
 
-        for order, class_name in enumerate(class_names, start=6):
+        # display_order: check XII before XI before X to avoid prefix collision
+        _order_map = {"VI": 6, "VII": 7, "VIII": 8, "IX": 9, "X": 10}
+
+        for class_name in class_names:
+            if class_name in _order_map:
+                order = _order_map[class_name]
+            elif class_name.startswith("XII"):
+                order = 12
+            elif class_name.startswith("XI"):
+                order = 11
+            else:
+                order = 0
+
             school_class, _ = SchoolClass.objects.update_or_create(
                 name=class_name,
                 defaults={"display_order": order},
             )
-            for section_name in ["A", "B"]:
+            for section_name in ["A", "B", "C", "D"]:
                 Section.objects.get_or_create(school_class=school_class, name=section_name)
 
             for head in heads:
