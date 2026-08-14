@@ -106,7 +106,15 @@ fe79def  Fix Student concession signal using is_active
 f401f68  Implement month-ranged student concessions safely
 c2f4284  feat: Concession UI + month-range backend + double-count guard
 3300aed  fix: restore MinValueValidator on StudentConcession.amount
+a21abda  fix: auto-load concession/due panel on ?student=id direct link
 ```
+
+**Manual UI verification (Aug 14, 2026) — 4/4 PASS ✓**
+- Admission form concession save ✓
+- Policy concession banner on receipt form ✓
+- JUL-MAR monthly waiver math: APR-AUG, ₹5000 demand → ₹1000 concession → ₹4000 payable ✓
+- Double-count amber warning ✓
+- Bonus bug fixed: `?student=id` direct link se concession panel auto-load nahi hota tha → fixed in `receipt-form.js`, `receipt_form.html`, `receipt_edit.html`
 
 #### 4. Sibling Detection
 - New endpoint: `check_siblings` — matches on mobile or father name
@@ -131,16 +139,17 @@ c2f4284  feat: Concession UI + month-range backend + double-count guard
 
 ---
 
-## Current Git Status (as of Aug 13, 2026)
+## Current Git Status (as of Aug 14, 2026)
 
 ```
-Latest commit: 3d583ea  feat: dashboard KPI cards + family ledger concession shortcut
+Latest commit: a21abda  fix: auto-load concession/due panel on ?student=id direct link
 Branch: main
 Remote: github.com/thpsicdudahi-jk1/schoolsoft-web ✓ pushed
-EXE: dist\SchoolSoft\SchoolSoft.exe (prev build — rebuild needed after dashboard change)
+EXE: dist\SchoolSoft\SchoolSoft.exe (rebuild needed — dashboard + concession fixes)
 Production DB: all 36 migrations applied ✓
 Tests: 23/23 pass (core.test_concession) ✓
 System check: no issues ✓
+Concession feature: FULLY COMPLETE + manually verified ✓
 ```
 
 ---
@@ -149,11 +158,10 @@ System check: no issues ✓
 
 | Priority | Task | Notes |
 |----------|------|-------|
-| HIGH | Manual UI test — Concession feature | 4 tests: admission save, fee banner, month range deduction, double-count warning |
+| HIGH | EXE rebuild | `build-desktop.bat` chalao — concession + dashboard + auto-load fix sab include honge |
 | MEDIUM | Old Wrong Receipt Audit | SAIF RAZA (SID 2179) `MR-20260728110300` — manual cleanup, not engine bug |
 | MEDIUM | NEELU MISS salary Jan/Feb 2026 | Entry karo jab cash mile |
 | MEDIUM | SATYAM remaining ₹7,000 May 2026 | Entry karo jab cash mile |
-| LOW | EXE rebuild | `build-desktop.bat` chalao — dashboard + family_detail changes include karne ke liye |
 | LOW | Online sync batch size | Already 50, monitor if needed |
 
 ---
