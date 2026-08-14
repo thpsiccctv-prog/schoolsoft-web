@@ -11,7 +11,7 @@ cd /d "%~dp0"
 set PYTHON_EXE=%cd%\.venv\Scripts\python.exe
 if not exist "%PYTHON_EXE%" set PYTHON_EXE=python
 
-set SCHOOLSOFT_SQLITE_PATH=%LOCALAPPDATA%\SchoolSoft\db.sqlite3
+set SCHOOLSOFT_SQLITE_PATH=%LOCALAPPDATA%\THPSIC-InterCollege-SchoolSoft\db.sqlite3
 if not exist "%SCHOOLSOFT_SQLITE_PATH%" set SCHOOLSOFT_SQLITE_PATH=%cd%\db.sqlite3
 echo Target database: %SCHOOLSOFT_SQLITE_PATH%
 

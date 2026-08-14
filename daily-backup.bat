@@ -1,26 +1,26 @@
 @echo off
 REM ============================================================
-REM SchoolSoft Daily Backup
+REM THPSIC SchoolSoft Daily Backup
 REM
 REM Source:
-REM   %LOCALAPPDATA%\SchoolSoft\db.sqlite3
+REM   %LOCALAPPDATA%\THPSIC-InterCollege-SchoolSoft\db.sqlite3
 REM
 REM Destination:
-REM   E:\SchoolSoft-Daily-Backups\YYYYMMDD-HHMMSS\
+REM   E:\THPSIC-INTER-COLLEGE\04-backups\daily-db\YYYYMMDD-HHMMSS\
 REM
 REM Run this after daily work is complete.
 REM Keep SchoolSoft EXE closed while taking backup.
 REM ============================================================
 setlocal EnableExtensions
 cd /d "%~dp0"
-title SchoolSoft Daily Backup
+title THPSIC SchoolSoft Daily Backup
 
-set "SOURCE_DIR=%LOCALAPPDATA%\SchoolSoft"
+set "SOURCE_DIR=%LOCALAPPDATA%\THPSIC-InterCollege-SchoolSoft"
 set "SOURCE_DB=%SOURCE_DIR%\db.sqlite3"
-set "BACKUP_ROOT=E:\SchoolSoft-Daily-Backups"
+set "BACKUP_ROOT=E:\THPSIC-INTER-COLLEGE\04-backups\daily-db"
 
 echo ============================================================
-echo SchoolSoft Daily Backup
+echo THPSIC SchoolSoft Daily Backup
 echo ============================================================
 echo.
 echo Source DB:
@@ -32,15 +32,15 @@ echo.
 
 if not exist "%SOURCE_DB%" (
     echo ERROR: Desktop database nahi mila.
-    echo SchoolSoft EXE ek baar chala kar band kijiye, phir backup dobara chalaiye.
+    echo THPSIC SchoolSoft EXE ek baar chala kar band kijiye, phir backup dobara chalaiye.
     echo.
     pause
     exit /b 1
 )
 
-tasklist /FI "IMAGENAME eq SchoolSoft.exe" 2>nul | find /I "SchoolSoft.exe" >nul
+tasklist /FI "IMAGENAME eq THPSIC SchoolSoft.exe" 2>nul | find /I "THPSIC SchoolSoft.exe" >nul
 if not errorlevel 1 (
-    echo WARNING: SchoolSoft.exe abhi running lag raha hai.
+    echo WARNING: THPSIC SchoolSoft.exe abhi running lag raha hai.
     echo Best practice: EXE band karke backup lena chahiye.
     echo.
     choice /C YN /M "Kya phir bhi backup continue karna hai"
@@ -93,7 +93,7 @@ if exist "%SOURCE_DIR%\media" (
 )
 
 echo [3/3] Restore note ban raha hai...
->"%BACKUP_DIR%\RESTORE-NOTE.txt" echo SchoolSoft daily backup
+>"%BACKUP_DIR%\RESTORE-NOTE.txt" echo THPSIC SchoolSoft daily backup
 >>"%BACKUP_DIR%\RESTORE-NOTE.txt" echo Created: %DATE% %TIME%
 >>"%BACKUP_DIR%\RESTORE-NOTE.txt" echo Source DB: %SOURCE_DB%
 >>"%BACKUP_DIR%\RESTORE-NOTE.txt" echo.

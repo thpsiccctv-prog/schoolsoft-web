@@ -3022,13 +3022,13 @@ class _IDCardBase(Flowable):
         # School name + location text
         name_x      = emb_cx + emb_r + 1.8 * mm
         avail_w     = b_x - name_x - 1.5 * mm
-        school_name = (self.school_profile.name if self.school_profile else "THPS ENGLISH MEDIUM SCHOOL").upper()
+        school_name = (self.school_profile.name if self.school_profile else "THAKUR HARIKESH PRATAP SINGH INTERMEDIATE COLLEGE").upper()
         school_addr = ""
         if self.school_profile:
             raw_addr = getattr(self.school_profile, 'address', None) or ""
             school_addr = raw_addr.replace('\n', ', ').strip()
         if not school_addr:
-            school_addr = "Dudahi, Kushinagar (U.P.)  ·  Est. 2005"
+            school_addr = "Uday, Kushinagar (U.P.)"
         if len(school_addr) > 45:
             school_addr = school_addr[:44].rstrip() + "…"
 

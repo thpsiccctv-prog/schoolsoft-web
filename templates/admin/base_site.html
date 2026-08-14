@@ -1,7 +1,7 @@
 {% extends "admin/base.html" %}
 {% load static i18n %}
 
-{% block title %}{% if subtitle %}{{ subtitle }} | {% endif %}{{ title }} | SchoolSoft Admin{% endblock %}
+{% block title %}{% if subtitle %}{{ subtitle }} | {% endif %}{{ title }} | THPSIC SchoolSoft Admin{% endblock %}
 
 {% block extrastyle %}
 {{ block.super }}
@@ -12,15 +12,15 @@
 <a class="schoolsoft-admin-brand" href="{% url 'admin:index' %}">
     <img src="{% static 'core/school_logo.png' %}" alt="THPS logo">
     <span>
-        <strong>SchoolSoft Admin</strong>
-        <small>THPS English Medium School</small>
+        <strong>THPSIC SchoolSoft Admin</strong>
+        <small>Thakur Harikesh Pratap Singh Intermediate College</small>
     </span>
 </a>
 {% endblock %}
 
 {% block footer %}
 <div class="schoolsoft-admin-footer">
-    <span>SchoolSoft v1.x</span>
-    <span>THPS English Medium School, Dudahi</span>
+    <span>THPSIC SchoolSoft v1.x</span>
+    <span>Thakur Harikesh Pratap Singh Intermediate College, Uday</span>
 </div>
 {% endblock %}

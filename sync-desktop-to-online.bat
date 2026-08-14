@@ -1,9 +1,9 @@
 @echo off
 REM ============================================================
-REM SchoolSoft: Desktop EXE database -> Online Render sync
+REM THPSIC SchoolSoft: Desktop EXE database -> Online Render sync
 REM
 REM Source of truth:
-REM   %LOCALAPPDATA%\SchoolSoft\db.sqlite3
+REM   %LOCALAPPDATA%\THPSIC-InterCollege-SchoolSoft\db.sqlite3
 REM
 REM Destination:
 REM   Render PostgreSQL from render-db-url.txt
@@ -15,7 +15,7 @@ REM   after taking a backup.
 REM ============================================================
 setlocal EnableExtensions
 cd /d "%~dp0"
-title SchoolSoft Desktop to Online Sync
+title THPSIC SchoolSoft Desktop to Online Sync
 
 set "AUTO_SYNC=0"
 if /I "%~1"=="/auto" set "AUTO_SYNC=1"
@@ -23,24 +23,24 @@ if /I "%~1"=="/auto" set "AUTO_SYNC=1"
 if not exist "sync-backups" mkdir "sync-backups"
 set "SYNC_LOG=sync-backups\sync-last.log"
 set "SYNC_SUCCESS_MARKER=sync-backups\sync-success.marker"
-set "APPDATA_SYNC_SUCCESS_MARKER=%LOCALAPPDATA%\SchoolSoft\sync-success.marker"
->"%SYNC_LOG%" echo SchoolSoft sync started at %DATE% %TIME%
+set "APPDATA_SYNC_SUCCESS_MARKER=%LOCALAPPDATA%\THPSIC-InterCollege-SchoolSoft\sync-success.marker"
+>"%SYNC_LOG%" echo THPSIC SchoolSoft sync started at %DATE% %TIME%
 
 set "PYTHON_EXE=%cd%\.venv\Scripts\python.exe"
 if not exist "%PYTHON_EXE%" set "PYTHON_EXE=python"
 
-set "SOURCE_DB=%LOCALAPPDATA%\SchoolSoft\db.sqlite3"
+set "SOURCE_DB=%LOCALAPPDATA%\THPSIC-InterCollege-SchoolSoft\db.sqlite3"
 if not exist "%SOURCE_DB%" (
     echo.
     echo ERROR: Desktop database nahi mila:
     echo   %SOURCE_DB%
     echo.
-    echo SchoolSoft EXE ek baar chala kar band kijiye, phir sync dobara chalaiye.
+    echo THPSIC SchoolSoft EXE ek baar chala kar band kijiye, phir sync dobara chalaiye.
     goto :fail
 )
 
 echo ============================================================
-echo SchoolSoft Desktop to Online Sync
+echo THPSIC SchoolSoft Desktop to Online Sync
 echo ============================================================
 echo.
 echo Source Desktop DB:
@@ -63,20 +63,20 @@ if "%AUTO_SYNC%"=="1" (
     if errorlevel 2 goto :cancel
 )
 
-if exist "render-db-url.txt" goto :read_url
+if exist "render-db-url-intercollege.txt" goto :read_url
 
     echo.
     echo Render ka External Database URL paste kijiye.
-    echo URL render-db-url.txt me local machine par save hoga.
+    echo URL render-db-url-intercollege.txt me local machine par save hoga.
     echo Ye file .gitignore me hai, GitHub par upload nahi hogi.
     set /p "DATABASE_URL=URL: "
     for /f "tokens=* delims= " %%A in ("%DATABASE_URL%") do set "DATABASE_URL=%%A"
     if "%DATABASE_URL%"=="" goto :fail
-    >"render-db-url.txt" echo %DATABASE_URL%
+    >"render-db-url-intercollege.txt" echo %DATABASE_URL%
     goto :check_url
 
 :read_url
-    for /f "usebackq delims=" %%A in ("render-db-url.txt") do set "DATABASE_URL=%%A"
+    for /f "usebackq delims=" %%A in ("render-db-url-intercollege.txt") do set "DATABASE_URL=%%A"
     for /f "tokens=* delims= " %%A in ("%DATABASE_URL%") do set "DATABASE_URL=%%A"
 
 :check_url
@@ -92,7 +92,7 @@ if /I "%PREFIX_13%"=="postgresql://" goto :valid_url
 if /I "%PREFIX_11%"=="postgres://" goto :valid_url
 
     echo ERROR: URL postgresql:// ya postgres:// se start nahi ho raha.
-    echo render-db-url.txt delete karke sahi External Database URL paste kijiye.
+    echo render-db-url-intercollege.txt delete karke sahi External Database URL paste kijiye.
     >>"%SYNC_LOG%" echo ERROR: invalid database URL prefix.
     goto :fail
 

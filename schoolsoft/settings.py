@@ -18,14 +18,17 @@ from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+APP_DATA_DIR_NAME = os.environ.get("SCHOOLSOFT_APP_DATA_DIR_NAME", "THPSIC-InterCollege-SchoolSoft")
 
 
 def local_data_dir():
     if getattr(sys, "frozen", False):
         return Path(sys.executable).resolve().parent
-    return BASE_DIR
+    dev_dir = BASE_DIR / "tmp" / "intercollege-dev-data"
+    dev_dir.mkdir(parents=True, exist_ok=True)
+    return dev_dir
 
-# Loads D:\english medium\schoolsoft_web\.env when present. On Render (and other
+# Loads the project .env when present. On Render (and other
 # hosts) the same variables are set directly in the environment, so this is a
 # no-op there - .env is only for local/desktop use and should not be committed.
 load_dotenv(BASE_DIR / ".env")
@@ -194,7 +197,7 @@ STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 # Media files (user uploads, e.g. student photos).
-# Desktop EXE: desktop.py sets SCHOOLSOFT_MEDIA_ROOT to %LOCALAPPDATA%\SchoolSoft\media,
+# Desktop EXE: desktop.py sets SCHOOLSOFT_MEDIA_ROOT to the per-school LOCALAPPDATA media folder,
 # the same reasoning as the sqlite db - anything saved next to the EXE is wiped on
 # rebuild, so uploads must live in the per-user app-data folder instead.
 # Render: falls back to a folder on the instance's local disk. That disk is NOT

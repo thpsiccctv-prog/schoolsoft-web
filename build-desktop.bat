@@ -1,8 +1,8 @@
 @echo off
 REM ============================================================
-REM  SchoolSoft desktop EXE build script
+REM  THPSIC SchoolSoft desktop EXE build script
 REM  Run from the project root: build-desktop.bat
-REM  Output: dist\SchoolSoft\SchoolSoft.exe
+REM  Output: dist\THPSIC SchoolSoft\THPSIC SchoolSoft.exe
 REM ============================================================
 setlocal
 cd /d "%~dp0"
@@ -32,6 +32,10 @@ if errorlevel 1 goto :fail
 REM Default admin user for first login - CHANGE THE PASSWORD after install!
 set DJANGO_SUPERUSER_PASSWORD=admin12345
 "%PYTHON_EXE%" manage.py createsuperuser --noinput --username admin --email admin@example.com
+if errorlevel 1 goto :fail
+echo     Adding THPSIC Inter College starter profile, classes and fee heads...
+"%PYTHON_EXE%" manage.py bootstrap_inter_college
+if errorlevel 1 goto :fail
 set DJANGO_SUPERUSER_PASSWORD=
 set SCHOOLSOFT_SQLITE_PATH=
 
@@ -40,11 +44,11 @@ echo [4/4] Building EXE with PyInstaller...
 if errorlevel 1 goto :fail
 
 REM Workaround for PyInstaller with Python 3.14+ failing to bundle the base Python DLL
-"%PYTHON_EXE%" -c "import sys, os, shutil; dll=f'python{sys.version_info.major}{sys.version_info.minor}.dll'; src=os.path.join(sys.base_prefix, dll); dst=os.path.join('dist', 'SchoolSoft', '_internal', dll); shutil.copy(src, dst) if os.path.exists(src) and not os.path.exists(dst) else None"
+"%PYTHON_EXE%" -c "import sys, os, shutil; dll=f'python{sys.version_info.major}{sys.version_info.minor}.dll'; src=os.path.join(sys.base_prefix, dll); dst=os.path.join('dist', 'THPSIC SchoolSoft', '_internal', dll); shutil.copy(src, dst) if os.path.exists(src) and not os.path.exists(dst) else None"
 
 echo.
-echo BUILD OK: dist\SchoolSoft\SchoolSoft.exe
-echo User data lives in %%LOCALAPPDATA%%\SchoolSoft\ (never overwritten by rebuilds).
+echo BUILD OK: dist\THPSIC SchoolSoft\THPSIC SchoolSoft.exe
+echo User data lives in %%LOCALAPPDATA%%\THPSIC-InterCollege-SchoolSoft\ (never overwritten by rebuilds).
 echo First login: admin / admin12345  (change it in /admin/ immediately)
 exit /b 0
 

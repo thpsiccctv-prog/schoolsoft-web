@@ -1,10 +1,10 @@
-r"""SchoolSoft desktop launcher (PyInstaller + waitress + pywebview).
+r"""THPSIC SchoolSoft desktop launcher (PyInstaller + waitress + pywebview).
 
 Data layout:
-  %LOCALAPPDATA%\SchoolSoft\db.sqlite3          <- live user database
-  %LOCALAPPDATA%\SchoolSoft\db.backup-*.sqlite3 <- automatic pre-migrate backups
-  %LOCALAPPDATA%\SchoolSoft\SchoolSoft-error.log
-  %LOCALAPPDATA%\SchoolSoft\media\               <- uploaded student photos, etc.
+  %LOCALAPPDATA%\THPSIC-InterCollege-SchoolSoft\db.sqlite3
+  %LOCALAPPDATA%\THPSIC-InterCollege-SchoolSoft\db.backup-*.sqlite3
+  %LOCALAPPDATA%\THPSIC-InterCollege-SchoolSoft\THPSIC-SchoolSoft-error.log
+  %LOCALAPPDATA%\THPSIC-InterCollege-SchoolSoft\media\
 The EXE bundle only ships a clean seed database (db.seed.sqlite3); user data
 is never inside the install folder, so updates can never overwrite it.
 """
@@ -19,20 +19,23 @@ import time
 import traceback
 from pathlib import Path
 
-SINGLE_INSTANCE_PORT = 47391  # fixed localhost port used only as an app lock
+APP_TITLE = "THPSIC SchoolSoft"
+APP_DATA_DIR_NAME = "THPSIC-InterCollege-SchoolSoft"
+DEFAULT_BACKUP_ROOT = r"E:\THPSIC-INTER-COLLEGE\04-backups\daily-db"
+SINGLE_INSTANCE_PORT = 47491  # separate from THPS English Medium SchoolSoft
 _lock_socket = None  # must stay referenced for the lifetime of the process
 
 
 def data_dir() -> Path:
     """Writable per-user folder (works even if the EXE sits in Program Files)."""
-    base = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "SchoolSoft"
+    base = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / APP_DATA_DIR_NAME
     base.mkdir(parents=True, exist_ok=True)
     return base
 
 
 APP_DATA = data_dir()
 DB_PATH = APP_DATA / "db.sqlite3"
-LOG_FILE = APP_DATA / "SchoolSoft-error.log"
+LOG_FILE = APP_DATA / "THPSIC-SchoolSoft-error.log"
 SERVER_ERROR = None
 
 
@@ -40,9 +43,12 @@ def configure_desktop_environment():
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "schoolsoft.settings")
     os.environ["SCHOOLSOFT_SQLITE_PATH"] = str(DB_PATH)
     os.environ["SCHOOLSOFT_LOG_FILE"] = str(LOG_FILE)
+    os.environ["SCHOOLSOFT_APP_TITLE"] = APP_TITLE
+    os.environ["SCHOOLSOFT_APP_DATA_DIR_NAME"] = APP_DATA_DIR_NAME
+    os.environ.setdefault("SCHOOLSOFT_BACKUP_ROOT", DEFAULT_BACKUP_ROOT)
+    os.environ.setdefault("SCHOOLSOFT_ONLINE_SYNC_ENABLED", "0")
     # Student photos and other uploads: same reasoning as the sqlite db above -
-    # must live under %LOCALAPPDATA%\SchoolSoft\, never beside the EXE, so a
-    # rebuild/update can never wipe them.
+    # must live under the per-school LOCALAPPDATA folder, never beside the EXE.
     media_dir = APP_DATA / "media"
     media_dir.mkdir(parents=True, exist_ok=True)
     os.environ["SCHOOLSOFT_MEDIA_ROOT"] = str(media_dir)
@@ -70,7 +76,7 @@ def configure_desktop_environment():
 
 
 def single_instance_or_exit():
-    """Show a message and exit if SchoolSoft is already running for this user."""
+    """Show a message and exit if this app is already running for this user."""
     global _lock_socket
     _lock_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
@@ -82,10 +88,10 @@ def single_instance_or_exit():
 
             ctypes.windll.user32.MessageBoxW(
                 None,
-                "SchoolSoft is already running (perhaps in the background).\n\n"
-                "Close the other SchoolSoft window, or end the SchoolSoft.exe "
+                f"{APP_TITLE} is already running (perhaps in the background).\n\n"
+                f"Close the other {APP_TITLE} window, or end the EXE "
                 "process in Task Manager, and try again.",
-                "SchoolSoft",
+                APP_TITLE,
                 0x40,  # MB_ICONINFORMATION
             )
         except Exception:
@@ -173,13 +179,13 @@ def main():
     window_kwargs = dict(width=1200, height=800, min_size=(1024, 768))
 
     server_ok = wait_for_server(port)
-    logging.warning("SchoolSoft launch: port=%s server_ok=%s", port, server_ok)
+    logging.warning("%s launch: port=%s server_ok=%s", APP_TITLE, port, server_ok)
 
     if server_ok:
         # Allow PDF receipt/report downloads (blocked by pywebview default).
         webview.settings["ALLOW_DOWNLOADS"] = True
         webview.create_window(
-            "SchoolSoft",
+            APP_TITLE,
             f"http://127.0.0.1:{port}/",
             zoomable=True,       # Ctrl+scroll zoom for readability
             text_select=True,    # allow copying receipt numbers etc.
@@ -187,10 +193,10 @@ def main():
         )
     else:
         message = (
-            "<h2>SchoolSoft server could not start</h2>"
+            f"<h2>{APP_TITLE} server could not start</h2>"
             f"<p>Please send this file for checking:<br>{LOG_FILE}</p>"
         )
-        webview.create_window("SchoolSoft", html=message, **window_kwargs)
+        webview.create_window(APP_TITLE, html=message, **window_kwargs)
 
     def _force_foreground():
         # The window can open BEHIND other maximized windows without focus
@@ -200,7 +206,7 @@ def main():
 
             user32 = ctypes.windll.user32
             for _ in range(20):
-                handle = user32.FindWindowW(None, "SchoolSoft")
+                handle = user32.FindWindowW(None, APP_TITLE)
                 if handle:
                     user32.ShowWindow(handle, 9)  # SW_RESTORE
                     user32.SetForegroundWindow(handle)
@@ -215,14 +221,14 @@ def main():
         # gui="edgechromium" was observed to hang with no window on some
         # machines, so we do not force it.
         webview.start(_force_foreground)
-        logging.warning("SchoolSoft window closed normally")
+        logging.warning("%s window closed normally", APP_TITLE)
     except Exception:
         logging.exception("webview failed to start")
         raise
     finally:
         # webview.start() has returned: the window is closed. Force the
         # process to end even if WebView2/waitress threads are hanging -
-        # otherwise a zombie SchoolSoft.exe keeps holding the single-instance
+        # otherwise a zombie EXE keeps holding the single-instance
         # lock and every future launch dies silently.
         logging.shutdown()
         os._exit(0)

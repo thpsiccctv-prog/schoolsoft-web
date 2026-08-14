@@ -29,9 +29,9 @@ from .models import (
     TransportRoute,
 )
 
-admin.site.site_header = "SchoolSoft Admin"
-admin.site.site_title = "SchoolSoft Admin"
-admin.site.index_title = "SchoolSoft Control Center"
+admin.site.site_header = "THPSIC SchoolSoft Admin"
+admin.site.site_title = "THPSIC SchoolSoft Admin"
+admin.site.index_title = "THPSIC SchoolSoft Control Center"
 
 
 @admin.register(AcademicSession)

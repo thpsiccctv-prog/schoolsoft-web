@@ -6,7 +6,7 @@ set PYTHON_EXE=%cd%\.venv\Scripts\python.exe
 if not exist "%PYTHON_EXE%" set PYTHON_EXE=python
 
 echo [1/3] Local database se fresh export (bina natural keys ke)...
-set SCHOOLSOFT_SQLITE_PATH=%LOCALAPPDATA%\SchoolSoft\db.sqlite3
+set SCHOOLSOFT_SQLITE_PATH=%LOCALAPPDATA%\THPSIC-InterCollege-SchoolSoft\db.sqlite3
 if not exist "%SCHOOLSOFT_SQLITE_PATH%" set SCHOOLSOFT_SQLITE_PATH=%cd%\db.sqlite3
 echo     (source: %SCHOOLSOFT_SQLITE_PATH%)
 "%PYTHON_EXE%" manage.py dumpdata -e contenttypes -e auth.permission -e sessions -e admin.logentry -o data.json

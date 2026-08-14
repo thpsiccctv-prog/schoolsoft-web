@@ -1,7 +1,7 @@
 {
-  "name": "SchoolSoft",
-  "short_name": "SchoolSoft",
-  "description": "THPS English Medium School records, fees and reports workspace.",
+  "name": "THPSIC SchoolSoft",
+  "short_name": "THPSIC",
+  "description": "Thakur Harikesh Pratap Singh Intermediate College records, fees and reports workspace.",
   "id": "/",
   "start_url": "/",
   "scope": "/",

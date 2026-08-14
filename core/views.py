@@ -78,6 +78,10 @@ from .pdf import (
     build_transfer_certificate_pdf,
 )
 
+APP_TITLE = os.environ.get("SCHOOLSOFT_APP_TITLE", "THPSIC SchoolSoft")
+APP_DATA_DIR_NAME = os.environ.get("SCHOOLSOFT_APP_DATA_DIR_NAME", "THPSIC-InterCollege-SchoolSoft")
+DEFAULT_BACKUP_ROOT = "E:/THPSIC-INTER-COLLEGE/04-backups/daily-db"
+
 
 def get_active_school_profile():
     return SchoolProfile.objects.filter(is_active=True).first()
@@ -258,7 +262,7 @@ def _sync_marker_paths():
     paths = []
     local_appdata = os.environ.get("LOCALAPPDATA")
     if local_appdata:
-        paths.append(Path(local_appdata) / "SchoolSoft" / "sync-success.marker")
+        paths.append(Path(local_appdata) / APP_DATA_DIR_NAME / "sync-success.marker")
     paths.append(Path(settings.BASE_DIR) / "sync-backups" / "sync-success.marker")
     return paths
 
@@ -282,7 +286,7 @@ def _read_last_sync_success(sync_log):
     return None, str(marker_paths[0] if marker_paths else sync_log)
 
 def _latest_backup_info():
-    backup_root = Path(os.environ.get("SCHOOLSOFT_BACKUP_ROOT", "E:/SchoolSoft-Daily-Backups"))
+    backup_root = Path(os.environ.get("SCHOOLSOFT_BACKUP_ROOT", DEFAULT_BACKUP_ROOT))
     try:
         backups = [item for item in backup_root.iterdir() if item.is_dir()]
     except OSError:
@@ -318,7 +322,7 @@ def _latest_backup_info():
     }
 
 def _backup_root():
-    return Path(os.environ.get("SCHOOLSOFT_BACKUP_ROOT", "E:/SchoolSoft-Daily-Backups"))
+    return Path(os.environ.get("SCHOOLSOFT_BACKUP_ROOT", DEFAULT_BACKUP_ROOT))
 
 
 def _new_backup_dir(root):
@@ -339,7 +343,7 @@ def _active_sqlite_db_path():
     explicit_path = os.environ.get("SCHOOLSOFT_SQLITE_PATH")
     if explicit_path:
         return Path(explicit_path)
-    live_desktop_path = Path(os.environ.get("LOCALAPPDATA", "")) / "SchoolSoft" / "db.sqlite3"
+    live_desktop_path = Path(os.environ.get("LOCALAPPDATA", "")) / APP_DATA_DIR_NAME / "db.sqlite3"
     if live_desktop_path.exists():
         return live_desktop_path
     db_name = connection.settings_dict.get("NAME")
@@ -349,15 +353,15 @@ def _active_sqlite_db_path():
 
 def _restore_note_text(db_path, backup_dir):
     return (
-        "SchoolSoft Backup Restore Note\n"
-        "==============================\n\n"
+        f"{APP_TITLE} Backup Restore Note\n"
+        "===============================\n\n"
         f"Backup folder: {backup_dir}\n"
         f"Source DB: {db_path}\n\n"
         "Restore rule:\n"
-        "1. SchoolSoft EXE ko poori tarah band karein.\n"
+        f"1. {APP_TITLE} EXE ko poori tarah band karein.\n"
         "2. Current live DB ka alag dated backup banaye bina overwrite na karein.\n"
-        "3. Is folder ke db.sqlite3 ko %LOCALAPPDATA%\\SchoolSoft\\db.sqlite3 par copy karein.\n"
-        "4. Agar media folder hai to use %LOCALAPPDATA%\\SchoolSoft\\media me restore karein.\n"
+        f"3. Is folder ke db.sqlite3 ko %LOCALAPPDATA%\\{APP_DATA_DIR_NAME}\\db.sqlite3 par copy karein.\n"
+        f"4. Agar media folder hai to use %LOCALAPPDATA%\\{APP_DATA_DIR_NAME}\\media me restore karein.\n"
         "5. Restore ke baad dashboard counts aur cash book verify karein.\n"
     )
 
@@ -682,7 +686,11 @@ def dashboard(request):
         "system_status": _dashboard_system_status(),
         "can_new_receipt": user_can_access(user, "fee_collection") and not readonly,
         "can_due_report": user_can_access(user, "dues"),
-        "can_online_sync": user_can_manage_users(user) and not is_online_deployment(),
+        "can_online_sync": (
+            user_can_manage_users(user)
+            and not is_online_deployment()
+            and os.environ.get("SCHOOLSOFT_ONLINE_SYNC_ENABLED", "0").strip().lower() in {"1", "true", "yes", "on"}
+        ),
         "can_backup": user_can_manage_users(user) and connection.vendor == "sqlite",
     }
     return render(request, "core/dashboard.html", context)
@@ -1825,7 +1833,7 @@ def receipt_print(request, pk):
         char if char.isalnum() or char in ("-", "_") else "_"
         for char in receipt.receipt_no
     ) or f"receipt-{receipt.pk}"
-    print_dir = Path(os.environ.get("LOCALAPPDATA") or tempfile.gettempdir()) / "SchoolSoft" / "print-jobs"
+    print_dir = Path(os.environ.get("LOCALAPPDATA") or tempfile.gettempdir()) / APP_DATA_DIR_NAME / "print-jobs"
     print_dir.mkdir(parents=True, exist_ok=True)
     pdf_path = print_dir / f"{safe_receipt_no}-{datetime.now().strftime('%Y%m%d%H%M%S')}.pdf"
     pdf_path.write_bytes(pdf_bytes)
