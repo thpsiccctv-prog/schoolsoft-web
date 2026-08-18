@@ -53,6 +53,7 @@ urlpatterns = [
     path("receipts/<int:pk>/edit/", module_required("receipts", write=True)(views.receipt_edit), name="receipt_edit"),
     path("receipts/<int:pk>/pdf/", module_required("receipts")(views.receipt_pdf), name="receipt_pdf"),
     path("receipts/<int:pk>/pdf/2up/", module_required("receipts")(views.receipt_pdf_2up), name="receipt_pdf_2up"),
+    path("pdf-viewer/", views.pdf_viewer, name="pdf_viewer"),
     path("receipts/<int:pk>/print/", module_required("receipts")(views.receipt_print), name="receipt_print"),
     path("receipts/<int:pk>/cancel/", module_required("receipts", write=True)(views.receipt_cancel), name="receipt_cancel"),
     path("api/students/<int:pk>/fee-defaults/", module_required("fee_collection")(views.student_fee_defaults), name="student_fee_defaults"),

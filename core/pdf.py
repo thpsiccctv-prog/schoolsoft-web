@@ -279,256 +279,367 @@ def _devanagari_flowable(text, font_size_pt, bold=False, align=0, color=(23, 32,
     return row_t
 
 
+import os
+from decimal import Decimal
+from io import BytesIO
+from xml.sax.saxutils import escape
+
+from django.conf import settings
+from django.utils import timezone
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4, A5, landscape
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import mm
+from reportlab.platypus import (
+    BaseDocTemplate,
+    Frame,
+    Image,
+    PageTemplate,
+    Paragraph,
+    SimpleDocTemplate,
+    Spacer,
+    Table,
+    TableStyle,
+)
+
+
+def _money(val):
+    if val is None:
+        return "0.00"
+    return f"{Decimal(str(val)):,.2f}"
+
+
 def _build_fee_receipt_story(receipt, school_profile=None):
     styles = getSampleStyleSheet()
     
-    # Premium Styles
-    brand_color = colors.HexColor("#0f766e")
-    text_color = colors.HexColor("#1e293b")
-    light_bg = colors.HexColor("#f8fafc")
-    border_color = colors.HexColor("#cbd5e1")
+    brand_color = colors.HexColor("#0f766e")       # Deep Teal
+    brand_gold = colors.HexColor("#d97706")        # Amber Gold
+    text_color = colors.HexColor("#0f172a")        # Slate 900
+    muted_color = colors.HexColor("#475569")       # Slate 600
+    border_color = colors.HexColor("#cbd5e1")      # Slate 300
+    light_bg = colors.HexColor("#f8fafc")          # Slate 50
+    header_bg = colors.HexColor("#0f766e")         # Primary Teal
     
     title_style = ParagraphStyle(
-        "ReceiptTitle",
-        parent=styles["Title"],
-        fontSize=12,
-        leading=13,
-        alignment=0, # Left align
+        "ReceiptSchoolTitle",
+        parent=styles["Normal"],
+        fontSize=10.5,
+        leading=12,
+        alignment=1,  # Center
         textColor=brand_color,
         fontName="Helvetica-Bold",
-        spaceAfter=1 * mm,
     )
-    small_style = ParagraphStyle(
-        "Small",
+    school_sub_style = ParagraphStyle(
+        "ReceiptSchoolSub",
         parent=styles["Normal"],
-        fontSize=5.6,
-        leading=6.4,
-        textColor=colors.HexColor("#64748b"),
+        fontSize=5.8,
+        leading=7.2,
+        alignment=1,  # Center
+        textColor=muted_color,
     )
     badge_style = ParagraphStyle(
-        "Badge",
+        "ReceiptBadge",
         parent=styles["Normal"],
-        fontSize=6,
-        leading=6.8,
+        fontSize=6.5,
+        leading=7.5,
         fontName="Helvetica-Bold",
         textColor=brand_color,
-        backColor=colors.HexColor("#ecfdf5"),
-        alignment=0,
-        spaceBefore=2 * mm,
+        alignment=1,
+        spaceBefore=1 * mm,
+    )
+    rno_style = ParagraphStyle(
+        "ReceiptNoStyle",
+        parent=styles["Normal"],
+        fontSize=6,
+        leading=7.5,
+        alignment=2,  # Right
+        textColor=muted_color,
+    )
+    rno_val_style = ParagraphStyle(
+        "ReceiptNoValStyle",
+        parent=styles["Normal"],
+        fontSize=9.5,
+        leading=11,
+        fontName="Helvetica-Bold",
+        alignment=2,
+        textColor=text_color,
     )
 
-    school_name = school_profile.name if school_profile else "SchoolSoft Fee Receipt"
-    school_address = school_profile.address if school_profile else "Premium Migration Prototype"
-    school_contact = ""
+    school_name = school_profile.name if school_profile and school_profile.name else "THAKUR HARIKESH PRATAP SINGH INTERMEDIATE COLLEGE"
+    school_address = school_profile.address if school_profile and school_profile.address else "Uday, Dudahi, Kushinagar, U.P."
+    
+    contact_parts = []
     if school_profile:
-        contact_parts = []
         if school_profile.phone:
             contact_parts.append(f"Phone: {school_profile.phone}")
         if school_profile.email:
             contact_parts.append(f"Email: {school_profile.email}")
-        school_contact = " | ".join(contact_parts)
+    school_contact = " | ".join(contact_parts) if contact_parts else "Affiliated to U.P. Board, Prayagraj"
 
     story = []
-    
-    # Clear, hard-to-miss payment-status badge
+
+    # 1. School Logo
+    logo_path = os.path.join(settings.BASE_DIR, "static", "core", "school_logo.png")
+    logo_flowable = ""
+    if os.path.exists(logo_path):
+        try:
+            logo_flowable = Image(logo_path, width=17 * mm, height=17 * mm)
+        except Exception:
+            logo_flowable = ""
+
+    # Status Badge
     if receipt.is_cancelled:
-        status_badge = None
+        status_badge = Paragraph(
+            "<b>CANCELLED</b>",
+            ParagraphStyle("StCancel", alignment=2, fontName="Helvetica-Bold", fontSize=7.5,
+                           textColor=colors.white, backColor=colors.HexColor("#dc2626"), spaceBefore=1.5 * mm),
+        )
     elif receipt.legacy_due_amount > 0:
         status_badge = Paragraph(
-            f"DUE - Rs. {money(receipt.legacy_due_amount)}",
-            ParagraphStyle("StatusDue", alignment=2, fontName="Helvetica-Bold", fontSize=8.5,
-                          textColor=colors.white, backColor=colors.HexColor("#dc2626"), spaceBefore=2 * mm),
+            f"<b>DUE: Rs. {_money(receipt.legacy_due_amount)}</b>",
+            ParagraphStyle("StDue", alignment=2, fontName="Helvetica-Bold", fontSize=7.5,
+                           textColor=colors.white, backColor=colors.HexColor("#dc2626"), spaceBefore=1.5 * mm),
         )
     else:
         status_badge = Paragraph(
-            "FULLY PAID",
-            ParagraphStyle("StatusPaid", alignment=2, fontName="Helvetica-Bold", fontSize=8.5,
-                          textColor=colors.white, backColor=colors.HexColor("#15803d"), spaceBefore=2 * mm),
+            "<b>FULLY PAID</b>",
+            ParagraphStyle("StPaid", alignment=2, fontName="Helvetica-Bold", fontSize=7.5,
+                           textColor=colors.white, backColor=colors.HexColor("#15803d"), spaceBefore=1.5 * mm),
         )
 
-    receipt_no_cell = [Paragraph(f"<b>Receipt No.</b><br/><font size=11>{receipt.receipt_no}</font>",
-                                 ParagraphStyle("RNo", alignment=2, leading=13, textColor=text_color))]
-    if status_badge is not None:
-        receipt_no_cell.append(status_badge)
-
-    # Header Table (School Info Left, Receipt No Right)
-    header_data = [
-        [
-            [Paragraph(school_name.upper(), title_style),
-             Paragraph(school_address, small_style),
-             Paragraph(school_contact, small_style),
-             Paragraph(" FEE RECEIPT ", badge_style)],
-            receipt_no_cell
-        ]
+    # Right cell (Receipt No + Status Badge)
+    rno_cell = [
+        Paragraph("RECEIPT NO", rno_style),
+        Paragraph(escape(receipt.receipt_no), rno_val_style),
+        status_badge,
     ]
-    header_table = Table(header_data, colWidths=[125 * mm, 57 * mm])
-    header_table.setStyle(TableStyle([
-        ('VALIGN', (0,0), (-1,-1), 'TOP'),
-        ('ALIGN', (1,0), (1,0), 'RIGHT'),
-        ('LINEBELOW', (0,0), (-1,-1), 1.5, border_color),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 3),
-    ]))
-    
-    story.extend([header_table, Spacer(1, 1.5 * mm)])
 
+    # Center cell (School Info)
+    center_cell = [
+        Paragraph(f"<b>{escape(school_name.upper())}</b>", title_style),
+        Paragraph(escape(school_address), school_sub_style),
+        Paragraph(escape(school_contact), school_sub_style),
+        Paragraph("<b>&bull; FEE RECEIPT (फीस रसीद) &bull;</b>", badge_style),
+    ]
+
+    # Top Header Table (3 Columns: Logo, School Info, Receipt Info)
+    header_table = Table([[logo_flowable, center_cell, rno_cell]], colWidths=[20 * mm, 114 * mm, 48 * mm])
+    header_table.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("ALIGN", (0, 0), (0, 0), "CENTER"),
+                ("ALIGN", (1, 0), (1, 0), "CENTER"),
+                ("ALIGN", (2, 0), (2, 0), "RIGHT"),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+            ]
+        )
+    )
+    story.append(header_table)
+    story.append(Spacer(1, 1 * mm))
+
+    # 2. Dual-Tone Accent Line (Teal + Gold)
+    accent_data = [[""], [""]]
+    accent_table = Table(accent_data, colWidths=[182 * mm], rowHeights=[1.2 * mm, 0.6 * mm])
+    accent_table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (0, 0), brand_color),
+                ("BACKGROUND", (0, 1), (0, 1), brand_gold),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+            ]
+        )
+    )
+    story.append(accent_table)
+    story.append(Spacer(1, 1.5 * mm))
+
+    # 3. Structured Metadata Card (4 Columns)
     student = receipt.student
     class_label = receipt.display_class_section
-
     month_label = receipt.from_month
     if receipt.to_month and receipt.to_month != receipt.from_month:
         month_label = f"{receipt.from_month} to {receipt.to_month}"
 
-    meta_label_style = ParagraphStyle(
-        "ReceiptMetaLabel",
-        parent=small_style,
+    session_name = receipt.session.name if receipt.session else "2026-27"
+    father_name = student.father_name if student and student.father_name else "-"
+    sid_adm = f"{student.legacy_sid or ''} / {student.admission_no or ''}" if student else "-"
+
+    meta_lbl_style = ParagraphStyle(
+        "MLbl",
+        parent=styles["Normal"],
         fontName="Helvetica-Bold",
-        fontSize=6.2,
+        fontSize=5.8,
         leading=6.8,
         textColor=colors.HexColor("#475569"),
     )
-    meta_value_style = ParagraphStyle(
-        "ReceiptMetaValue",
-        parent=small_style,
+    meta_val_style = ParagraphStyle(
+        "MVal",
+        parent=styles["Normal"],
+        fontName="Helvetica",
         fontSize=6.2,
-        leading=6.8,
+        leading=7.2,
         textColor=text_color,
     )
 
-    def meta_cell(value, style):
-        return Paragraph(escape(str(value or "")), style)
+    def m_cell(txt, is_val=False, is_bold=False):
+        style = meta_val_style if is_val else meta_lbl_style
+        font_tag = f"<b>{escape(str(txt))}</b>" if (is_bold or not is_val) else escape(str(txt))
+        return Paragraph(font_tag, style)
 
-    meta = [
-        [meta_cell("Student Name", meta_label_style), meta_cell(receipt.display_student_name, meta_value_style), meta_cell("Date", meta_label_style), meta_cell(receipt.receipt_date.strftime("%d-%m-%Y"), meta_value_style)],
-        [meta_cell("SID / Admn", meta_label_style), meta_cell(f"{student.legacy_sid or ''} / {student.admission_no or ''}", meta_value_style), meta_cell("Class", meta_label_style), meta_cell(class_label, meta_value_style)],
-        [meta_cell("Fee Month", meta_label_style), meta_cell(month_label, meta_value_style), meta_cell("Mode", meta_label_style), meta_cell(receipt.get_payment_mode_display(), meta_value_style)],
+    meta_grid = [
+        [m_cell("Student Name"), m_cell(receipt.display_student_name, True, True), m_cell("Receipt Date"), m_cell(receipt.receipt_date.strftime("%d-%m-%Y"), True)],
+        [m_cell("Father's Name"), m_cell(father_name, True), m_cell("Class & Sec"), m_cell(class_label, True, True)],
+        [m_cell("SID / Adm No"), m_cell(sid_adm, True), m_cell("Fee Month"), m_cell(month_label, True, True)],
+        [m_cell("Payment Mode"), m_cell(receipt.get_payment_mode_display(), True), m_cell("Academic Session"), m_cell(session_name, True)],
     ]
-    meta_table = Table(meta, colWidths=[28 * mm, 64 * mm, 25 * mm, 65 * mm])
+    meta_table = Table(meta_grid, colWidths=[24 * mm, 67 * mm, 24 * mm, 67 * mm])
     meta_table.setStyle(
         TableStyle(
             [
-                ("GRID", (0, 0), (-1, -1), 0.5, border_color),
+                ("GRID", (0, 0), (-1, -1), 0.4, border_color),
                 ("BACKGROUND", (0, 0), (0, -1), light_bg),
                 ("BACKGROUND", (2, 0), (2, -1), light_bg),
-                ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
-                ("FONTNAME", (2, 0), (2, -1), "Helvetica-Bold"),
-                ("TEXTCOLOR", (0, 0), (0, -1), colors.HexColor("#475569")),
-                ("TEXTCOLOR", (2, 0), (2, -1), colors.HexColor("#475569")),
-                ("TEXTCOLOR", (1, 0), (1, -1), text_color),
-                ("TEXTCOLOR", (3, 0), (3, -1), text_color),
-                ("FONTSIZE", (0, 0), (-1, -1), 6.2),
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("TOPPADDING", (0, 0), (-1, -1), 1.4),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 1.4),
+                ("TOPPADDING", (0, 0), (-1, -1), 1.2),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 1.2),
+                ("LEFTPADDING", (0, 0), (-1, -1), 3),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 3),
             ]
         )
     )
-    story.extend([meta_table, Spacer(1, 1.5 * mm)])
+    story.append(meta_table)
+    story.append(Spacer(1, 1.5 * mm))
 
+    # 4. Itemized Fee Table
     line_rows = [["Fee Head Description", "Amount (Rs.)"]]
     for line in receipt.lines.select_related("fee_head").all():
-        line_rows.append([line.fee_head.name, money(line.amount)])
+        line_rows.append([line.fee_head.name, _money(line.amount)])
 
     body_last_idx = len(line_rows) - 1
     total_start_idx = len(line_rows)
-    line_rows.append(["Fee Total", money(receipt.legacy_fee_total)])
+    line_rows.append(["Fee Total", _money(receipt.legacy_fee_total)])
 
     previous_due_idx = None
     if receipt.previous_due_amount > 0:
         previous_due_idx = len(line_rows)
-        line_rows.append(["Previous Due (carried forward)", f"+ {money(receipt.previous_due_amount)}"])
+        line_rows.append(["Previous Due (carried forward)", f"+ {_money(receipt.previous_due_amount)}"])
 
+    concession_idx = None
     if receipt.concession_amount > 0:
-        line_rows.append(["Concession / Discount", f"- {money(receipt.concession_amount)}"])
+        concession_idx = len(line_rows)
+        line_rows.append(["Concession / Discount", f"- {_money(receipt.concession_amount)}"])
+
+    late_fee_idx = None
     if receipt.late_fee_amount > 0:
-        line_rows.append(["Late Fee Fine", f"+ {money(receipt.late_fee_amount)}"])
-        
+        late_fee_idx = len(line_rows)
+        line_rows.append(["Late Fee Fine", f"+ {_money(receipt.late_fee_amount)}"])
+
     net_idx = len(line_rows)
-    line_rows.append(["Net Payable", f"Rs. {money(receipt.legacy_net_total)}"])
-    line_rows.append(["Amount Paid", f"Rs. {money(receipt.received_amount)}"])
-    
+    line_rows.append(["Net Payable", f"Rs. {_money(receipt.legacy_net_total)}"])
+    paid_idx = len(line_rows)
+    line_rows.append(["Amount Paid", f"Rs. {_money(receipt.received_amount)}"])
+
     due_idx = None
     if receipt.legacy_due_amount > 0:
         due_idx = len(line_rows)
-        line_rows.append(["Balance Due", f"Rs. {money(receipt.legacy_due_amount)}"])
+        line_rows.append(["Balance Due", f"Rs. {_money(receipt.legacy_due_amount)}"])
 
     fee_table = Table(line_rows, colWidths=[136 * mm, 46 * mm], repeatRows=1)
-    
+
     ts = [
         # Header
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f1f5f9")),
-        ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#334155")),
+        ("BACKGROUND", (0, 0), (-1, 0), header_bg),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("LINEBELOW", (0, 0), (-1, 0), 1, border_color),
-        
+        ("FONTSIZE", (0, 0), (-1, 0), 6.5),
+        ("ALIGN", (1, 0), (1, 0), "RIGHT"),
         # Body Lines
         ("ALIGN", (1, 1), (1, -1), "RIGHT"),
-        ("FONTSIZE", (0, 0), (-1, -1), 6.2),
+        ("FONTSIZE", (0, 1), (-1, -1), 6.2),
         ("TEXTCOLOR", (0, 1), (-1, body_last_idx), text_color),
-        ("TOPPADDING", (0, 0), (-1, -1), 1.1),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 1.1),
-        
+        ("TOPPADDING", (0, 0), (-1, -1), 1.0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 1.0),
+        ("LEFTPADDING", (0, 0), (-1, -1), 4),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
         # Totals Section
         ("FONTNAME", (0, total_start_idx), (-1, -1), "Helvetica-Bold"),
         ("TEXTCOLOR", (0, total_start_idx), (-1, -1), colors.HexColor("#475569")),
-        ("LINEABOVE", (0, total_start_idx), (-1, total_start_idx), 1, border_color),
-        
+        ("LINEABOVE", (0, total_start_idx), (-1, total_start_idx), 0.8, border_color),
         # Net Payable Row
         ("BACKGROUND", (0, net_idx), (-1, net_idx), light_bg),
         ("TEXTCOLOR", (0, net_idx), (-1, net_idx), text_color),
-        ("LINEABOVE", (0, net_idx), (-1, net_idx), 1, border_color),
-        ("LINEBELOW", (0, net_idx), (-1, net_idx), 1, border_color),
-        ("FONTSIZE", (0, net_idx), (-1, net_idx), 7.2),
+        ("FONTSIZE", (0, net_idx), (-1, net_idx), 7.0),
+        ("LINEABOVE", (0, net_idx), (-1, net_idx), 0.8, border_color),
+        ("LINEBELOW", (0, net_idx), (-1, net_idx), 0.8, border_color),
+        # Amount Paid Row
+        ("TEXTCOLOR", (0, paid_idx), (-1, paid_idx), colors.HexColor("#15803d")),
+        ("FONTSIZE", (0, paid_idx), (-1, paid_idx), 7.2),
     ]
 
     if body_last_idx >= 1:
-        ts.append(("LINEBELOW", (0, 1), (-1, body_last_idx), 0.5, colors.HexColor("#e2e8f0")))
-    
-    if due_idx:
-        ts.append(("TEXTCOLOR", (0, due_idx), (-1, due_idx), colors.HexColor("#dc2626")))
+        ts.append(("LINEBELOW", (0, 1), (-1, body_last_idx), 0.4, colors.HexColor("#f1f5f9")))
 
     if previous_due_idx is not None:
         ts.append(("TEXTCOLOR", (0, previous_due_idx), (-1, previous_due_idx), colors.HexColor("#7c3aed")))
-        ts.append(("FONTNAME", (0, previous_due_idx), (-1, previous_due_idx), "Helvetica-Bold"))
+
+    if concession_idx is not None:
+        ts.append(("TEXTCOLOR", (0, concession_idx), (-1, concession_idx), colors.HexColor("#15803d")))
+
+    if late_fee_idx is not None:
+        ts.append(("TEXTCOLOR", (0, late_fee_idx), (-1, late_fee_idx), colors.HexColor("#d97706")))
+
+    if due_idx is not None:
+        ts.append(("TEXTCOLOR", (0, due_idx), (-1, due_idx), colors.HexColor("#dc2626")))
+        ts.append(("FONTSIZE", (0, due_idx), (-1, due_idx), 7.2))
 
     fee_table.setStyle(TableStyle(ts))
     story.append(fee_table)
 
     if receipt.remarks:
-        story.extend([Spacer(1, 1 * mm), Paragraph(f"<i>Remarks: {receipt.remarks}</i>", small_style)])
+        story.extend([Spacer(1, 1 * mm), Paragraph(f"<i>Remarks: {escape(receipt.remarks)}</i>", meta_lbl_style)])
 
-    story.extend(
+    # 5. Signatures & Footer Note
+    sig_data = [
         [
-            Spacer(1, 3 * mm),
-            Table(
-                [["Cashier's Signature", "Parent / Guardian"]],
-                colWidths=[82 * mm, 82 * mm],
-                style=TableStyle(
-                    [
-                        ("LINEABOVE", (0, 0), (0, 0), 1, border_color),
-                        ("LINEABOVE", (1, 0), (1, 0), 1, border_color),
-                        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-                        ("FONTSIZE", (0, 0), (-1, -1), 6),
-                        ("TEXTCOLOR", (0, 0), (-1, -1), colors.HexColor("#64748b")),
-                        ("TOPPADDING", (0, 0), (-1, -1), 2),
-                    ]
-                ),
-            ),
+            Paragraph("Cashier's Signature<br/>___________________", meta_lbl_style),
+            Paragraph("Parent / Guardian Signature<br/>___________________", meta_lbl_style),
         ]
+    ]
+    sig_table = Table(sig_data, colWidths=[91 * mm, 91 * mm])
+    sig_table.setStyle(
+        TableStyle(
+            [
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("VALIGN", (0, 0), (-1, -1), "BOTTOM"),
+                ("TOPPADDING", (0, 0), (-1, -1), 2),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+            ]
+        )
     )
+    story.extend([Spacer(1, 2 * mm), sig_table])
+
     return story
 
 
 def build_fee_receipt_pdf(receipt, school_profile=None):
+    """Generate executive standard A5 Landscape Fee Receipt PDF."""
     buffer = BytesIO()
-    page_size = landscape(A5)
+    page_size = landscape(A5)  # 210mm x 148mm
     page_width, page_height = page_size
+
     document = SimpleDocTemplate(
         buffer,
         pagesize=page_size,
-        rightMargin=7 * mm,
-        leftMargin=7 * mm,
-        topMargin=6 * mm,
-        bottomMargin=7 * mm,
+        rightMargin=14 * mm,
+        leftMargin=14 * mm,
+        topMargin=5 * mm,
+        bottomMargin=5 * mm,
         title=f"Fee Receipt {receipt.receipt_no}",
     )
 
@@ -537,29 +648,29 @@ def build_fee_receipt_pdf(receipt, school_profile=None):
     def add_watermark(canvas, doc):
         canvas.saveState()
         if receipt.is_cancelled:
-            canvas.setFont('Helvetica-Bold', 60)
-            canvas.setFillColor(colors.HexColor("#dc2626"), alpha=0.2)
+            canvas.setFont("Helvetica-Bold", 55)
+            canvas.setFillColor(colors.HexColor("#dc2626"), alpha=0.18)
             canvas.translate(page_width / 2, page_height / 2)
-            canvas.rotate(45)
+            canvas.rotate(35)
             canvas.drawCentredString(0, 0, "CANCELLED")
         elif receipt.is_edited:
-            canvas.setFont('Helvetica-Bold', 60)
-            canvas.setFillColor(colors.HexColor("#f59e0b"), alpha=0.2)
+            canvas.setFont("Helvetica-Bold", 55)
+            canvas.setFillColor(colors.HexColor("#f59e0b"), alpha=0.18)
             canvas.translate(page_width / 2, page_height / 2)
-            canvas.rotate(45)
+            canvas.rotate(35)
             canvas.drawCentredString(0, 0, "EDITED")
             canvas.restoreState()
             canvas.saveState()
-            canvas.setFont('Helvetica', 5.5)
+            canvas.setFont("Helvetica", 5.5)
             canvas.setFillColor(colors.HexColor("#b45309"))
             footer_text = f"Edited on {receipt.edited_at.strftime('%d-%m-%Y %H:%M')} by {receipt.edited_by.username if receipt.edited_by else 'System'}. Reason: {receipt.edit_reason}"
-            canvas.drawCentredString(page_width / 2, 4 * mm, footer_text[:115])
+            canvas.drawCentredString(page_width / 2, 3 * mm, footer_text[:115])
         else:
-            canvas.setFont('Helvetica-Bold', 68)
-            canvas.setFillColor(colors.HexColor("#0f766e"), alpha=0.04)
+            canvas.setFont("Helvetica-Bold", 60)
+            canvas.setFillColor(colors.HexColor("#0f766e"), alpha=0.035)
             canvas.translate(page_width / 2, page_height / 2)
-            canvas.rotate(45)
-            canvas.drawCentredString(0, 0, "SCHOOLSOFT")
+            canvas.rotate(35)
+            canvas.drawCentredString(0, 0, "THPSIC")
         canvas.restoreState()
 
     document.build(story, onFirstPage=add_watermark, onLaterPages=add_watermark)
@@ -575,8 +686,6 @@ def build_fee_receipt_pdf_2up(receipt, school_profile=None):
     buffer = BytesIO()
     page_width, page_height = A4  # 210mm x 297mm
 
-    # Top-half Frame (width=182mm, height=138mm, centered horizontally with 14mm left/right margin)
-    # y1 from bottom of page: 148.5mm + 4mm = 152.5mm
     top_frame = Frame(
         14 * mm,
         148.5 * mm + 4 * mm,
@@ -601,29 +710,29 @@ def build_fee_receipt_pdf_2up(receipt, school_profile=None):
         center_y = 148.5 * mm + (148.5 * mm / 2)
 
         if receipt.is_cancelled:
-            canvas.setFont('Helvetica-Bold', 60)
-            canvas.setFillColor(colors.HexColor("#dc2626"), alpha=0.2)
+            canvas.setFont("Helvetica-Bold", 55)
+            canvas.setFillColor(colors.HexColor("#dc2626"), alpha=0.18)
             canvas.translate(center_x, center_y)
-            canvas.rotate(45)
+            canvas.rotate(35)
             canvas.drawCentredString(0, 0, "CANCELLED")
         elif receipt.is_edited:
-            canvas.setFont('Helvetica-Bold', 60)
-            canvas.setFillColor(colors.HexColor("#f59e0b"), alpha=0.2)
+            canvas.setFont("Helvetica-Bold", 55)
+            canvas.setFillColor(colors.HexColor("#f59e0b"), alpha=0.18)
             canvas.translate(center_x, center_y)
-            canvas.rotate(45)
+            canvas.rotate(35)
             canvas.drawCentredString(0, 0, "EDITED")
             canvas.restoreState()
             canvas.saveState()
-            canvas.setFont('Helvetica', 5.5)
+            canvas.setFont("Helvetica", 5.5)
             canvas.setFillColor(colors.HexColor("#b45309"))
             footer_text = f"Edited on {receipt.edited_at.strftime('%d-%m-%Y %H:%M')} by {receipt.edited_by.username if receipt.edited_by else 'System'}. Reason: {receipt.edit_reason}"
-            canvas.drawCentredString(center_x, 148.5 * mm + 4 * mm, footer_text[:115])
+            canvas.drawCentredString(center_x, 148.5 * mm + 3 * mm, footer_text[:115])
         else:
-            canvas.setFont('Helvetica-Bold', 68)
-            canvas.setFillColor(colors.HexColor("#0f766e"), alpha=0.04)
+            canvas.setFont("Helvetica-Bold", 60)
+            canvas.setFillColor(colors.HexColor("#0f766e"), alpha=0.035)
             canvas.translate(center_x, center_y)
-            canvas.rotate(45)
-            canvas.drawCentredString(0, 0, "SCHOOLSOFT")
+            canvas.rotate(35)
+            canvas.drawCentredString(0, 0, "THPSIC")
         canvas.restoreState()
 
         # Subtle cutting / fold guide line at mid-page

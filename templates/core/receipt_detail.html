@@ -94,11 +94,11 @@
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px;vertical-align:middle"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
                 Back
             </a>
-            <a class="button secondary" href="{% url 'core:receipt_pdf' receipt.id %}">
+            <a class="button secondary" href="{% url 'core:pdf_viewer' %}?src={% url 'core:receipt_pdf' receipt.id %}&title=Fee%20Receipt%20{{ receipt.receipt_no }}%20(A5)&back={% url 'core:receipt_detail' receipt.id %}&alt_src={% url 'core:pdf_viewer' %}?src={% url 'core:receipt_pdf_2up' receipt.id %}%26title=Fee%20Receipt%20{{ receipt.receipt_no }}%20(Half-A4)%26back={% url 'core:receipt_detail' receipt.id %}&alt_title=Switch%20to%20Half-A4" title="A5 Landscape Receipt PDF Preview">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px;vertical-align:middle"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
-                PDF
+                PDF (A5)
             </a>
-            <a class="button secondary" href="{% url 'core:receipt_pdf_2up' receipt.id %}" target="_blank">
+            <a class="button secondary" href="{% url 'core:pdf_viewer' %}?src={% url 'core:receipt_pdf_2up' receipt.id %}&title=Fee%20Receipt%20{{ receipt.receipt_no }}%20(Half-A4)&back={% url 'core:receipt_detail' receipt.id %}&alt_src={% url 'core:pdf_viewer' %}?src={% url 'core:receipt_pdf' receipt.id %}%26title=Fee%20Receipt%20{{ receipt.receipt_no }}%20(A5)%26back={% url 'core:receipt_detail' receipt.id %}&alt_title=Switch%20to%20A5" title="A4 portrait page ke top half par receipt (bottom half blank for paper re-use)">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px;vertical-align:middle"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="4" y1="12" x2="20" y2="12" stroke-dasharray="2 2"/></svg>
                 Half-A4 PDF
             </a>

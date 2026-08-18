@@ -18,6 +18,7 @@ from django.db import connection, transaction
 from django.db.models import Count, F, Max, ProtectedError, Q, Sum
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.clickjacking import xframe_options_sameorigin
 from django.urls import reverse
 from django.utils import timezone
 
@@ -1785,6 +1786,7 @@ def receipt_edit(request, pk):
     )
 
 
+@xframe_options_sameorigin
 def receipt_pdf(request, pk):
     receipt = get_object_or_404(
         FeeReceipt.objects.select_related(
@@ -1801,6 +1803,7 @@ def receipt_pdf(request, pk):
     return response
 
 
+@xframe_options_sameorigin
 def receipt_pdf_2up(request, pk):
     receipt = get_object_or_404(
         FeeReceipt.objects.select_related(
@@ -1815,6 +1818,21 @@ def receipt_pdf_2up(request, pk):
     response = HttpResponse(pdf_bytes, content_type="application/pdf")
     response["Content-Disposition"] = f'inline; filename="receipt_{receipt.receipt_no}_2up.pdf"'
     return response
+
+
+@xframe_options_sameorigin
+def pdf_viewer(request):
+    return render(
+        request,
+        "core/pdf_viewer.html",
+        {
+            "pdf_url": request.GET.get("src", ""),
+            "title": request.GET.get("title", "Document Preview"),
+            "back_url": request.GET.get("back", "/"),
+            "alt_url": request.GET.get("alt_src", ""),
+            "alt_title": request.GET.get("alt_title", ""),
+        },
+    )
 
 
 def _local_print_allowed(request):

@@ -1,0 +1,68 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ title|default:"PDF Preview" }} | SchoolSoft</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
+        .pdf-toolbar { height: 50px; background: #1e293b; border-bottom: 1px solid #334155; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.25); }
+        .toolbar-left { display: flex; align-items: center; gap: 14px; }
+        .toolbar-right { display: flex; align-items: center; gap: 10px; }
+        .btn-back { display: inline-flex; align-items: center; gap: 8px; background: #0f766e; color: #ffffff; font-size: 13.5px; font-weight: 700; padding: 8px 16px; border-radius: 6px; text-decoration: none; border: 1px solid #14b8a6; cursor: pointer; }
+        .btn-back:hover { background: #115e59; box-shadow: 0 0 10px rgba(20, 184, 166, 0.5); }
+        .btn-action { display: inline-flex; align-items: center; gap: 6px; background: #334155; color: #f8fafc; font-size: 12.5px; font-weight: 600; padding: 7px 14px; border-radius: 6px; text-decoration: none; border: 1px solid #475569; cursor: pointer; }
+        .btn-action:hover { background: #475569; color: #ffffff; }
+        .doc-title { font-size: 14px; font-weight: 600; color: #e2e8f0; }
+        .pdf-container { flex: 1; width: 100%; height: calc(100vh - 50px); background: #334155; }
+        .pdf-frame { width: 100%; height: 100%; border: none; display: block; }
+    </style>
+</head>
+<body>
+    <div class="pdf-toolbar">
+        <div class="toolbar-left">
+            <a href="{{ back_url|default:'/' }}" class="btn-back" id="backBtn" title="Go back to SchoolSoft (or press Esc)">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+                <span>&larr; Back to App (Esc)</span>
+            </a>
+            <div class="doc-title">{{ title|default:"Document Preview" }}</div>
+        </div>
+        <div class="toolbar-right">
+            {% if alt_url and alt_title %}
+            <a href="{{ alt_url }}" class="btn-action" title="Switch format">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                <span>{{ alt_title }}</span>
+            </a>
+            {% endif %}
+            <button onclick="printPdf()" class="btn-action" style="background:#0f766e; border-color:#14b8a6; color:#ffffff;" title="Print PDF">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>
+                <span>Print</span>
+            </button>
+            <a href="{{ pdf_url }}" download class="btn-action" title="Download PDF file">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+                <span>Download</span>
+            </a>
+        </div>
+    </div>
+    <div class="pdf-container">
+        <iframe id="pdfFrame" class="pdf-frame" src="{{ pdf_url }}" allow="fullscreen"></iframe>
+    </div>
+    <script>
+        function printPdf() {
+            var f = document.getElementById('pdfFrame');
+            if (f && f.contentWindow) {
+                try { f.contentWindow.focus(); f.contentWindow.print(); return; } catch(err) {}
+            }
+            window.open("{{ pdf_url }}", "_blank");
+        }
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                window.location.href = "{{ back_url|default:'/' }}";
+            }
+        });
+    </script>
+</body>
+</html>
