@@ -1,0 +1,15 @@
+{% if form.errors %}
+<div class="entry-flash error">
+    <strong>Save nahi hua. Neeche wali galti theek kijiye:</strong>
+    <ul>
+    {% for field in form %}
+        {% for error in field.errors %}
+            <li><strong>{{ field.label }}:</strong> {{ error }}</li>
+        {% endfor %}
+    {% endfor %}
+    {% for error in form.non_field_errors %}
+        <li>{{ error }}</li>
+    {% endfor %}
+    </ul>
+</div>
+{% endif %}

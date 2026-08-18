@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+
+{% block title %}Fee Structure | SchoolSoft Modernization{% endblock %}
+
+{% block content %}
+<section class="section">
+    <div class="section-heading with-actions">
+        <div>
+            <h2>Fee Structure</h2>
+            <p>Class-wise fee setup used by manual receipt entry.</p>
+        </div>
+        <div class="action-row">
+            <a class="button secondary" href="/admin/core/feestructure/">Admin List</a>
+            <a class="button secondary" href="/admin/core/feestructure/add/">Add</a>
+        </div>
+    </div>
+
+    <form class="filterbar fee-structure-filter" method="get">
+        <select name="session">
+            <option value="">Auto session</option>
+            {% for session in sessions %}
+                <option value="{{ session.id }}" {% if selected_session_id == session.id|stringformat:"s" %}selected{% endif %}>
+                    {{ session.name }}{% if session.is_active %} (Active){% endif %}
+                </option>
+            {% endfor %}
+        </select>
+        <select name="class">
+            <option value="">All classes</option>
+            {% for class in classes %}
+                <option value="{{ class.id }}" {% if selected_class_id == class.id|stringformat:"s" %}selected{% endif %}>
+                    {{ class.name }}
+                </option>
+            {% endfor %}
+        </select>
+        <select name="rows">
+            <option value="nonzero" {% if row_mode != "all" %}selected{% endif %}>Non-zero rows</option>
+            <option value="all" {% if row_mode == "all" %}selected{% endif %}>All rows</option>
+        </select>
+        <button type="submit">Search</button>
+        <a class="button secondary" href="{% url 'core:fee_structure_report' %}">Reset</a>
+    </form>
+
+    <div class="stat-grid receipt-stats">
+        <article class="stat">
+            <span>Session</span>
+            <strong>{{ selected_session.name|default:"-" }}</strong>
+        </article>
+        <article class="stat">
+            <span>Rows</span>
+            <strong>{{ totals.total_rows|default:"0" }}</strong>
+        </article>
+        <article class="stat">
+            <span>Total Amount</span>
+            <strong>{{ totals.total_amount|default:"0" }}</strong>
+        </article>
+    </div>
+
+    <section class="section">
+        <div class="section-heading compact">
+            <h2>Class Summary</h2>
+        </div>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Class</th>
+                        <th class="amount">Fee Heads</th>
+                        <th class="amount">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in class_totals %}
+                        <tr>
+                            <td>{{ row.school_class__name }}</td>
+                            <td class="amount">{{ row.fee_heads }}</td>
+                            <td class="amount">{{ row.total_amount }}</td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="3">No fee structure rows found.</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="section">
+        <div class="section-heading compact">
+            <h2>Fee Heads</h2>
+        </div>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Class</th>
+                        <th>Fee Head</th>
+                        <th>Frequency</th>
+                        <th class="amount">Amount</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for structure in structures %}
+                        <tr>
+                            <td>{{ structure.school_class.name }}</td>
+                            <td>{{ structure.fee_head.name }}</td>
+                            <td>{{ structure.fee_head.get_frequency_display }}</td>
+                            <td class="amount">{{ structure.amount }}</td>
+                            <td>
+                                <a class="table-link" href="/admin/core/feestructure/{{ structure.pk }}/change/">Edit</a>
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="5">No fee structure rows found.</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+</section>
+{% endblock %}

@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}Add Discipline Record | {{ student.full_name }}{% endblock %}
+
+{% block content %}
+<section class="section">
+    <div class="section-heading with-actions">
+        <div>
+            <h2>Add Discipline Record</h2>
+            <p>{{ student.full_name }} | SID {{ student.legacy_sid|default:"-" }} | {{ student.current_class|default:"-" }}{% if student.current_section %}-{{ student.current_section.name }}{% endif %}</p>
+        </div>
+        <a class="button secondary" href="{% url 'core:discipline_list' student.pk %}">Back</a>
+    </div>
+
+    <form class="entry-form" method="post">
+        {% csrf_token %}
+        {% if form.non_field_errors %}
+            <div class="form-errors">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        <section class="form-panel">
+            <h3>Incident Details</h3>
+            <div class="form-grid">
+                {% for field in form %}
+                    <label>
+                        <span>{{ field.label }}</span>
+                        {{ field }}
+                        {% if field.errors %}<small>{{ field.errors|striptags }}</small>{% endif %}
+                    </label>
+                {% endfor %}
+            </div>
+        </section>
+        <div class="form-actions">
+            <button type="submit">Save Record</button>
+            <a class="button secondary" href="{% url 'core:discipline_list' student.pk %}">Cancel</a>
+        </div>
+    </form>
+</section>
+{% endblock %}

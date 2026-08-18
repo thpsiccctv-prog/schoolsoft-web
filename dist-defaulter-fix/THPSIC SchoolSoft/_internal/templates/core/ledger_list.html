@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Ledger Master | SchoolSoft{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div class="header-content">
+        <h1>Ledger Accounts</h1>
+    </div>
+    <div class="header-actions">
+        <a href="{% url 'core:ledger_create' %}" class="btn btn-primary">New Ledger Account</a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="table-responsive">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Group</th>
+                    <th>Account Name</th>
+                    <th>Cash/Bank?</th>
+                    <th>Opening Balance</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for ledger in ledgers %}
+                <tr>
+                    <td>{{ ledger.group.name }}</td>
+                    <td><strong>{{ ledger.name }}</strong></td>
+                    <td>
+                        {% if ledger.is_cash_or_bank %}
+                        <span class="badge" style="background:var(--color-primary);color:white;">Yes</span>
+                        {% else %}
+                        -
+                        {% endif %}
+                    </td>
+                    <td>Rs.  {{ ledger.opening_balance }}</td>
+                    <td>
+                        {% if ledger.is_active %}
+                        <span class="badge badge-success">Active</span>
+                        {% else %}
+                        <span class="badge badge-secondary">Inactive</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <a href="{% url 'core:ledger_edit' ledger.pk %}" class="btn btn-small btn-secondary">Edit</a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="text-center">No ledger accounts found. Run seed_accounts.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,187 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Student Register | SchoolSoft</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            font-size: 11px;
+            color: #000;
+        }
+        
+        .no-print {
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .range-form { display: inline-flex; gap: 8px; align-items: end; flex-wrap: wrap; margin-right: 12px; }
+        .range-form label { display: grid; gap: 3px; text-align: left; font-weight: bold; font-size: 11px; }
+        .range-form input { width: 90px; padding: 7px; border: 1px solid #94a3b8; border-radius: 4px; }
+        
+        .btn-print {
+            padding: 8px 16px;
+            background: #2a7c85;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        
+        .btn-back {
+            padding: 8px 16px;
+            background: #e2e8f0;
+            color: #333;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 14px;
+            margin-right: 10px;
+        }
+
+        .report-header {
+            text-align: center;
+            margin-bottom: 15px;
+        }
+        
+        .report-header h1 {
+            margin: 0 0 5px 0;
+            font-size: 18px;
+            text-transform: uppercase;
+        }
+        
+        .report-header p {
+            margin: 0 0 5px 0;
+            font-size: 12px;
+        }
+        
+        .report-meta {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            font-weight: bold;
+            border-bottom: 2px solid #000;
+            padding-bottom: 5px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        thead {
+            display: table-header-group;
+        }
+        
+        th, td {
+            border: 1px solid #ccc;
+            padding: 4px 6px;
+            text-align: left;
+            vertical-align: top;
+        }
+        
+        th {
+            background-color: #f8f9fa;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 10px;
+            -webkit-print-color-adjust: exact;
+            color-adjust: exact;
+        }
+        
+        .text-center { text-align: center; }
+        
+        @media print {
+            @page {
+                size: landscape;
+                margin: 10mm;
+            }
+            .no-print { display: none !important; }
+            body { padding: 0; }
+            th, td { border: 1px solid #000; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="no-print">
+        <form method="get" class="range-form">
+            <input type="hidden" name="status" value="{{ selected_status }}">
+            <label>Book No.<input id="book-no" name="book" inputmode="numeric" value="{{ book_no }}"></label>
+            <label>From SID<input id="from-no" name="from_no" inputmode="numeric" value="{{ from_no }}"></label>
+            <label>To SID<input id="to-no" name="to_no" inputmode="numeric" value="{{ to_no }}"></label>
+            <button type="submit" class="btn-print">Load Range</button>
+            <button type="submit" formaction="{% url 'core:scholar_register_index_pdf' %}" formtarget="_blank" class="btn-print" style="background:#0f766e;" title="S.No, SR No, Student Name, Father Name aur Address wala index - koi individual page nahi">Scholar Register Index</button>
+            <button type="submit" formaction="{% url 'core:scholar_register_book_pdf' %}" formtarget="_blank" class="btn-print" style="background:#b58a2a;" title="Cover + Index + har existing student ka Scholar Register page - Book No. ya From/To SID zaroori hai">Full Register Book</button>
+        </form>
+        <a href="javascript:history.back()" class="btn-back">Back</a>
+        <button onclick="window.print()" class="btn-print">Print Register</button>
+    </div>
+
+    <div class="report-header">
+        <h1>THPS ENGLISH MEDIUM SCHOOL</h1>
+        <p>DUDAHI 274302 KUSHINAGAR, (U.P.)</p>
+        <h2 style="font-size: 16px; margin: 10px 0 5px 0; text-decoration: underline;">STUDENTS LIST</h2>
+    </div>
+
+    <div class="report-meta">
+        <div>Total Students: {{ total_students }}</div>
+        <div>Filters: {{ filter_description|default:"All" }}</div>
+        <div>Print Date: {{ print_date|date:"d/m/Y h:i A" }}</div>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Id.</th>
+                <th>Date</th>
+                <th>Student's Name</th>
+                <th>Father's Name</th>
+                <th>Mother's Name</th>
+                <th>DOB</th>
+                <th>Aadhar Card</th>
+                <th>Gender</th>
+                <th>Mobile</th>
+                <th>Address</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for st in students %}
+                <tr>
+                    <td class="text-center"><strong>{{ st.legacy_sid|default:"-" }}</strong></td>
+                    <td>{{ st.admission_date|date:"d/m/Y"|default:"" }}</td>
+                    <td><strong>{{ st.full_name|upper }}</strong>{% if st.current_class %}<br><small>{{ st.current_class }}{% if st.current_section %}-{{ st.current_section }}{% endif %}</small>{% endif %}</td>
+                    <td>{{ st.father_name|upper }}</td>
+                    <td>{{ st.mother_name|upper }}</td>
+                    <td>{{ st.date_of_birth|date:"d/m/Y"|default:"" }}</td>
+                    <td>{{ st.aadhaar_no }}</td>
+                    <td>{{ st.get_gender_display|upper }}</td>
+                    <td>{{ st.mobile_primary }}</td>
+                    <td style="font-size: 10px;">{{ st.address_local|default:st.address_permanent|upper }}</td>
+                </tr>
+            {% empty %}
+                <tr>
+                    <td colspan="10" class="text-center">No students found for the selected filters.</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+</body>
+<script>
+    document.getElementById("book-no").addEventListener("input", function () {
+        var book = parseInt(this.value, 10);
+        if (book > 0) {
+            document.getElementById("from-no").value = ((book - 1) * 100) + 1;
+            document.getElementById("to-no").value = book * 100;
+        }
+    });
+</script>
+</html>

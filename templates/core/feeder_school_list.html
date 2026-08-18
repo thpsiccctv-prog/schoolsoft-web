@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% load schoolsoft_extras %}
+
+{% block title %}Attached / Feeder Schools | SchoolSoft{% endblock %}
+
+{% block content %}
+<section class="section">
+    <div class="section-heading with-actions">
+        <div>
+            <h2>Attached Schools (अटैच्ड / फीडर विद्यालय)</h2>
+            <p>ग्रामीण क्षेत्रों के अटैच्ड विद्यालयों का प्रबंधन, छात्र संख्या व Sundry Debtors खाता हिसाब।</p>
+        </div>
+        <div class="action-row">
+            <a class="button" href="{% url 'core:feeder_school_create' %}">+ Add Attached School</a>
+        </div>
+    </div>
+
+    <!-- KPI Metric Cards -->
+    <div class="stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+        <div class="stat-card" style="background: var(--surface); padding: 1.25rem; border-radius: 8px; border: 1px solid var(--border); box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+            <div style="font-size: 0.85rem; color: var(--text-muted); font-weight: 500;">कुल अटैच्ड विद्यालय</div>
+            <div style="font-size: 1.75rem; font-weight: 700; color: var(--primary); margin-top: 0.25rem;">{{ total_schools }}</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">Active Partner Schools</div>
+        </div>
+        <div class="stat-card" style="background: var(--surface); padding: 1.25rem; border-radius: 8px; border: 1px solid var(--border); box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+            <div style="font-size: 0.85rem; color: var(--text-muted); font-weight: 500;">नामांकित छात्र (Sec B & C)</div>
+            <div style="font-size: 1.75rem; font-weight: 700; color: #0284C7; margin-top: 0.25rem;">{{ total_students }}</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">Class 9–12 Board Students</div>
+        </div>
+        <div class="stat-card" style="background: var(--surface); padding: 1.25rem; border-radius: 8px; border: 1px solid var(--border); box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+            <div style="font-size: 0.85rem; color: var(--text-muted); font-weight: 500;">कुल देय मांग (Total Demand)</div>
+            <div style="font-size: 1.75rem; font-weight: 700; color: #1E293B; margin-top: 0.25rem;">₹{{ total_demand|indian_number }}</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">Package Billed @ ₹1,500/student</div>
+        </div>
+        <div class="stat-card" style="background: var(--surface); padding: 1.25rem; border-radius: 8px; border: 1px solid var(--border); box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+            <div style="font-size: 0.85rem; color: var(--text-muted); font-weight: 500;">कुल शेष बकाया (Balance Due)</div>
+            <div style="font-size: 1.75rem; font-weight: 700; color: {% if total_balance > 0 %}#DC2626{% else %}#16A34A{% endif %}; margin-top: 0.25rem;">₹{{ total_balance|indian_number }}</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">₹{{ total_received|indian_number }} Received</div>
+        </div>
+    </div>
+
+    <!-- Attached Schools Table -->
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>School Name & Code</th>
+                    <th>Director / Contact</th>
+                    <th>Village / Location</th>
+                    <th style="text-align: center;">Students</th>
+                    <th style="text-align: right;">Rate / Stu</th>
+                    <th style="text-align: right;">Total Demand</th>
+                    <th style="text-align: right;">Received</th>
+                    <th style="text-align: right;">Balance Due</th>
+                    <th style="text-align: center;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in schools_data %}
+                <tr>
+                    <td>{{ forloop.counter }}</td>
+                    <td>
+                        <a class="table-link" href="{% url 'core:feeder_school_detail' item.school.pk %}" style="font-weight: 600;">
+                            {{ item.school.name }}
+                        </a>
+                        {% if item.school.code %}
+                        <div style="font-size: 0.75rem; color: var(--text-muted);">{{ item.school.code }}</div>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div>{{ item.school.contact_person|default:"-" }}</div>
+                        {% if item.school.phone %}
+                        <div style="font-size: 0.75rem; color: var(--text-muted);">{{ item.school.phone }}</div>
+                        {% endif %}
+                    </td>
+                    <td>{{ item.school.village_address|default:"-" }}</td>
+                    <td style="text-align: center;">
+                        <span class="badge" style="background: #E0F2FE; color: #0369A1; font-weight: 600; padding: 0.25rem 0.5rem; border-radius: 4px;">
+                            {{ item.enrolled }} छात्र
+                        </span>
+                    </td>
+                    <td style="text-align: right; font-weight: 500;">₹{{ item.school.package_rate_per_student|floatformat:0|indian_number }}</td>
+                    <td style="text-align: right; font-weight: 600;">₹{{ item.demand|indian_number }}</td>
+                    <td style="text-align: right; color: #16A34A; font-weight: 600;">₹{{ item.received|indian_number }}</td>
+                    <td style="text-align: right;">
+                        {% if item.balance > 0 %}
+                        <span style="color: #DC2626; font-weight: 700;">₹{{ item.balance|indian_number }}</span>
+                        {% else %}
+                        <span style="color: #16A34A; font-weight: 600;">₹0 (Clear)</span>
+                        {% endif %}
+                    </td>
+                    <td style="text-align: center; white-space: nowrap;">
+                        <a class="button small secondary" href="{% url 'core:feeder_school_detail' item.school.pk %}" title="View Student Roster & Ledger">Roster &amp; Ledger</a>
+                        <a class="button small" href="{% url 'core:feeder_school_payment' item.school.pk %}" title="Record Payment Voucher">+ Payment</a>
+                        <a class="button small secondary" href="{% url 'core:feeder_school_edit' item.school.pk %}" title="Edit School Details">Edit</a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="10" style="text-align: center; padding: 2rem; color: var(--text-muted);">
+                        No attached feeder schools found. Click "+ Add Attached School" to create one.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

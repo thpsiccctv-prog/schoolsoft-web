@@ -14,7 +14,7 @@ from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas as pdf_canvas
-from reportlab.platypus import Image, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import BaseDocTemplate, Frame, Image, PageBreak, PageTemplate, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 try:
     _reg_path = os.path.join(settings.BASE_DIR, 'static', 'core', 'fonts', 'NotoSansDevanagari-Regular.ttf')
@@ -279,20 +279,7 @@ def _devanagari_flowable(text, font_size_pt, bold=False, align=0, color=(23, 32,
     return row_t
 
 
-def build_fee_receipt_pdf(receipt, school_profile=None):
-    buffer = BytesIO()
-    page_size = landscape(A5)
-    page_width, page_height = page_size
-    document = SimpleDocTemplate(
-        buffer,
-        pagesize=page_size,
-        rightMargin=7 * mm,
-        leftMargin=7 * mm,
-        topMargin=6 * mm,
-        bottomMargin=7 * mm,
-        title=f"Fee Receipt {receipt.receipt_no}",
-    )
-
+def _build_fee_receipt_story(receipt, school_profile=None):
     styles = getSampleStyleSheet()
     
     # Premium Styles
@@ -343,9 +330,7 @@ def build_fee_receipt_pdf(receipt, school_profile=None):
 
     story = []
     
-    # Clear, hard-to-miss payment-status badge - a plain number in a table
-    # row further down is easy to overlook, especially when the month range
-    # looks like a full-session payment (e.g. Apr-Mar) but isn't fully paid.
+    # Clear, hard-to-miss payment-status badge
     if receipt.is_cancelled:
         status_badge = None
     elif receipt.legacy_due_amount > 0:
@@ -530,8 +515,25 @@ def build_fee_receipt_pdf(receipt, school_profile=None):
             ),
         ]
     )
+    return story
 
-    # Add Watermark callback
+
+def build_fee_receipt_pdf(receipt, school_profile=None):
+    buffer = BytesIO()
+    page_size = landscape(A5)
+    page_width, page_height = page_size
+    document = SimpleDocTemplate(
+        buffer,
+        pagesize=page_size,
+        rightMargin=7 * mm,
+        leftMargin=7 * mm,
+        topMargin=6 * mm,
+        bottomMargin=7 * mm,
+        title=f"Fee Receipt {receipt.receipt_no}",
+    )
+
+    story = _build_fee_receipt_story(receipt, school_profile)
+
     def add_watermark(canvas, doc):
         canvas.saveState()
         if receipt.is_cancelled:
@@ -542,11 +544,10 @@ def build_fee_receipt_pdf(receipt, school_profile=None):
             canvas.drawCentredString(0, 0, "CANCELLED")
         elif receipt.is_edited:
             canvas.setFont('Helvetica-Bold', 60)
-            canvas.setFillColor(colors.HexColor("#f59e0b"), alpha=0.2) # Amber
+            canvas.setFillColor(colors.HexColor("#f59e0b"), alpha=0.2)
             canvas.translate(page_width / 2, page_height / 2)
             canvas.rotate(45)
             canvas.drawCentredString(0, 0, "EDITED")
-            # Also draw footer note
             canvas.restoreState()
             canvas.saveState()
             canvas.setFont('Helvetica', 5.5)
@@ -564,6 +565,84 @@ def build_fee_receipt_pdf(receipt, school_profile=None):
     document.build(story, onFirstPage=add_watermark, onLaterPages=add_watermark)
     buffer.seek(0)
     return buffer.getvalue()
+
+
+def build_fee_receipt_pdf_2up(receipt, school_profile=None):
+    """
+    Generate A4 Portrait PDF with the receipt positioned strictly in the top half (A5 size).
+    The bottom half remains completely blank, allowing the paper to be re-fed into a printer.
+    """
+    buffer = BytesIO()
+    page_width, page_height = A4  # 210mm x 297mm
+
+    # Top-half Frame (width=182mm, height=138mm, centered horizontally with 14mm left/right margin)
+    # y1 from bottom of page: 148.5mm + 4mm = 152.5mm
+    top_frame = Frame(
+        14 * mm,
+        148.5 * mm + 4 * mm,
+        182 * mm,
+        138 * mm,
+        id="top_half_frame",
+        leftPadding=0,
+        rightPadding=0,
+        topPadding=0,
+        bottomPadding=0,
+    )
+
+    doc = BaseDocTemplate(
+        buffer,
+        pagesize=A4,
+        title=f"Fee Receipt {receipt.receipt_no} (Half A4)",
+    )
+
+    def draw_top_watermark_and_divider(canvas, document):
+        canvas.saveState()
+        center_x = page_width / 2
+        center_y = 148.5 * mm + (148.5 * mm / 2)
+
+        if receipt.is_cancelled:
+            canvas.setFont('Helvetica-Bold', 60)
+            canvas.setFillColor(colors.HexColor("#dc2626"), alpha=0.2)
+            canvas.translate(center_x, center_y)
+            canvas.rotate(45)
+            canvas.drawCentredString(0, 0, "CANCELLED")
+        elif receipt.is_edited:
+            canvas.setFont('Helvetica-Bold', 60)
+            canvas.setFillColor(colors.HexColor("#f59e0b"), alpha=0.2)
+            canvas.translate(center_x, center_y)
+            canvas.rotate(45)
+            canvas.drawCentredString(0, 0, "EDITED")
+            canvas.restoreState()
+            canvas.saveState()
+            canvas.setFont('Helvetica', 5.5)
+            canvas.setFillColor(colors.HexColor("#b45309"))
+            footer_text = f"Edited on {receipt.edited_at.strftime('%d-%m-%Y %H:%M')} by {receipt.edited_by.username if receipt.edited_by else 'System'}. Reason: {receipt.edit_reason}"
+            canvas.drawCentredString(center_x, 148.5 * mm + 4 * mm, footer_text[:115])
+        else:
+            canvas.setFont('Helvetica-Bold', 68)
+            canvas.setFillColor(colors.HexColor("#0f766e"), alpha=0.04)
+            canvas.translate(center_x, center_y)
+            canvas.rotate(45)
+            canvas.drawCentredString(0, 0, "SCHOOLSOFT")
+        canvas.restoreState()
+
+        # Subtle cutting / fold guide line at mid-page
+        canvas.saveState()
+        canvas.setStrokeColor(colors.HexColor("#cbd5e1"))
+        canvas.setLineWidth(0.5)
+        canvas.setDash([2, 4])
+        canvas.line(10 * mm, 148.5 * mm, 200 * mm, 148.5 * mm)
+        canvas.restoreState()
+
+    template = PageTemplate(id="half_a4_top", frames=[top_frame], onPage=draw_top_watermark_and_divider)
+    doc.addPageTemplates([template])
+
+    story = _build_fee_receipt_story(receipt, school_profile)
+    doc.build(story)
+
+    buffer.seek(0)
+    return buffer.getvalue()
+
 
 
 def build_due_report_pdf(rows, totals, school_profile=None):
@@ -1305,6 +1384,24 @@ def build_admission_form_pdf(student, school_profile=None):
         ["Father's Name", student.father_name or "", "Mother's Name", student.mother_name or ""],
         ["Date of Birth", student.date_of_birth.strftime("%d-%m-%Y") if student.date_of_birth else "", "Roll No.", student.roll_no or ""],
         ["Class", class_label, "Category", student.category or ""],
+        [
+            "Exam Medium",
+            student.get_exam_medium_display() if getattr(student, "exam_medium", "") else "",
+            "Subject Group",
+            student.get_subject_group_display() if getattr(student, "subject_group", "") else "",
+        ],
+        [
+            "Candidate Type 1",
+            student.get_board_candidate_type_1_code_display() if getattr(student, "board_candidate_type_1_code", "") else "",
+            "Candidate Type 2",
+            student.get_board_candidate_type_2_code_display() if getattr(student, "board_candidate_type_2_code", "") else "",
+        ],
+        [
+            "Board Caste Code",
+            student.get_board_caste_code_display() if getattr(student, "board_caste_code", "") else "",
+            "Sr Number",
+            getattr(student, "board_sr_number", "") or "",
+        ],
         ["Religion", student.religion or "", "Aadhaar No.", student.aadhaar_no or ""],
         ["Mobile (Primary)", student.mobile_primary or "", "Mobile (Alternate)", student.mobile_secondary or ""],
     ]
@@ -1327,6 +1424,12 @@ def build_admission_form_pdf(student, school_profile=None):
     story.extend([table, Spacer(1, 6 * mm)])
 
     address_rows = [
+        ["Street / Mohalla / Area", getattr(student, "address_street_area", "") or ""],
+        ["Village / Town / City", student.village_locality or ""],
+        ["Post Office", student.post or ""],
+        ["Tehsil / Block", student.block or ""],
+        ["District / State / PIN", " / ".join(part for part in [student.district, getattr(student, "state", ""), student.pin_code] if part)],
+        ["Nationality", " / ".join(part for part in [getattr(student, "nationality", ""), getattr(student, "nationality_other", "")] if part)],
         ["Permanent Address", student.address_permanent or ""],
         ["Local Address", student.address_local or ""],
     ]
@@ -1345,6 +1448,44 @@ def build_admission_form_pdf(student, school_profile=None):
         )
     )
     story.append(address_table)
+
+    subject_codes = [
+        getattr(student, "subject_1_code", ""),
+        getattr(student, "subject_2_code", ""),
+        getattr(student, "subject_3_code", ""),
+        getattr(student, "subject_4_code", ""),
+        getattr(student, "subject_5_code", ""),
+        getattr(student, "subject_6_code", ""),
+        getattr(student, "subject_7_code", ""),
+        getattr(student, "subject_voc_code", ""),
+        getattr(student, "subject_rev_voc_code", ""),
+    ]
+    if any(subject_codes):
+        story.extend([Spacer(1, 6 * mm), Paragraph("Board Subjects", styles["Heading3"])])
+        subject_rows = [
+            ["1st", subject_codes[0] or "", "2nd", subject_codes[1] or "", "3rd", subject_codes[2] or ""],
+            ["4th", subject_codes[3] or "", "5th", subject_codes[4] or "", "6th", subject_codes[5] or ""],
+            ["7th", subject_codes[6] or "", "VOC", subject_codes[7] or "", "RevVOC", subject_codes[8] or ""],
+        ]
+        subject_table = Table(subject_rows, colWidths=[18 * mm, 42 * mm, 18 * mm, 42 * mm, 18 * mm, 42 * mm])
+        subject_table.setStyle(
+            TableStyle(
+                [
+                    ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#9aa4b2")),
+                    ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f1f5f9")),
+                    ("BACKGROUND", (2, 0), (2, -1), colors.HexColor("#f1f5f9")),
+                    ("BACKGROUND", (4, 0), (4, -1), colors.HexColor("#f1f5f9")),
+                    ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+                    ("FONTNAME", (2, 0), (2, -1), "Helvetica-Bold"),
+                    ("FONTNAME", (4, 0), (4, -1), "Helvetica-Bold"),
+                    ("FONTSIZE", (0, 0), (-1, -1), 9),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("TOPPADDING", (0, 0), (-1, -1), 5),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+                ]
+            )
+        )
+        story.append(subject_table)
 
     story.extend(
         [
@@ -3407,5 +3548,403 @@ def build_staff_id_card_batch_pdf(staff_list, school_profile=None):
             ("RIGHTPADDING",  (0, 0), (-1, -1), 4),
         ]))
         doc.build([grid])
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+def build_feeder_school_statement_pdf(school, students, vouchers, school_profile=None):
+    """Generate professional A4 PDF statement for an attached/feeder school."""
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=12 * mm,
+        leftMargin=12 * mm,
+        topMargin=12 * mm,
+        bottomMargin=12 * mm,
+        title=f"Statement - {school.name}",
+    )
+    styles = getSampleStyleSheet()
+    story = []
+
+    school_name_text = school_profile.name if school_profile and school_profile.name else "THAKUR HARIKESH PRATAP SINGH INTERMEDIATE COLLEGE"
+    school_address_text = school_profile.address if school_profile and school_profile.address else "Dudahi, Kushinagar, U.P."
+
+    # Header
+    header_data = [
+        [Paragraph(f"<b><font size='13' color='#1E3A8A'>{school_name_text}</font></b>", styles["Normal"])],
+        [Paragraph(f"<font size='9' color='#4B5563'>{school_address_text}</font>", styles["Normal"])],
+        [Paragraph(f"<b><font size='11' color='#0F172A'>ATTACHED SCHOOL STATEMENT & STUDENT ROSTER (सत्र 2026-27)</font></b>", styles["Normal"])],
+    ]
+    header_table = Table(header_data, colWidths=[doc.width])
+    header_table.setStyle(TableStyle([
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+    ]))
+    story.append(header_table)
+    story.append(Spacer(1, 4 * mm))
+
+    # School & Financial Summary Box
+    enrolled = school.total_enrolled_students
+    demand = school.total_demand
+    received = school.total_received
+    balance = school.balance_due
+
+    summary_data = [
+        [
+            Paragraph(f"<b>Attached School:</b> {school.name}", styles["Normal"]),
+            Paragraph(f"<b>Code:</b> {school.code or '-'}", styles["Normal"]),
+            Paragraph(f"<b>Date:</b> {timezone.localdate().strftime('%d/%m/%Y')}", styles["Normal"]),
+        ],
+        [
+            Paragraph(f"<b>Director / Contact:</b> {school.contact_person or '-'}", styles["Normal"]),
+            Paragraph(f"<b>Phone:</b> {school.phone or '-'}", styles["Normal"]),
+            Paragraph(f"<b>Village / Post:</b> {school.village_address or '-'}", styles["Normal"]),
+        ],
+        [
+            Paragraph(f"<b>Enrolled Students:</b> {enrolled}", styles["Normal"]),
+            Paragraph(f"<b>Package Rate:</b> Rs. {school.package_rate_per_student:,.0f} / student", styles["Normal"]),
+            Paragraph(f"<b>Total Demand:</b> Rs. {demand:,.2f}", styles["Normal"]),
+        ],
+        [
+            Paragraph(f"<b>Total Paid:</b> Rs. {received:,.2f}", styles["Normal"]),
+            Paragraph(f"<b>Balance Due:</b> <font color='#DC2626'><b>Rs. {balance:,.2f}</b></font>", styles["Normal"]),
+            Paragraph(f"<b>Status:</b> {'Clear' if balance <= 0 else 'Pending'}", styles["Normal"]),
+        ],
+    ]
+    summary_table = Table(summary_data, colWidths=[doc.width * 0.38, doc.width * 0.32, doc.width * 0.30])
+    summary_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F8FAFC")),
+        ("BOX", (0, 0), (-1, -1), 1, colors.HexColor("#CBD5E1")),
+        ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#E2E8F0")),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    story.append(summary_table)
+    story.append(Spacer(1, 5 * mm))
+
+    # Student Roster Table
+    story.append(Paragraph("<b>1. ENROLLED STUDENTS ROSTER (नामांकित छात्र सूची)</b>", styles["Normal"]))
+    story.append(Spacer(1, 2 * mm))
+
+    student_rows = [
+        [
+            Paragraph("<b>#</b>", styles["Normal"]),
+            Paragraph("<b>Adm No</b>", styles["Normal"]),
+            Paragraph("<b>Student Name</b>", styles["Normal"]),
+            Paragraph("<b>Father Name</b>", styles["Normal"]),
+            Paragraph("<b>Class</b>", styles["Normal"]),
+            Paragraph("<b>Section</b>", styles["Normal"]),
+        ]
+    ]
+    for idx, s in enumerate(students, 1):
+        student_rows.append([
+            str(idx),
+            str(s.admission_no or s.legacy_sid or ""),
+            s.full_name or "",
+            s.father_name or "",
+            str(s.current_class or ""),
+            str(s.current_section.name if s.current_section else ""),
+        ])
+
+    col_widths = [10 * mm, 25 * mm, 55 * mm, 55 * mm, 20 * mm, 15 * mm]
+    stu_table = Table(student_rows, colWidths=col_widths, repeatRows=1)
+    stu_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1E3A8A")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+        ("ALIGN", (0, 0), (1, -1), "CENTER"),
+        ("ALIGN", (4, 0), (-1, -1), "CENTER"),
+        ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#94A3B8")),
+        ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#E2E8F0")),
+        ("FONTSIZE", (0, 0), (-1, -1), 8),
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+    ]))
+    story.append(stu_table)
+    story.append(Spacer(1, 5 * mm))
+
+    # Payment History
+    if vouchers:
+        story.append(Paragraph("<b>2. PAYMENT HISTORY (जमा की गई किस्तों का विवरण)</b>", styles["Normal"]))
+        story.append(Spacer(1, 2 * mm))
+        pay_rows = [
+            [
+                Paragraph("<b>#</b>", styles["Normal"]),
+                Paragraph("<b>Date</b>", styles["Normal"]),
+                Paragraph("<b>Voucher No</b>", styles["Normal"]),
+                Paragraph("<b>Mode</b>", styles["Normal"]),
+                Paragraph("<b>Ref / Cheque No</b>", styles["Normal"]),
+                Paragraph("<b>Amount</b>", styles["Normal"]),
+            ]
+        ]
+        for idx, v in enumerate(vouchers, 1):
+            pay_rows.append([
+                str(idx),
+                v.voucher_date.strftime("%d/%m/%Y"),
+                v.voucher_no,
+                v.get_payment_mode_display(),
+                v.physical_slip_no or "-",
+                f"Rs. {v.amount:,.2f}",
+            ])
+        p_widths = [10 * mm, 25 * mm, 35 * mm, 30 * mm, 40 * mm, 40 * mm]
+        pay_table = Table(pay_rows, colWidths=p_widths, repeatRows=1)
+        pay_table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#065F46")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+            ("ALIGN", (0, 0), (0, -1), "CENTER"),
+            ("ALIGN", (-1, 0), (-1, -1), "RIGHT"),
+            ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#94A3B8")),
+            ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#E2E8F0")),
+            ("FONTSIZE", (0, 0), (-1, -1), 8),
+            ("TOPPADDING", (0, 0), (-1, -1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ]))
+        story.append(pay_table)
+        story.append(Spacer(1, 8 * mm))
+
+    # Signatures block
+    sig_data = [
+        [
+            Paragraph("Prepared By<br/><br/><br/>______________________", styles["Normal"]),
+            Paragraph("School Representative<br/><br/><br/>______________________", styles["Normal"]),
+            Paragraph("Principal / Manager<br/><br/><br/>______________________", styles["Normal"]),
+        ]
+    ]
+    sig_table = Table(sig_data, colWidths=[doc.width / 3] * 3)
+    sig_table.setStyle(TableStyle([
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+    ]))
+    story.append(sig_table)
+
+    doc.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+def build_attendance_register_pdf(
+    students,
+    school_class,
+    section=None,
+    month=8,
+    year=2026,
+    session=None,
+    school_profile=None,
+):
+    """Generate professional A4 Landscape Monthly Attendance Register PDF for classroom pen marking."""
+    import calendar
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=landscape(A4),
+        rightMargin=8 * mm,
+        leftMargin=8 * mm,
+        topMargin=7 * mm,
+        bottomMargin=7 * mm,
+        title=f"Attendance Register - {school_class.name} {section.name if section else ''} - {calendar.month_name[month]} {year}",
+    )
+    styles = getSampleStyleSheet()
+    story = []
+
+    school_name = (
+        school_profile.name
+        if school_profile and school_profile.name
+        else "THAKUR HARIKESH PRATAP SINGH INTERMEDIATE COLLEGE"
+    )
+    school_address = (
+        school_profile.address
+        if school_profile and school_profile.address
+        else "Uday, Dudahi, Kushinagar, U.P."
+    )
+    session_text = session.name if session else "2026-27"
+    month_name = calendar.month_name[month]
+    num_days = calendar.monthrange(year, month)[1]
+
+    # Header section
+    header_data = [
+        [
+            Paragraph(
+                f"<b><font size='12' color='#1E3A8A'>{escape(school_name)}</font></b>",
+                styles["Normal"],
+            )
+        ],
+        [
+            Paragraph(
+                f"<font size='8' color='#4B5563'>{escape(school_address)}</font>",
+                styles["Normal"],
+            )
+        ],
+        [
+            _devanagari_flowable(
+                "STUDENT MONTHLY ATTENDANCE REGISTER (छात्र मासिक उपस्थिति पंजिका)",
+                10,
+                bold=True,
+                align=1,
+                color=(15, 23, 42, 255),
+            )
+        ],
+    ]
+    header_table = Table(header_data, colWidths=[doc.width])
+    header_table.setStyle(
+        TableStyle(
+            [
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
+                ("TOPPADDING", (0, 0), (-1, -1), 1),
+            ]
+        )
+    )
+    story.append(header_table)
+    story.append(Spacer(1, 2 * mm))
+
+    # Meta strip (Class, Section, Month, Year, Session, Total Students)
+    sec_label = f"Section: <b>{section.name}</b>" if section else "Section: <b>All</b>"
+    meta_data = [
+        [
+            Paragraph(f"Academic Session: <b>{session_text}</b>", styles["Normal"]),
+            Paragraph(f"Class: <b>{school_class.name}</b>", styles["Normal"]),
+            Paragraph(sec_label, styles["Normal"]),
+            Paragraph(f"Month: <b>{month_name} {year}</b>", styles["Normal"]),
+            Paragraph(f"Total Enrolled: <b>{len(students)}</b>", styles["Normal"]),
+            Paragraph("Class Teacher: ________________", styles["Normal"]),
+        ]
+    ]
+    meta_col_widths = [
+        doc.width * 0.16,
+        doc.width * 0.15,
+        doc.width * 0.14,
+        doc.width * 0.16,
+        doc.width * 0.15,
+        doc.width * 0.24,
+    ]
+    meta_table = Table(meta_data, colWidths=meta_col_widths)
+    meta_table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F8FAFC")),
+                ("BOX", (0, 0), (-1, -1), 0.75, colors.HexColor("#94A3B8")),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("TOPPADDING", (0, 0), (-1, -1), 3),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+                ("LEFTPADDING", (0, 0), (-1, -1), 4),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+                ("FONTSIZE", (0, 0), (-1, -1), 8),
+            ]
+        )
+    )
+    story.append(meta_table)
+    story.append(Spacer(1, 2.5 * mm))
+
+    # Days mapping (date -> weekday)
+    day_abbrs = ["M", "Tu", "W", "Th", "F", "Sa", "Su"]
+    sundays = []
+    for d in range(1, num_days + 1):
+        weekday = calendar.weekday(year, month, d)
+        if weekday == 6:  # Sunday
+            sundays.append(d)
+
+    # Grid columns calculation
+    # doc.width is 281 mm (297 - 16)
+    fixed_widths = {
+        "roll": 9 * mm,
+        "adm": 13 * mm,
+        "name": 44 * mm,
+        "present": 13 * mm,
+        "absent": 13 * mm,
+        "remarks": 14 * mm,
+    }
+    fixed_sum = sum(fixed_widths.values())
+    remaining_width = doc.width - fixed_sum
+    day_col_width = remaining_width / num_days
+
+    col_widths = [fixed_widths["roll"], fixed_widths["adm"], fixed_widths["name"]]
+    for _ in range(num_days):
+        col_widths.append(day_col_width)
+    col_widths.extend([fixed_widths["present"], fixed_widths["absent"], fixed_widths["remarks"]])
+
+    # Header Row 1: Numbers
+    row1 = ["#", "Adm", "Student Name"]
+    for d in range(1, num_days + 1):
+        row1.append(str(d))
+    row1.extend(["P", "A", "Remarks"])
+
+    # Header Row 2: Day names
+    row2 = ["", "", ""]
+    for d in range(1, num_days + 1):
+        weekday = calendar.weekday(year, month, d)
+        row2.append(day_abbrs[weekday])
+    row2.extend(["", "", ""])
+
+    grid_data = [row1, row2]
+
+    # Student rows
+    for idx, s in enumerate(students, 1):
+        roll_text = str(s.roll_no) if s.roll_no else str(idx)
+        adm_text = str(s.admission_no or s.legacy_sid or "")
+        name_text = s.full_name[:22] if s.full_name else ""
+        row = [roll_text, adm_text, name_text]
+        for _ in range(num_days):
+            row.append("")  # Blank cell for teacher to mark P/A
+        row.extend(["", "", ""])
+        grid_data.append(row)
+
+    # Styling the grid table
+    table_styles = [
+        ("BACKGROUND", (0, 0), (-1, 1), colors.HexColor("#1E3A8A")),
+        ("TEXTCOLOR", (0, 0), (-1, 1), colors.whitesmoke),
+        ("ALIGN", (0, 0), (-1, 1), "CENTER"),
+        ("ALIGN", (0, 2), (1, -1), "CENTER"),  # Roll and Adm centered
+        ("ALIGN", (2, 2), (2, -1), "LEFT"),    # Name left-aligned
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("INNERGRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#CBD5E1")),
+        ("BOX", (0, 0), (-1, -1), 1, colors.HexColor("#475569")),
+        ("FONTSIZE", (0, 0), (-1, 1), 6.5),
+        ("FONTNAME", (0, 0), (-1, 1), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 2), (-1, -1), 6.5),
+        ("TOPPADDING", (0, 0), (-1, -1), 1.5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 1.5),
+        ("LEFTPADDING", (0, 0), (-1, -1), 1.5),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 1.5),
+    ]
+
+    # Highlight Sunday columns in light grey/red tint
+    for sun_day in sundays:
+        col_idx = 2 + sun_day  # 0=roll, 1=adm, 2=name, 3=day 1
+        table_styles.append(
+            ("BACKGROUND", (col_idx, 2), (col_idx, -1), colors.HexColor("#F1F5F9"))
+        )
+        table_styles.append(
+            ("TEXTCOLOR", (col_idx, 0), (col_idx, 1), colors.HexColor("#FCA5A5"))
+        )
+
+    grid_table = Table(grid_data, colWidths=col_widths, repeatRows=2)
+    grid_table.setStyle(TableStyle(table_styles))
+    story.append(grid_table)
+    story.append(Spacer(1, 4 * mm))
+
+    # Signatures block
+    sig_data = [
+        [
+            Paragraph("Class Teacher Signature<br/><br/>______________________", styles["Normal"]),
+            Paragraph("Attendance In-charge<br/><br/>______________________", styles["Normal"]),
+            Paragraph("Principal Signature<br/><br/>______________________", styles["Normal"]),
+        ]
+    ]
+    sig_table = Table(sig_data, colWidths=[doc.width / 3] * 3)
+    sig_table.setStyle(
+        TableStyle(
+            [
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ]
+        )
+    )
+    story.append(sig_table)
+
+    doc.build(story)
     buffer.seek(0)
     return buffer.getvalue()

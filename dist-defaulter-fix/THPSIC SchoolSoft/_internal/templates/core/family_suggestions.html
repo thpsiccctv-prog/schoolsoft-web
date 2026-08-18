@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block title %}Suggested Families | SchoolSoft{% endblock %}
+
+{% block content %}
+<section class="section">
+    <div class="section-heading with-actions">
+        <div>
+            <h2>Suggested Families</h2>
+            <p>
+                Students who share the exact same father's name and mobile number, and aren't linked to a family yet.
+                Nothing is linked automatically - review each group and uncheck anyone who doesn't belong before saving.
+            </p>
+        </div>
+        <a class="button secondary" href="{% url 'core:family_list' %}">Back to Families</a>
+    </div>
+
+    {% for group in suggestions %}
+        <form method="post" action="{% url 'core:family_create_from_suggestion' %}" class="form-panel" style="margin-bottom: 1.5rem;">
+            {% csrf_token %}
+            <h3>{{ group.father_name }} - {{ group.mobile }}</h3>
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Include</th>
+                            <th>Student</th>
+                            <th>Class</th>
+                            <th>SID</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for student in group.students %}
+                            <tr>
+                                <td><input type="checkbox" name="student_ids" value="{{ student.pk }}" checked></td>
+                                <td>{{ student.full_name }}</td>
+                                <td>{{ student.current_class|default:"-" }}{% if student.current_section %}-{{ student.current_section.name }}{% endif %}</td>
+                                <td>{{ student.legacy_sid|default:"-" }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="form-grid" style="margin-top: 1rem;">
+                <label>
+                    <span>Family Name</span>
+                    <input type="text" name="name" class="form-control" value="{{ group.father_name }}" required>
+                </label>
+                <label>
+                    <span>Primary Mobile</span>
+                    <input type="text" name="mobile" class="form-control" value="{{ group.mobile }}">
+                </label>
+            </div>
+            <div class="form-actions">
+                <button type="submit">Create Family with Checked Students</button>
+            </div>
+        </form>
+    {% empty %}
+        <p class="text-muted">No suggested groups right now - either every student with a father's name and mobile number is already linked, or no two students share the exact same father's name and mobile number. You can still create a family manually.</p>
+    {% endfor %}
+</section>
+{% endblock %}

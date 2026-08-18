@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Salary Payment | SchoolSoft Modernization{% endblock %}
+
+{% block content %}
+<section class="section">
+    <div class="section-heading with-actions">
+        <div>
+            <h2>Edit Salary Payment: {{ payment.slip_no }}</h2>
+            <p>Update payslip for {{ payment.staff.full_name }} ({{ payment.pay_month|date:"F Y" }})</p>
+        </div>
+        <a class="button secondary" href="{% url 'core:salary_payment_detail' pk=payment.pk %}">Cancel</a>
+    </div>
+
+    {{ staff_defaults|json_script:"staff-defaults-data" }}
+    {{ pending_advances|json_script:"pending-advances-data" }}
+
+    <form class="entry-form" method="post" id="salary-payment-form">
+        {% csrf_token %}
+        {% if form.non_field_errors %}
+            <div class="form-errors">{{ form.non_field_errors }}</div>
+        {% endif %}
+        
+        <div class="kpi-grid" style="margin-bottom: 2rem;">
+            <div class="kpi-card" style="border-left-color: var(--amber-500);">
+                <span>Pending Advance</span>
+                <strong id="kpi-pending-advance">Rs.  0.00</strong>
+            </div>
+            <div class="kpi-card" style="border-left-color: var(--blue-500);">
+                <span>Gross Pay</span>
+                <strong id="kpi-gross-pay">Rs.  0.00</strong>
+            </div>
+            <div class="kpi-card" style="border-left-color: var(--rose-500);">
+                <span>Total Deductions</span>
+                <strong id="kpi-deductions">Rs.  0.00</strong>
+            </div>
+            <div class="kpi-card" style="border-left-color: var(--emerald-500);">
+                <span>Net Payable</span>
+                <strong id="kpi-net-pay">Rs.  0.00</strong>
+            </div>
+        </div>
+
+        <section class="form-panel">
+            <h3>Payslip Details</h3>
+            <div class="form-grid">
+                {% for field in form %}
+                    <label>
+                        <span>{{ field.label }}</span>
+                        {{ field }}
+                        {% if field.errors %}<small>{{ field.errors|striptags }}</small>{% endif %}
+                    </label>
+                {% endfor %}
+            </div>
+            
+            <h3 style="margin-top: 2rem;">Audit Information</h3>
+            <label>
+                <span>Reason for Edit (Required) <span style="color: var(--rose-600);">*</span></span>
+                <input type="text" name="edit_reason" class="form-control" required placeholder="Why are you changing this payment?">
+            </label>
+        </section>
+        
+        <div class="form-actions">
+            <button type="submit" id="save-btn" class="button primary">Update &amp; Re-generate Payslip</button>
+            <a class="button secondary" href="{% url 'core:salary_payment_detail' pk=payment.pk %}">Cancel</a>
+        </div>
+    </form>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    var dataEl = document.getElementById("staff-defaults-data");
+    var advEl = document.getElementById("pending-advances-data");
+    if (!dataEl || !advEl) return;
+    
+    var staffDefaults = JSON.parse(dataEl.textContent);
+    var pendingAdvances = JSON.parse(advEl.textContent);
+    
+    var form = document.getElementById("salary-payment-form");
+    var staffField = form.querySelector("#id_staff");
+    
+    var basicField = form.querySelector("#id_basic_pay");
+    var daField = form.querySelector("#id_da");
+    var allowField = form.querySelector("#id_other_allowances");
+    
+    var pfField = form.querySelector("#id_pf_deduction");
+    var esiField = form.querySelector("#id_esi_deduction");
+    var otherDedField = form.querySelector("#id_other_deduction");
+    var advRecField = form.querySelector("#id_advance_recovery");
+    
+    var saveBtn = document.getElementById("save-btn");
+
+    function parseAmt(val) {
+        var num = parseFloat(val);
+        return isNaN(num) ? 0 : num;
+    }
+
+    function calculateLive() {
+        var basic = parseAmt(basicField.value);
+        var da = parseAmt(daField.value);
+        var allow = parseAmt(allowField.value);
+        
+        var pf = parseAmt(pfField.value);
+        var esi = parseAmt(esiField.value);
+        var otherDed = parseAmt(otherDedField.value);
+        var advRec = parseAmt(advRecField.value);
+        
+        var gross = basic + da + allow;
+        var deductions = pf + esi + otherDed + advRec;
+        var net = gross - deductions;
+        
+        document.getElementById("kpi-gross-pay").textContent = "Rs.  " + gross.toFixed(2);
+        document.getElementById("kpi-deductions").textContent = "Rs.  " + deductions.toFixed(2);
+        document.getElementById("kpi-net-pay").textContent = "Rs.  " + net.toFixed(2);
+        
+        var staffId = staffField.value;
+        var pending = 0;
+        if (staffId && pendingAdvances[staffId]) {
+            pending = pendingAdvances[staffId];
+        }
+        document.getElementById("kpi-pending-advance").textContent = "Rs.  " + pending.toFixed(2);
+        
+        if (net < 0) {
+            document.getElementById("kpi-net-pay").style.color = "var(--rose-600)";
+            saveBtn.disabled = true;
+            saveBtn.textContent = "Net Pay Cannot Be Negative";
+        } else {
+            document.getElementById("kpi-net-pay").style.color = "";
+            saveBtn.disabled = false;
+            saveBtn.textContent = "Update & Re-generate Payslip";
+        }
+    }
+
+    if (staffField) {
+        staffField.addEventListener("change", function () {
+            var defaults = staffDefaults[staffField.value];
+            if (defaults) {
+                if (basicField && (!basicField.value || basicField.value === "0" || basicField.value === "0.00")) {
+                    basicField.value = defaults.basic_pay;
+                }
+                if (daField && (!daField.value || daField.value === "0" || daField.value === "0.00")) {
+                    daField.value = defaults.da;
+                }
+                if (allowField && (!allowField.value || allowField.value === "0" || allowField.value === "0.00")) {
+                    allowField.value = defaults.other_allowances;
+                }
+            }
+            calculateLive();
+        });
+    }
+
+    var fieldsToWatch = [basicField, daField, allowField, pfField, esiField, otherDedField, advRecField];
+    fieldsToWatch.forEach(function(f) {
+        if (f) {
+            f.addEventListener("input", calculateLive);
+            f.addEventListener("change", calculateLive);
+        }
+    });
+
+    calculateLive();
+})();
+</script>
+{% endblock %}

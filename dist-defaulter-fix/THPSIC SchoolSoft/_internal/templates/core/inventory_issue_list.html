@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% load schoolsoft_extras %}
+{% block title %}Inventory | {{ student.full_name }}{% endblock %}
+
+{% block content %}
+<section class="section">
+    <div class="section-heading with-actions">
+        <div>
+            <h2>Inventory Issued</h2>
+            <p>{{ student.full_name }} | SID {{ student.legacy_sid|default:"-" }} | {{ student.current_class|default:"-" }}{% if student.current_section %}-{{ student.current_section.name }}{% endif %} | Total charged: &#8377; {{ total_charged|indian_number }}</p>
+        </div>
+        <div class="table-actions">
+            <a class="button secondary" href="{% url 'core:student_detail' student.pk %}">Back to Profile</a>
+            {% if not is_readonly %}
+                <a class="button primary" href="{% url 'core:inventory_issue_create' student.pk %}">Issue Item</a>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Item</th>
+                    <th>Category</th>
+                    <th class="amount">Qty</th>
+                    <th class="amount">Unit Price</th>
+                    <th class="amount">Charged</th>
+                    <th class="amount">Concession</th>
+                    <th>Remarks</th>
+                    <th>Issued By</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for issue in issues %}
+                    <tr>
+                        <td>{{ issue.issue_date|date:"d M Y" }}</td>
+                        <td>{{ issue.item.name }}</td>
+                        <td>{{ issue.item.get_category_display }}</td>
+                        <td class="amount">{{ issue.quantity }}</td>
+                        <td class="amount">&#8377; {{ issue.unit_price|indian_number }}</td>
+                        <td class="amount">
+                            {% if issue.is_free %}
+                                <span class="badge badge-success">Free</span>
+                            {% else %}
+                                &#8377; {{ issue.amount_charged|indian_number }}
+                            {% endif %}
+                        </td>
+                        <td class="amount">{% if issue.concession_amount > 0 %}&#8377; {{ issue.concession_amount|indian_number }}{% else %}-{% endif %}</td>
+                        <td>{{ issue.remarks|default:"-" }}</td>
+                        <td>{% if issue.issued_by %}{{ issue.issued_by.get_full_name|default:issue.issued_by.username }}{% else %}-{% endif %}</td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="9" class="empty-state">No inventory issued to this student yet.</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

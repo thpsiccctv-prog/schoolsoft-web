@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% load schoolsoft_extras %}
+{% block title %}Discipline Record | {{ student.full_name }}{% endblock %}
+
+{% block content %}
+<section class="section">
+    <div class="section-heading with-actions">
+        <div>
+            <h2>Discipline Record</h2>
+            <p>{{ student.full_name }} | SID {{ student.legacy_sid|default:"-" }} | {{ student.current_class|default:"-" }}{% if student.current_section %}-{{ student.current_section.name }}{% endif %}</p>
+        </div>
+        <div class="table-actions">
+            <a class="button secondary" href="{% url 'core:student_detail' student.pk %}">Back to Profile</a>
+            {% if records %}
+            <a class="button secondary" href="{% url 'core:discipline_pdf' student.pk %}" target="_blank">Download PDF (PTM)</a>
+            {% endif %}
+            <a class="button primary" href="{% url 'core:discipline_create' student.pk %}">Add Record</a>
+        </div>
+    </div>
+
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Category</th>
+                    <th>Severity</th>
+                    <th>Description</th>
+                    <th>Action Taken</th>
+                    <th>Parent Notified</th>
+                    <th>Reported By</th>
+                    <th>WhatsApp</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in records %}
+                    <tr>
+                        <td>{{ r.incident_date|date:"d M Y" }}</td>
+                        <td>{{ r.get_category_display }}</td>
+                        <td>
+                            <span class="badge {% if r.severity == 'severe' %}badge-danger{% elif r.severity == 'major' %}badge-warning{% else %}badge-success{% endif %}">
+                                {{ r.get_severity_display }}
+                            </span>
+                        </td>
+                        <td>{{ r.description|truncatewords:20 }}</td>
+                        <td>{{ r.action_taken|truncatewords:15|default:"-" }}</td>
+                        <td>{% if r.parent_notified %}Yes{% else %}No{% endif %}</td>
+                        <td>{{ r.reported_by.get_full_name|default:r.reported_by.username|default:"-" }}</td>
+                        <td>
+                            {% wa_discipline_link student.mobile_primary student.father_name student.full_name student.current_class student.current_section.name r.get_category_display r.get_severity_display school_name as wa_url %}
+                            {% if wa_url %}
+                                <a class="button secondary action-secondary" href="{{ wa_url }}" target="_blank" rel="noopener" title="Open WhatsApp with a notice pre-filled - review and press Send yourself">Notify</a>
+                            {% else %}
+                                <span class="text-muted">No mobile</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="8" class="empty-state">No discipline records on file for this student.</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

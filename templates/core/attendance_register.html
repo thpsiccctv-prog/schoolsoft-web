@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+
+{% block title %}Attendance Register | SchoolSoft{% endblock %}
+
+{% block content %}
+<section class="section">
+    <div class="section-heading with-actions">
+        <div>
+            <h2>Attendance Register (छात्र मासिक उपस्थिति पंजिका)</h2>
+            <p>कक्षा, सेक्शन व माह के अनुसार A4 Landscape उपस्थिति पंजिका। कक्षा में पेन से हाजिरी लगाने हेतु प्रिंट करें।</p>
+        </div>
+        {% if selected_class and students %}
+        <div class="action-row">
+            <a class="button" href="{% url 'core:attendance_register_pdf' %}?class_id={{ selected_class.pk }}&section_id={{ selected_section.pk|default:'' }}&month={{ selected_month }}&year={{ selected_year }}" target="_blank">
+                🖨️ Print Register (A4 PDF)
+            </a>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Filter Bar -->
+    <form class="filterbar" method="get" style="display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; background: var(--surface); padding: 1rem; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 1.5rem;">
+        <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+            <label style="font-size: 0.75rem; font-weight: 600; color: var(--text-muted);">कक्षा (Class) *</label>
+            <select name="class_id" style="min-width: 140px; padding: 0.4rem 0.6rem; border-radius: 4px; border: 1px solid var(--border);">
+                {% for c in classes %}
+                <option value="{{ c.pk }}" {% if selected_class.pk == c.pk %}selected{% endif %}>{{ c.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+            <label style="font-size: 0.75rem; font-weight: 600; color: var(--text-muted);">सेक्शन (Section)</label>
+            <select name="section_id" style="min-width: 120px; padding: 0.4rem 0.6rem; border-radius: 4px; border: 1px solid var(--border);">
+                <option value="">All Sections</option>
+                {% for sec in sections %}
+                <option value="{{ sec.pk }}" {% if selected_section.pk == sec.pk %}selected{% endif %}>Section {{ sec.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+            <label style="font-size: 0.75rem; font-weight: 600; color: var(--text-muted);">माह (Month) *</label>
+            <select name="month" style="min-width: 130px; padding: 0.4rem 0.6rem; border-radius: 4px; border: 1px solid var(--border);">
+                {% for m_num, m_name in months_choices %}
+                <option value="{{ m_num }}" {% if selected_month == m_num %}selected{% endif %}>{{ m_name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+            <label style="font-size: 0.75rem; font-weight: 600; color: var(--text-muted);">वर्ष (Year) *</label>
+            <select name="year" style="min-width: 100px; padding: 0.4rem 0.6rem; border-radius: 4px; border: 1px solid var(--border);">
+                {% for y in years_choices %}
+                <option value="{{ y }}" {% if selected_year == y %}selected{% endif %}>{{ y }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div style="display: flex; gap: 0.5rem; align-self: flex-end;">
+            <button type="submit" class="button small">Generate Preview</button>
+            <a href="{% url 'core:attendance_register' %}" class="button small secondary">Reset</a>
+        </div>
+    </form>
+
+    {% if selected_class %}
+    <!-- Summary Header Box -->
+    <div style="background: #F8FAFC; border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1.25rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+        <div>
+            <div style="font-size: 1.15rem; font-weight: 700; color: var(--primary);">
+                Class: {{ selected_class.name }} {% if selected_section %}&bull; Section: {{ selected_section.name }}{% endif %}
+            </div>
+            <div style="font-size: 0.85rem; color: var(--text-muted);">
+                माह: <strong>{{ selected_month_name }} {{ selected_year }}</strong> &bull; कुल नामांकित छात्र: <strong>{{ total_students }}</strong>
+            </div>
+        </div>
+        <div>
+            <a class="button" href="{% url 'core:attendance_register_pdf' %}?class_id={{ selected_class.pk }}&section_id={{ selected_section.pk|default:'' }}&month={{ selected_month }}&year={{ selected_year }}" target="_blank">
+                🖨️ Download &amp; Print A4 PDF
+            </a>
+        </div>
+    </div>
+
+    <!-- Attendance Grid Preview Table -->
+    <div class="table-wrap" style="overflow-x: auto; max-width: 100%; border: 1px solid var(--border); border-radius: 6px;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 0.75rem;">
+            <thead>
+                <tr style="background: #1E3A8A; color: #FFFFFF;">
+                    <th style="padding: 6px 4px; text-align: center; border: 1px solid #3B82F6; width: 30px;">#</th>
+                    <th style="padding: 6px 4px; text-align: center; border: 1px solid #3B82F6; width: 55px;">Adm No</th>
+                    <th style="padding: 6px 8px; text-align: left; border: 1px solid #3B82F6; min-width: 160px;">Student Name</th>
+                    {% for d in days_list %}
+                    <th style="padding: 4px 2px; text-align: center; border: 1px solid #3B82F6; min-width: 22px; {% if d.is_sunday %}background: #DC2626; color: #FFFFFF;{% endif %}">
+                        <div>{{ d.day }}</div>
+                        <div style="font-size: 0.65rem; opacity: 0.9;">{{ d.weekday|slice:":2" }}</div>
+                    </th>
+                    {% endfor %}
+                    <th style="padding: 6px 4px; text-align: center; border: 1px solid #3B82F6; width: 35px;" title="Total Present">P</th>
+                    <th style="padding: 6px 4px; text-align: center; border: 1px solid #3B82F6; width: 35px;" title="Total Absent">A</th>
+                    <th style="padding: 6px 4px; text-align: center; border: 1px solid #3B82F6; width: 60px;">Remarks</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in students %}
+                <tr style="border-bottom: 1px solid var(--border); height: 26px;">
+                    <td style="text-align: center; font-weight: 600; border-right: 1px solid var(--border); background: #F8FAFC;">
+                        {{ s.roll_no|default:forloop.counter }}
+                    </td>
+                    <td style="text-align: center; border-right: 1px solid var(--border); color: var(--text-muted);">
+                        {{ s.admission_no|default:s.legacy_sid }}
+                    </td>
+                    <td style="font-weight: 500; border-right: 1px solid var(--border); padding-left: 8px; white-space: nowrap;">
+                        {{ s.full_name }}
+                    </td>
+                    {% for d in days_list %}
+                    <td style="border-right: 1px solid var(--border); text-align: center; {% if d.is_sunday %}background: #FEF2F2;{% endif %}">
+                        <!-- Blank cell for classroom teacher pen mark -->
+                    </td>
+                    {% endfor %}
+                    <td style="border-right: 1px solid var(--border); text-align: center; background: #F8FAFC;"></td>
+                    <td style="border-right: 1px solid var(--border); text-align: center; background: #F8FAFC;"></td>
+                    <td style="text-align: center; background: #F8FAFC;"></td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="{{ days_list|length|add:6 }}" style="text-align: center; padding: 2rem; color: var(--text-muted);">
+                        इस कक्षा / सेक्शन में कोई सक्रिय छात्र नहीं मिला। कृपया दूसरा विकल्प चुनें।
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Register Signatures Footer -->
+    <div style="display: flex; justify-content: space-between; margin-top: 2rem; padding: 1rem; background: var(--surface); border-radius: 8px; border: 1px solid var(--border); text-align: center; font-size: 0.85rem; color: var(--text-muted);">
+        <div>
+            <div>__________________________________</div>
+            <div style="font-weight: 600; margin-top: 0.25rem; color: var(--text);">Class Teacher Signature</div>
+        </div>
+        <div>
+            <div>__________________________________</div>
+            <div style="font-weight: 600; margin-top: 0.25rem; color: var(--text);">Attendance In-charge</div>
+        </div>
+        <div>
+            <div>__________________________________</div>
+            <div style="font-weight: 600; margin-top: 0.25rem; color: var(--text);">Principal / Manager</div>
+        </div>
+    </div>
+    {% endif %}
+</section>
+{% endblock %}

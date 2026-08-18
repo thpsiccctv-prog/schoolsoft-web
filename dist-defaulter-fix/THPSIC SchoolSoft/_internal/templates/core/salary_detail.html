@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% load schoolsoft_extras %}
+{% block title %}Salary Detail - {{ payment.slip_no }} | SchoolSoft Modernization{% endblock %}
+
+{% block content %}
+<section class="section">
+    <div class="section-heading with-actions">
+        <div>
+            <h2>Salary Payment: {{ payment.slip_no }}</h2>
+            <p>{{ payment.staff.full_name }} | {{ payment.pay_month|date:"F Y" }}</p>
+        </div>
+        <div class="action-buttons">
+            <a href="{% url 'core:salary_payment_list' %}" class="button secondary">Back to Register</a>
+            <a href="{% url 'core:salary_payslip_pdf' pk=payment.pk %}" class="button primary">Download PDF</a>
+        </div>
+    </div>
+
+    {% if salary_msg %}
+        <div class="salary-save-msg" style="background:linear-gradient(135deg,#0f4c3a,#1a6b52);color:#fff;padding:1rem 1.5rem;border-radius:10px;margin-bottom:1.5rem;font-weight:600;font-size:1rem;">
+            {{ salary_msg }}
+        </div>
+    {% endif %}
+
+    {% if payment.is_cancelled %}
+        <div class="alert alert-danger" style="margin-bottom: 1.5rem; padding: 1rem; background: var(--rose-50); border: 1px solid var(--rose-200); border-radius: var(--radius-md); color: var(--rose-800);">
+            <strong>CANCELLED:</strong> This salary payment was cancelled on {{ payment.cancelled_at|date:"d/m/Y H:i" }} by {{ payment.cancelled_by.get_full_name|default:payment.cancelled_by.username|default:"System" }}.<br>
+            <strong>Reason:</strong> {{ payment.cancel_reason }}
+        </div>
+    {% elif payment.is_edited %}
+        <div class="alert alert-warning" style="margin-bottom: 1.5rem; padding: 1rem; background: var(--amber-50); border: 1px solid var(--amber-200); border-radius: var(--radius-md); color: var(--amber-800);">
+            <strong>EDITED:</strong> This salary payment has been modified {{ payment.edit_count }} time(s). Last edited on {{ payment.edited_at|date:"d/m/Y H:i" }} by {{ payment.edited_by.get_full_name|default:payment.edited_by.username|default:"System" }}.
+        </div>
+    {% endif %}
+
+    <div class="grid-2">
+        <div class="panel">
+            <h3>Payment Summary</h3>
+            <table class="detail-table">
+                <tbody>
+                    <tr><th>Staff</th><td>{{ payment.staff.full_name }}</td></tr>
+                    <tr><th>Payment Date</th><td>{{ payment.payment_date|date:"d M Y" }}</td></tr>
+                    <tr><th>Payment Mode</th><td>{{ payment.get_payment_mode_display }}</td></tr>
+                    <tr><th>Remarks</th><td>{{ payment.remarks|default:"-" }}</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="panel">
+            <h3>Earnings &amp; Deductions</h3>
+            <table class="detail-table">
+                <tbody>
+                    <tr style="background: var(--emerald-50); border-top:2px solid var(--emerald-400);"><th style="color:var(--emerald-900);padding:.75rem;">💵 Aaj ka Payment</th><td class="text-right" style="color:var(--emerald-900);font-size:1.2rem;font-weight:700;">Rs.  {{ payment.amount_paid }}</td></tr>
+
+                    <tr><th>Basic Pay</th><td class="text-right">Rs.  {{ payment.basic_pay }}</td></tr>
+                    <tr><th>DA</th><td class="text-right">Rs.  {{ payment.da }}</td></tr>
+                    <tr><th>Other Allowances</th><td class="text-right">Rs.  {{ payment.other_allowances }}</td></tr>
+                    <tr style="border-top: 2px solid var(--slate-200);"><th>Gross Pay</th><td class="text-right"><strong>Rs.  {{ payment.gross_pay }}</strong></td></tr>
+                    
+                    <tr><th>PF Deduction</th><td class="text-right">Rs.  {{ payment.pf_deduction }}</td></tr>
+                    <tr><th>ESI Deduction</th><td class="text-right">Rs.  {{ payment.esi_deduction }}</td></tr>
+                    <tr><th>Other Deduction</th><td class="text-right">Rs.  {{ payment.other_deduction }}</td></tr>
+                    <tr><th>Advance Recovery</th><td class="text-right">Rs.  {{ payment.advance_recovery }}</td></tr>
+                    <tr style="border-top: 2px solid var(--slate-200);"><th>Total Deductions & Adv</th><td class="text-right"><strong>Rs.  {{ payment.total_deductions|add:payment.advance_recovery }}</strong></td></tr>
+                    
+                    <tr style="border-top: 2px solid var(--slate-800); background: var(--slate-50);"><th style="padding: 0.75rem;">Net Pay (Record)</th><td class="text-right" style="padding: 0.75rem;"><strong>Rs.  {{ payment.net_pay }}</strong></td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="action-bar" style="margin-top: 2rem; display: flex; gap: 1rem; padding-top: 1rem; border-top: 1px solid var(--slate-200);">
+        {% if not payment.is_cancelled %}
+            <a href="{% url 'core:salary_payment_edit' pk=payment.pk %}" class="button">Edit / Correct</a>
+            <a href="{% url 'core:salary_payment_cancel' pk=payment.pk %}" class="button danger">Cancel Payment</a>
+        {% endif %}
+    </div>
+
+    {% if audit_logs %}
+    <section class="panel mt-4">
+        <h3>Audit Trail</h3>
+        <table class="data-table mt-2">
+            <thead>
+                <tr>
+                    <th>Date & Time</th>
+                    <th>Action</th>
+                    <th>User</th>
+                    <th>Reason</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in audit_logs %}
+                <tr>
+                    <td>{{ log.changed_at|date:"d M Y, H:i" }}</td>
+                    <td>
+                        {% if log.action == 'created' %}<span class="badge badge-success">Created</span>
+                        {% elif log.action == 'edited' %}<span class="badge badge-warning">Edited</span>
+                        {% elif log.action == 'cancelled' %}<span class="badge badge-danger">Cancelled</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ log.changed_by.get_full_name|default:log.changed_by.username|default:"System" }}</td>
+                    <td>{{ log.reason|default:"-" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
+    {% endif %}
+</section>
+{% endblock %}

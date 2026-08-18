@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}New Family | SchoolSoft{% endblock %}
+
+{% block content %}
+<section class="section">
+    <div class="section-heading with-actions">
+        <div>
+            <h2>New Family</h2>
+            <p>Create a household record, then add children to it from the family page.</p>
+        </div>
+        <a class="button secondary" href="{% url 'core:family_list' %}">Back</a>
+    </div>
+
+    <form class="entry-form" method="post">
+        {% csrf_token %}
+        {% if form.non_field_errors %}
+            <div class="form-errors">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        <section class="form-panel">
+            <h3>Family Details</h3>
+            <div class="form-grid">
+                {% for field in form %}
+                    <label>
+                        <span>{{ field.label }}</span>
+                        {{ field }}
+                        {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}
+                        {% if field.errors %}<small>{{ field.errors|striptags }}</small>{% endif %}
+                    </label>
+                {% endfor %}
+            </div>
+        </section>
+        <div class="form-actions">
+            <button type="submit">Save Family</button>
+            <a class="button secondary" href="{% url 'core:family_list' %}">Cancel</a>
+        </div>
+    </form>
+</section>
+{% endblock %}

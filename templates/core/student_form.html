@@ -87,6 +87,11 @@
                             {{ form.full_name }}
                             {% if form.full_name.errors %}<div class="error-text">{{ form.full_name.errors|striptags }}</div>{% endif %}
                         </div>
+                        <div class="entry-field entry-span-2">
+                            <label for="{{ form.full_name_hindi.id_for_label }}">{{ form.full_name_hindi.label }}</label>
+                            {{ form.full_name_hindi }}
+                            {% if form.full_name_hindi.errors %}<div class="error-text">{{ form.full_name_hindi.errors|striptags }}</div>{% endif %}
+                        </div>
                         <div class="entry-field">
                             <label for="{{ form.current_class.id_for_label }}">{{ form.current_class.label }}</label>
                             {{ form.current_class }}
@@ -96,6 +101,11 @@
                             <label for="{{ form.current_section.id_for_label }}">{{ form.current_section.label }}</label>
                             {{ form.current_section }}
                             {% if form.current_section.errors %}<div class="error-text">{{ form.current_section.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.feeder_school.id_for_label }}">From Attached School (फीडर विद्यालय)</label>
+                            {{ form.feeder_school }}
+                            {% if form.feeder_school.errors %}<div class="error-text">{{ form.feeder_school.errors|striptags }}</div>{% endif %}
                         </div>
                         <div class="entry-field">
                             <label for="{{ form.roll_no.id_for_label }}">{{ form.roll_no.label }}</label>
@@ -117,10 +127,142 @@
                             {{ form.gender }}
                             {% if form.gender.errors %}<div class="error-text">{{ form.gender.errors|striptags }}</div>{% endif %}
                         </div>
+                        <div class="entry-field">
+                            <label for="{{ form.exam_medium.id_for_label }}">{{ form.exam_medium.label }}</label>
+                            {{ form.exam_medium }}
+                            {% if form.exam_medium.errors %}<div class="error-text">{{ form.exam_medium.errors|striptags }}</div>{% endif %}
+                        </div>
                         <div class="entry-field entry-span-2">
                             <label for="{{ form.aadhaar_no.id_for_label }}">{{ form.aadhaar_no.label }}</label>
                             {{ form.aadhaar_no }}
                             {% if form.aadhaar_no.errors %}<div class="error-text">{{ form.aadhaar_no.errors|striptags }}</div>{% endif %}
+                        </div>
+                    </div>
+                </section>
+
+                <section class="entry-card" id="board-registration-card" style="display: none;">
+                    <div class="entry-card-title">Board Registration</div>
+                    <div id="board-registration-guidance" class="entry-alert entry-alert-warning" style="margin-bottom: 12px;">
+                        Select Class IX or XI stream to show board registration fields.
+                    </div>
+                    <div class="entry-grid entry-grid-four">
+                        <div class="entry-field">
+                            <label for="{{ form.board_candidate_type_1_code.id_for_label }}">{{ form.board_candidate_type_1_code.label }}</label>
+                            {{ form.board_candidate_type_1_code }}
+                            {% if form.board_candidate_type_1_code.errors %}<div class="error-text">{{ form.board_candidate_type_1_code.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.board_candidate_type_2_code.id_for_label }}">{{ form.board_candidate_type_2_code.label }}</label>
+                            {{ form.board_candidate_type_2_code }}
+                            {% if form.board_candidate_type_2_code.errors %}<div class="error-text">{{ form.board_candidate_type_2_code.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.board_caste_code.id_for_label }}">{{ form.board_caste_code.label }}</label>
+                            {{ form.board_caste_code }}
+                            {% if form.board_caste_code.errors %}<div class="error-text">{{ form.board_caste_code.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.previous_board_source.id_for_label }}">{{ form.previous_board_source.label }}</label>
+                            {{ form.previous_board_source }}
+                            {% if form.previous_board_source.errors %}<div class="error-text">{{ form.previous_board_source.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.class8_unique_id.id_for_label }}">{{ form.class8_unique_id.label }}</label>
+                            {{ form.class8_unique_id }}
+                            {% if form.class8_unique_id.errors %}<div class="error-text">{{ form.class8_unique_id.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.board_sr_number.id_for_label }}">{{ form.board_sr_number.label }}</label>
+                            {{ form.board_sr_number }}
+                            {% if form.board_sr_number.errors %}<div class="error-text">{{ form.board_sr_number.errors|striptags }}</div>{% endif %}
+                        </div>
+                    </div>
+                </section>
+
+                <section class="entry-card" id="board-subject-card" style="display: none;">
+                    <div class="entry-card-title">Board Subjects (Class IX/XI)</div>
+                    <div id="subject-guidance" class="entry-alert entry-alert-warning" style="margin-bottom: 12px;">
+                        Select Class IX or XI stream to load the matching Board subject pattern.
+                    </div>
+                    <div class="entry-grid entry-grid-four">
+                        <div class="entry-field entry-span-2">
+                            <label for="{{ form.subject_group.id_for_label }}">{{ form.subject_group.label }}</label>
+                            {{ form.subject_group }}
+                            {% if form.subject_group.errors %}<div class="error-text">{{ form.subject_group.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.subject_1_code.id_for_label }}">{{ form.subject_1_code.label }}</label>
+                            {{ form.subject_1_code }}
+                            {% if form.subject_1_code.errors %}<div class="error-text">{{ form.subject_1_code.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.subject_2_code.id_for_label }}">{{ form.subject_2_code.label }}</label>
+                            {{ form.subject_2_code }}
+                            {% if form.subject_2_code.errors %}<div class="error-text">{{ form.subject_2_code.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.subject_3_code.id_for_label }}">{{ form.subject_3_code.label }}</label>
+                            {{ form.subject_3_code }}
+                            {% if form.subject_3_code.errors %}<div class="error-text">{{ form.subject_3_code.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.subject_4_code.id_for_label }}">{{ form.subject_4_code.label }}</label>
+                            {{ form.subject_4_code }}
+                            {% if form.subject_4_code.errors %}<div class="error-text">{{ form.subject_4_code.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.subject_5_code.id_for_label }}">{{ form.subject_5_code.label }}</label>
+                            {{ form.subject_5_code }}
+                            {% if form.subject_5_code.errors %}<div class="error-text">{{ form.subject_5_code.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.subject_6_code.id_for_label }}">{{ form.subject_6_code.label }}</label>
+                            {{ form.subject_6_code }}
+                            {% if form.subject_6_code.errors %}<div class="error-text">{{ form.subject_6_code.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.subject_7_code.id_for_label }}">{{ form.subject_7_code.label }}</label>
+                            {{ form.subject_7_code }}
+                            {% if form.subject_7_code.errors %}<div class="error-text">{{ form.subject_7_code.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.subject_voc_code.id_for_label }}">{{ form.subject_voc_code.label }}</label>
+                            {{ form.subject_voc_code }}
+                            {% if form.subject_voc_code.errors %}<div class="error-text">{{ form.subject_voc_code.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.subject_rev_voc_code.id_for_label }}">{{ form.subject_rev_voc_code.label }}</label>
+                            {{ form.subject_rev_voc_code }}
+                            {% if form.subject_rev_voc_code.errors %}<div class="error-text">{{ form.subject_rev_voc_code.errors|striptags }}</div>{% endif %}
+                        </div>
+                    </div>
+                    <div class="entry-alert entry-alert-info" style="margin-top: 12px;">
+                        IX default: 901, 917, 928, 931, 932, optional, 944. XI uses Group A/B/C according to stream. SubjectVOC is optional; SubjectRevVOC is only for Class IX.
+                    </div>
+                </section>
+
+                <section class="entry-card" id="fee-package-card" style="display: none;">
+                    <div class="entry-card-title">Fee Package</div>
+                    <div id="fee-package-guidance" class="entry-alert entry-alert-info" style="margin-bottom: 12px;">
+                        Package billing applies when selected.
+                    </div>
+                    <div class="entry-grid entry-grid-three">
+                        <div class="entry-field">
+                            <label class="student-active-toggle">
+                                {{ form.fee_package_enabled }}
+                                <span>{{ form.fee_package_enabled.label }}</span>
+                            </label>
+                            {% if form.fee_package_enabled.errors %}<div class="error-text">{{ form.fee_package_enabled.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.fee_package_total.id_for_label }}">{{ form.fee_package_total.label }}</label>
+                            {{ form.fee_package_total }}
+                            {% if form.fee_package_total.errors %}<div class="error-text">{{ form.fee_package_total.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.fee_package_note.id_for_label }}">{{ form.fee_package_note.label }}</label>
+                            {{ form.fee_package_note }}
+                            {% if form.fee_package_note.errors %}<div class="error-text">{{ form.fee_package_note.errors|striptags }}</div>{% endif %}
                         </div>
                     </div>
                 </section>
@@ -134,9 +276,19 @@
                             {% if form.father_name.errors %}<div class="error-text">{{ form.father_name.errors|striptags }}</div>{% endif %}
                         </div>
                         <div class="entry-field entry-span-2">
+                            <label for="{{ form.father_name_hindi.id_for_label }}">{{ form.father_name_hindi.label }}</label>
+                            {{ form.father_name_hindi }}
+                            {% if form.father_name_hindi.errors %}<div class="error-text">{{ form.father_name_hindi.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field entry-span-2">
                             <label for="{{ form.mother_name.id_for_label }}">{{ form.mother_name.label }}</label>
                             {{ form.mother_name }}
                             {% if form.mother_name.errors %}<div class="error-text">{{ form.mother_name.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field entry-span-2">
+                            <label for="{{ form.mother_name_hindi.id_for_label }}">{{ form.mother_name_hindi.label }}</label>
+                            {{ form.mother_name_hindi }}
+                            {% if form.mother_name_hindi.errors %}<div class="error-text">{{ form.mother_name_hindi.errors|striptags }}</div>{% endif %}
                         </div>
                         <div class="entry-field entry-span-2">
                             <label for="{{ form.guardian_name.id_for_label }}">{{ form.guardian_name.label }}</label>
@@ -216,6 +368,21 @@
                             {{ form.email }}
                             {% if form.email.errors %}<div class="error-text">{{ form.email.errors|striptags }}</div>{% endif %}
                         </div>
+                        <div class="entry-field">
+                            <label for="{{ form.nationality.id_for_label }}">{{ form.nationality.label }}</label>
+                            {{ form.nationality }}
+                            {% if form.nationality.errors %}<div class="error-text">{{ form.nationality.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.nationality_other.id_for_label }}">{{ form.nationality_other.label }}</label>
+                            {{ form.nationality_other }}
+                            {% if form.nationality_other.errors %}<div class="error-text">{{ form.nationality_other.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field entry-span-2">
+                            <label for="{{ form.address_street_area.id_for_label }}">{{ form.address_street_area.label }}</label>
+                            {{ form.address_street_area }}
+                            {% if form.address_street_area.errors %}<div class="error-text">{{ form.address_street_area.errors|striptags }}</div>{% endif %}
+                        </div>
                         <div class="entry-field entry-span-2">
                             <label for="{{ form.address_local.id_for_label }}">{{ form.address_local.label }}</label>
                             {{ form.address_local }}
@@ -245,6 +412,11 @@
                             <label for="{{ form.district.id_for_label }}">{{ form.district.label }}</label>
                             {{ form.district }}
                             {% if form.district.errors %}<div class="error-text">{{ form.district.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.state.id_for_label }}">{{ form.state.label }}</label>
+                            {{ form.state }}
+                            {% if form.state.errors %}<div class="error-text">{{ form.state.errors|striptags }}</div>{% endif %}
                         </div>
                         <div class="entry-field">
                             <label for="{{ form.pin_code.id_for_label }}">{{ form.pin_code.label }}</label>
@@ -594,6 +766,240 @@
         if (classSelect && sectionSelect) {
             classSelect.addEventListener("change", filterSectionsByClass);
             filterSectionsByClass();
+        }
+
+        const feePackageCard = document.getElementById("fee-package-card");
+        const feePackageGuidance = document.getElementById("fee-package-guidance");
+        const feePackageEnabled = document.getElementById("{{ form.fee_package_enabled.id_for_label }}");
+        const feePackageTotal = document.getElementById("{{ form.fee_package_total.id_for_label }}");
+
+        function currentClassLabel() {
+            if (!classSelect || classSelect.selectedIndex < 0) return "";
+            const option = classSelect.options[classSelect.selectedIndex];
+            return option ? option.textContent.trim().toUpperCase() : "";
+        }
+
+        function currentSectionLabel() {
+            if (!sectionSelect || sectionSelect.selectedIndex < 0) return "";
+            const option = sectionSelect.options[sectionSelect.selectedIndex];
+            return option ? option.textContent.trim().toUpperCase() : "";
+        }
+
+        function feePackageAmountIsBlank() {
+            if (!feePackageTotal) return true;
+            const raw = (feePackageTotal.value || "").trim();
+            return raw === "" || raw === "0" || raw === "0.0" || raw === "0.00";
+        }
+
+        function updateFeePackageCard() {
+            if (!feePackageCard) return;
+            const classLabel = currentClassLabel();
+            const sectionLabel = currentSectionLabel();
+            const isZeroSection = sectionLabel === "B" || sectionLabel === "C";
+            const isCommerce = classLabel.includes("COM");
+            const isSectionPackage = sectionLabel === "D";
+            const isDirectNegotiatedClass = classLabel === "X" || classLabel.startsWith("XII");
+            const manuallyEnabled = feePackageEnabled && feePackageEnabled.checked;
+            const shouldShow = !isZeroSection && (isSectionPackage || isCommerce || isDirectNegotiatedClass || manuallyEnabled);
+
+            feePackageCard.style.display = shouldShow ? "block" : "none";
+            if (!shouldShow) {
+                if (feePackageEnabled && isZeroSection) {
+                    feePackageEnabled.checked = false;
+                }
+                return;
+            }
+
+            if (isSectionPackage) {
+                if (feePackageEnabled) {
+                    feePackageEnabled.checked = true;
+                }
+                if (feePackageTotal && feePackageAmountIsBlank()) {
+                    feePackageTotal.value = "4500.00";
+                }
+                if (feePackageGuidance) {
+                    feePackageGuidance.textContent = "Section D package billing: Rs. 4500 default, manual override allowed.";
+                }
+            } else if (isCommerce) {
+                if (feePackageGuidance) {
+                    feePackageGuidance.textContent = "Commerce regular fee applies by default. Tick package only for approved Rs. 4500 package cases.";
+                }
+                if (feePackageEnabled && feePackageEnabled.checked && feePackageTotal && feePackageAmountIsBlank()) {
+                    feePackageTotal.value = "4500.00";
+                }
+            } else if (isDirectNegotiatedClass && feePackageGuidance) {
+                feePackageGuidance.textContent = "Direct X/XII admission: enter negotiated package amount only when applicable.";
+            }
+        }
+
+        if (classSelect) {
+            classSelect.addEventListener("change", updateFeePackageCard);
+        }
+        if (sectionSelect) {
+            sectionSelect.addEventListener("change", updateFeePackageCard);
+        }
+        if (feePackageEnabled) {
+            feePackageEnabled.addEventListener("change", updateFeePackageCard);
+        }
+        updateFeePackageCard();
+
+        // Board registration + subject helper for Class IX and Class XI.
+        const boardRegistrationCard = document.getElementById("board-registration-card");
+        const boardRegistrationGuidance = document.getElementById("board-registration-guidance");
+        const subjectCard = document.getElementById("board-subject-card");
+        const subjectGuidance = document.getElementById("subject-guidance");
+        const subjectGroupSelect = document.getElementById("{{ form.subject_group.id_for_label }}");
+        const subjectVocSelect = document.getElementById("{{ form.subject_voc_code.id_for_label }}");
+        const subjectRevVocSelect = document.getElementById("{{ form.subject_rev_voc_code.id_for_label }}");
+        const candidateType1Select = document.getElementById("{{ form.board_candidate_type_1_code.id_for_label }}");
+        const candidateType2Select = document.getElementById("{{ form.board_candidate_type_2_code.id_for_label }}");
+        const previousBoardSourceSelect = document.getElementById("{{ form.previous_board_source.id_for_label }}");
+        const class8UniqueInput = document.getElementById("{{ form.class8_unique_id.id_for_label }}");
+        const subjectCodeSelects = [
+            document.getElementById("{{ form.subject_1_code.id_for_label }}"),
+            document.getElementById("{{ form.subject_2_code.id_for_label }}"),
+            document.getElementById("{{ form.subject_3_code.id_for_label }}"),
+            document.getElementById("{{ form.subject_4_code.id_for_label }}"),
+            document.getElementById("{{ form.subject_5_code.id_for_label }}"),
+            document.getElementById("{{ form.subject_6_code.id_for_label }}"),
+            document.getElementById("{{ form.subject_7_code.id_for_label }}")
+        ].filter(Boolean);
+
+        const subjectProfiles = {
+            high_school: {
+                group: "HS",
+                codes: ["901", "917", "928", "931", "932", "936", "944"],
+                message: "Class IX/X: choose five compulsory subjects, one optional subject, and 944 as the 7th compulsory activity subject."
+            },
+            arts: {
+                group: "A",
+                codes: ["101", "117", "128", "129", "142", "140", "173"],
+                message: "Arts/Humanities: Hindi/General Hindi + four optional subjects + 173 activity subject."
+            },
+            science_bio: {
+                group: "B",
+                codes: ["102", "117", "151", "152", "153", "", "173"],
+                message: "Science BIO: General Hindi, English, Physics, Chemistry, Biology, and 173 activity subject."
+            },
+            science_maths: {
+                group: "B",
+                codes: ["102", "117", "151", "152", "131", "", "173"],
+                message: "Science MATHS: General Hindi, English, Physics, Chemistry, Mathematics, and 173 activity subject."
+            },
+            commerce: {
+                group: "C",
+                codes: ["102", "156", "157", "117", "136", "", "173"],
+                message: "Commerce: General Hindi, Accountancy, Business Studies, two optional subjects, and 173 activity subject."
+            }
+        };
+
+        function selectedClassLabel() {
+            if (!classSelect || classSelect.selectedIndex < 0) return "";
+            const option = classSelect.options[classSelect.selectedIndex];
+            return option ? option.textContent.trim().toUpperCase() : "";
+        }
+
+        function subjectProfileForClass() {
+            const label = selectedClassLabel();
+            if (label === "IX") {
+                return {
+                    mode: "class9",
+                    profile: subjectProfiles.high_school,
+                    boardMessage: "Class IX board registration: fill candidate type, caste code, Class 8 Unique ID, subjects, VOC/RevVOC if applicable."
+                };
+            }
+            if (label.startsWith("XI")) {
+                let profile = null;
+                if (label.includes("ART")) profile = subjectProfiles.arts;
+                if (label.includes("BIO")) profile = subjectProfiles.science_bio;
+                if (label.includes("MATH")) profile = subjectProfiles.science_maths;
+                if (label.includes("COM")) profile = subjectProfiles.commerce;
+                if (profile) {
+                    return {
+                        mode: "class11",
+                        profile: profile,
+                        boardMessage: "Class XI board registration: choose UP Board or Other Board format, fill Class 10 board/year/roll in Previous School section, then confirm subjects."
+                    };
+                }
+            }
+            return null;
+        }
+
+        function fieldWrapper(element) {
+            return element ? element.closest(".entry-field") : null;
+        }
+
+        function setFieldVisible(element, visible) {
+            const wrapper = fieldWrapper(element);
+            if (wrapper) {
+                wrapper.style.display = visible ? "" : "none";
+            }
+        }
+
+        function setValueIfBlank(element, value) {
+            if (element && !element.value) {
+                element.value = value;
+            }
+        }
+
+        function subjectFieldsAreBlank() {
+            const groupBlank = !subjectGroupSelect || !subjectGroupSelect.value;
+            const codesBlank = subjectCodeSelects.every(function (el) { return !el.value; });
+            const vocBlank = !subjectVocSelect || !subjectVocSelect.value;
+            const revVocBlank = !subjectRevVocSelect || !subjectRevVocSelect.value;
+            return groupBlank && codesBlank && vocBlank && revVocBlank;
+        }
+
+        function applySubjectProfile() {
+            if (!subjectGroupSelect || subjectCodeSelects.length === 0) return;
+            const config = subjectProfileForClass();
+            if (!config) {
+                if (boardRegistrationCard) {
+                    boardRegistrationCard.style.display = "none";
+                }
+                if (subjectCard) {
+                    subjectCard.style.display = "none";
+                }
+                if (subjectGuidance) {
+                    subjectGuidance.textContent = "Select Class IX or an XI stream class to load Board subject choices.";
+                }
+                return;
+            }
+            const profile = config.profile;
+            if (boardRegistrationCard) {
+                boardRegistrationCard.style.display = "block";
+            }
+            if (subjectCard) {
+                subjectCard.style.display = "block";
+            }
+            if (boardRegistrationGuidance) {
+                boardRegistrationGuidance.textContent = config.boardMessage;
+            }
+            if (subjectGuidance) {
+                subjectGuidance.textContent = profile.message;
+            }
+
+            setValueIfBlank(candidateType1Select, "1");
+            setValueIfBlank(candidateType2Select, "0");
+            setFieldVisible(subjectGroupSelect, false);
+            setFieldVisible(previousBoardSourceSelect, config.mode === "class11");
+            setFieldVisible(class8UniqueInput, config.mode === "class9");
+            setFieldVisible(subjectVocSelect, true);
+            setFieldVisible(subjectRevVocSelect, config.mode === "class9");
+
+            if (subjectFieldsAreBlank()) {
+                subjectGroupSelect.value = profile.group;
+                subjectCodeSelects.forEach(function (select, index) {
+                    select.value = profile.codes[index] || "";
+                });
+            } else if (!subjectGroupSelect.value) {
+                subjectGroupSelect.value = profile.group;
+            }
+        }
+
+        if (classSelect && subjectGroupSelect) {
+            classSelect.addEventListener("change", applySubjectProfile);
+            applySubjectProfile();
         }
 
         // Instant photo preview - the file only actually saves on form submit,

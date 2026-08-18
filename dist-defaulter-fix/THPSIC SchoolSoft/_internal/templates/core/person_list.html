@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Persons & Consolidated Accounts | SchoolSoft{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div class="header-content">
+        <h1>Persons & Consolidated Accounts</h1>
+    </div>
+</div>
+
+<div class="card">
+    <div class="table-responsive">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>Contact Info</th>
+                    <th>Consolidated Net Balance</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for person in persons %}
+                <tr>
+                    <td><strong>{{ person.name }}</strong></td>
+                    <td><span class="badge badge-secondary">{{ person.get_person_type_display }}</span></td>
+                    <td>{{ person.contact_info|default:"-" }}</td>
+                    <td>
+                        <strong>Rs. {{ person.abs_balance|floatformat:2 }}</strong>
+                        {% if person.balance_status == "DR" %}
+                        <span class="badge badge-danger">DR</span>
+                        {% else %}
+                        <span class="badge badge-success">CR</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if person.is_active %}
+                        <span class="badge badge-success">Active</span>
+                        {% else %}
+                        <span class="badge badge-secondary">Inactive</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <a href="{% url 'core:person_detail' person.pk %}" class="btn btn-small btn-secondary">View Statement</a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="text-center">No persons found.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

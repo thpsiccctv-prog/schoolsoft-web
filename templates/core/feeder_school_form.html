@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }} | SchoolSoft{% endblock %}
+
+{% block content %}
+<section class="section" style="max-width: 760px; margin: 0 auto;">
+    <div class="section-heading">
+        <div>
+            <h2>{{ title }}</h2>
+            <p>अटैच्ड / फीडर विद्यालय का विवरण, पैकेज फीस दर एवं संपर्क जानकारी।</p>
+        </div>
+    </div>
+
+    <form method="post" style="background: var(--surface); padding: 1.5rem; border-radius: 8px; border: 1px solid var(--border);">
+        {% csrf_token %}
+
+        {% if form.errors %}
+        <div class="alert alert-danger" style="background: #FEE2E2; color: #991B1B; padding: 0.75rem; border-radius: 6px; margin-bottom: 1.25rem;">
+            Please correct the errors below.
+        </div>
+        {% endif %}
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+            <div>
+                <label style="display: block; font-weight: 600; margin-bottom: 0.25rem;">School Name (विद्यालय का नाम) *</label>
+                {{ form.name }}
+                {% if form.name.errors %}<div style="color: #DC2626; font-size: 0.8rem; margin-top: 0.25rem;">{{ form.name.errors.0 }}</div>{% endif %}
+            </div>
+            <div>
+                <label style="display: block; font-weight: 600; margin-bottom: 0.25rem;">School Code (कोड - optional)</label>
+                {{ form.code }}
+                {% if form.code.errors %}<div style="color: #DC2626; font-size: 0.8rem; margin-top: 0.25rem;">{{ form.code.errors.0 }}</div>{% endif %}
+            </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+            <div>
+                <label style="display: block; font-weight: 600; margin-bottom: 0.25rem;">Director / Principal (प्रबंधक / प्रधानाचार्य)</label>
+                {{ form.contact_person }}
+            </div>
+            <div>
+                <label style="display: block; font-weight: 600; margin-bottom: 0.25rem;">Phone Number (मोबाइल नंबर)</label>
+                {{ form.phone }}
+            </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+            <div>
+                <label style="display: block; font-weight: 600; margin-bottom: 0.25rem;">Village / Location (गांव / पता)</label>
+                {{ form.village_address }}
+            </div>
+            <div>
+                <label style="display: block; font-weight: 600; margin-bottom: 0.25rem;">Package Rate / Student (₹ प्रति छात्र पैकेज दर) *</label>
+                {{ form.package_rate_per_student }}
+                <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">2 साल का बोर्ड रजिस्ट्रेशन पैकेज (उदा. ₹1,500 या ₹1,800)</div>
+            </div>
+        </div>
+
+        <div style="margin-bottom: 1rem;">
+            <label style="display: block; font-weight: 600; margin-bottom: 0.25rem;">Notes / Remarks (अन्य विवरण)</label>
+            {{ form.notes }}
+        </div>
+
+        <div style="margin-bottom: 1.5rem;">
+            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-weight: 500;">
+                {{ form.is_active }} Active School (सक्रिय विद्यालय)
+            </label>
+        </div>
+
+        <div style="display: flex; gap: 0.75rem; justify-content: flex-end;">
+            <a class="button secondary" href="{% if school %}{% url 'core:feeder_school_detail' school.pk %}{% else %}{% url 'core:feeder_school_list' %}{% endif %}">Cancel</a>
+            <button type="submit" class="button">Save School (सुरक्षित करें)</button>
+        </div>
+    </form>
+</section>
+{% endblock %}

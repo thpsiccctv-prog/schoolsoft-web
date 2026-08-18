@@ -16,7 +16,7 @@
         </div>
     </div>
 
-    <form class="entry-form classic-fee-form" method="post" data-fee-defaults-url-template="/api/students/__student__/fee-defaults/">
+    <form class="entry-form classic-fee-form" method="post" data-fee-defaults-url-template="/api/students/__student__/fee-defaults/" data-default-due-month="{{ default_due_month|default:'APR' }}">
         {% csrf_token %}
 
         {% if receipt_form.non_field_errors or line_form.non_field_errors %}
@@ -141,7 +141,7 @@
             <section class="classic-panel totals-console">
                 <div class="classic-panel-title">Payable</div>
                 <div class="pay-total-row">
-                    <span>Fees</span>
+                    <span>Selected fees</span>
                     <strong data-fee-total>0.00</strong>
                 </div>
                 <label>
@@ -228,5 +228,5 @@
 {% endblock %}
 
 {% block scripts %}
-    <script src="{% static 'core/receipt-form.js' %}?v=20260813-concession-initial-load"></script>
+    <script src="{% static 'core/receipt-form.js' %}?v=20260815-receipt-history-range"></script>
 {% endblock %}

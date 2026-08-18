@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+{% load schoolsoft_extras %}
+{% block title %}Salary Register | SchoolSoft Modernization{% endblock %}
+
+{% block content %}
+<section class="section">
+    <div class="section-heading with-actions">
+        <div>
+            <h2>Salary Register</h2>
+            <p>View and manage staff salary payments.</p>
+        </div>
+        <a class="button primary" href="{% url 'core:salary_payment_create' %}">New Salary Payment</a>
+    </div>
+
+    <!-- KPI Section -->
+    <div class="kpi-grid" style="margin-bottom: 2rem;">
+        <div class="kpi-card" style="border-left-color: var(--blue-500);">
+            <span>Gross Salary</span>
+            <strong>Rs.  {{ total_gross }}</strong>
+        </div>
+        <div class="kpi-card" style="border-left-color: var(--rose-500);">
+            <span>Deductions</span>
+            <strong>Rs.  {{ total_deductions }}</strong>
+        </div>
+        <div class="kpi-card" style="border-left-color: var(--amber-500);">
+            <span>Advance Recovered</span>
+            <strong>Rs.  {{ total_recovery }}</strong>
+        </div>
+        <div class="kpi-card" style="border-left-color: var(--emerald-500);">
+            <span>Net Paid</span>
+            <strong>Rs.  {{ total_net }}</strong>
+        </div>
+    </div>
+
+    <!-- Filter Form -->
+    <form class="filter-form" method="get">
+        <label>
+            <span>Staff</span>
+            <select name="staff" class="form-control">
+                <option value="">All Staff</option>
+                {% for st in active_staff %}
+                    <option value="{{ st.id }}" {% if request.GET.staff == st.id|stringformat:"s" %}selected{% endif %}>
+                        {{ st.full_name }}
+                    </option>
+                {% endfor %}
+            </select>
+        </label>
+        
+        <label>
+            <span>From Date</span>
+            <input type="date" name="from_date" class="form-control" value="{{ request.GET.from_date }}">
+        </label>
+
+        <label>
+            <span>To Date</span>
+            <input type="date" name="to_date" class="form-control" value="{{ request.GET.to_date }}">
+        </label>
+
+        <label>
+            <span>Status</span>
+            <select name="status" class="form-control">
+                <option value="valid" {% if request.GET.status == 'valid' or not request.GET.status %}selected{% endif %}>Valid</option>
+                <option value="cancelled" {% if request.GET.status == 'cancelled' %}selected{% endif %}>Cancelled</option>
+                <option value="all" {% if request.GET.status == 'all' %}selected{% endif %}>All</option>
+            </select>
+        </label>
+        
+        <button class="button primary" type="submit" style="align-self: flex-end;">Filter</button>
+        <a href="{% url 'core:salary_payment_list' %}" class="button secondary" style="align-self: flex-end;">Clear</a>
+    </form>
+
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Slip No</th>
+                    <th>Month</th>
+                    <th>Date</th>
+                    <th>Staff</th>
+                    <th class="text-right">Monthly Salary</th>
+                    <th class="text-right">💵 Paid (This Slip)</th>
+                    <th>Payment Status</th>
+                    <th>Mode</th>
+                    <th>Slip Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in page_obj %}
+                    <tr class="{% if p.is_cancelled %}cancelled-row{% endif %}">
+                        <td><a href="{% url 'core:salary_payment_detail' pk=p.pk %}">{{ p.slip_no }}</a></td>
+                        <td>{{ p.pay_month|date:"M Y" }}</td>
+                        <td>{{ p.payment_date|date:"d M Y" }}</td>
+                        <td>{{ p.staff.full_name }}</td>
+                        <td class="text-right">Rs. {{ p.staff.basic_pay|add:p.staff.da|add:p.staff.other_allowances }}</td>
+                        <td class="text-right"><strong>Rs. {{ p.amount_paid }}</strong></td>
+                        <td>
+                            {% if not p.is_cancelled %}
+                                <span class="badge badge-info pay-status" data-amount-paid="{{ p.amount_paid }}" data-monthly="0">—</span>
+                            {% else %}
+                                <span style="color:var(--muted);font-size:.8rem;">cancelled</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ p.get_payment_mode_display }}</td>
+                        <td>
+                            {% if p.is_cancelled %}
+                                <span class="badge badge-danger">Cancelled</span>
+                            {% elif p.is_edited %}
+                                <span class="badge badge-warning">Edited</span>
+                            {% else %}
+                                <span class="badge badge-success">Valid</span>
+                            {% endif %}
+                        </td>
+                        <td class="actions">
+                            <a href="{% url 'core:salary_payslip_pdf' pk=p.pk %}" class="action-link" title="Download PDF">PDF</a>
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="10" class="empty-state">No salary payments found.</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Pagination -->
+    {% if page_obj.has_other_pages %}
+    <div class="pagination">
+        {% if page_obj.has_previous %}
+            <a href="?page={{ page_obj.previous_page_number }}&staff={{ request.GET.staff }}&from_date={{ request.GET.from_date }}&to_date={{ request.GET.to_date }}&status={{ request.GET.status }}">Prev</a>
+        {% endif %}
+        <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+        {% if page_obj.has_next %}
+            <a href="?page={{ page_obj.next_page_number }}&staff={{ request.GET.staff }}&from_date={{ request.GET.from_date }}&to_date={{ request.GET.to_date }}&status={{ request.GET.status }}">Next</a>
+        {% endif %}
+    </div>
+    {% endif %}
+
+</section>
+
+<style>
+.cancelled-row {
+    opacity: 0.6;
+}
+.cancelled-row td {
+    text-decoration: line-through;
+}
+.cancelled-row td.actions, .cancelled-row td:first-child, .cancelled-row td:nth-last-child(2) {
+    text-decoration: none;
+}
+</style>
+{% endblock %}

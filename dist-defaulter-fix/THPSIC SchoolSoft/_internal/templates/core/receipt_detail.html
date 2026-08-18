@@ -1,0 +1,375 @@
+{% extends "base.html" %}
+{% load schoolsoft_extras %}
+
+{% block title %}Receipt {{ receipt.receipt_no }} | SchoolSoft Modernization{% endblock %}
+
+{% block content %}
+<style>
+@media print {
+    @page {
+        size: A5 landscape;
+        margin: 4mm;
+    }
+    html,
+    body {
+        width: 210mm;
+        min-height: 148mm;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+        background: #fff !important;
+    }
+    .receipt-paper {
+        margin: 0 !important;
+        padding: 4mm 5mm !important;
+        box-shadow: none !important;
+        border: none !important;
+        width: 200mm !important;
+        max-width: 200mm !important;
+        min-height: auto !important;
+        max-height: 140mm !important;
+        page-break-after: avoid !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+        overflow: hidden !important;
+    }
+    
+    /* Compact spacing and fonts for A5 fit */
+    .receipt-header {
+        align-items: flex-start !important;
+        gap: 8px !important;
+        padding-bottom: 5px !important;
+        margin-bottom: 6px !important;
+    }
+    .receipt-header h2 { font-size: 15px !important; margin: 0 0 2px 0 !important; letter-spacing: 0 !important; }
+    .receipt-header p { font-size: 8px !important; margin: 0 0 1px 0 !important; line-height: 1.2 !important; }
+    .receipt-title-badge { font-size: 7.5px !important; padding: 2px 7px !important; margin-top: 3px !important; }
+    .receipt-number { font-size: 7.5px !important; padding: 5px 9px !important; min-width: 40mm !important; }
+    .receipt-number strong { font-size: 12px !important; }
+    
+    .receipt-meta {
+        grid-template-columns: repeat(3, 1fr) !important;
+        padding: 5px 7px !important;
+        gap: 5px 8px !important;
+        margin: 6px 0 !important;
+        border-radius: 5px !important;
+    }
+    .receipt-meta span { font-size: 7px !important; margin-bottom: 1px !important; }
+    .receipt-meta strong { font-size: 9px !important; }
+    
+    .print-table table { margin-top: 5px !important; }
+    .print-table th, .print-table td { padding: 3px 6px !important; font-size: 8.2px !important; line-height: 1.15 !important; }
+    .print-table thead th { padding: 3px 6px !important; font-size: 7.8px !important; }
+    .print-table .amount { width: 28mm !important; }
+    .print-table tfoot th,
+    .print-table tfoot td { padding: 3px 6px !important; font-size: 8px !important; }
+    .net-total-row th, .net-total-row td { font-size: 9px !important; padding: 4px 6px !important; }
+    .due-row th, .due-row td { font-size: 8.5px !important; padding: 4px 6px !important; }
+    
+    .receipt-paper p {
+        margin-top: 5px !important;
+        font-size: 7.5px !important;
+        line-height: 1.2 !important;
+    }
+    .receipt-footer { margin-top: 8px !important; padding-top: 7px !important; font-size: 8px !important; }
+    .receipt-footer span::before { margin-bottom: 4px !important; }
+    
+    /* Hide non-print elements */
+    .no-print,
+    .app-sidebar,
+    .topbar,
+    .section:not(.receipt-paper) {
+        display: none !important;
+    }
+}
+</style>
+<section class="section no-print" style="margin-bottom: 20px;">
+    <div class="section-heading with-actions" style="background: #fff; padding: 16px 24px; border-radius: 8px; border: 1px solid #e2e8f0;">
+        <div>
+            <h2 style="margin: 0; font-size: 20px; font-weight: 700; color: #0f172a;">Receipt {{ receipt.receipt_no }}</h2>
+            <p style="margin: 4px 0 0; color: #64748b; font-size: 13px;">{{ receipt.display_student_name }} | {{ receipt.receipt_date|date:"d M Y" }}</p>
+        </div>
+        <div class="action-row">
+            <a class="button secondary" href="{% url 'core:receipt_list' %}">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px;vertical-align:middle"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+                Back
+            </a>
+            <a class="button secondary" href="{% url 'core:receipt_pdf' receipt.id %}">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px;vertical-align:middle"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+                PDF
+            </a>
+            <a class="button primary" href="{% url 'core:receipt_print' receipt.id %}">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px;vertical-align:middle"><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>
+                Print Receipt
+            </a>
+            {% if access.receipts and not is_readonly and not receipt.is_cancelled %}
+                <a class="button secondary" href="{% url 'core:receipt_edit' receipt.id %}" style="margin-left: 12px; background: #f59e0b; color: white; border-color: #d97706;">
+                    Correct Receipt
+                </a>
+                <a class="button danger" href="{% url 'core:receipt_cancel' receipt.id %}" style="margin-left: 12px; background: #dc2626; color: white; border-color: #b91c1c;">
+                    Cancel / Void
+                </a>
+            {% endif %}
+        </div>
+    </div>
+</section>
+
+{% if receipt.is_cancelled %}
+<section class="section no-print" style="margin-bottom: 20px;">
+    <div style="background: #fef2f2; border-left: 4px solid #ef4444; padding: 16px 20px; border-radius: 4px;">
+        <h3 style="margin: 0 0 8px 0; color: #b91c1c; font-size: 16px; font-weight: 700;">CANCELLED RECEIPT</h3>
+        <p style="margin: 0; color: #991b1b; font-size: 14px;">
+            <strong>Cancelled By:</strong> {{ receipt.cancelled_by.username|default:"System" }} on {{ receipt.cancelled_at|date:"d M Y h:i A" }}<br>
+            <strong>Reason:</strong> {{ receipt.cancel_reason }}
+        </p>
+    </div>
+</section>
+{% elif receipt.is_edited %}
+<section class="section no-print" style="margin-bottom: 20px;">
+    <div style="background: #fffbeb; border-left: 4px solid #f59e0b; padding: 16px 20px; border-radius: 4px;">
+        <h3 style="margin: 0 0 8px 0; color: #b45309; font-size: 16px; font-weight: 700;">EDITED / CORRECTED RECEIPT ({{ receipt.edit_count }} time{{ receipt.edit_count|pluralize }})</h3>
+        <p style="margin: 0; color: #92400e; font-size: 14px;">
+            <strong>Last Edited By:</strong> {{ receipt.edited_by.username|default:"System" }} on {{ receipt.edited_at|date:"d M Y h:i A" }}<br>
+            <strong>Reason:</strong> {{ receipt.edit_reason }}
+        </p>
+    </div>
+</section>
+{% endif %}
+
+{% if not receipt.is_cancelled and receipt.legacy_due_amount > 0 %}
+<section class="section no-print" style="margin-bottom: 20px;">
+    <div style="background: #fef2f2; border-left: 4px solid #dc2626; padding: 16px 20px; border-radius: 4px;">
+        <h3 style="margin: 0 0 4px 0; color: #b91c1c; font-size: 16px; font-weight: 700;">⚠ NOT FULLY PAID - ₹{{ receipt.legacy_due_amount|indian_number }} STILL DUE</h3>
+        <p style="margin: 0; color: #991b1b; font-size: 13px;">
+            Month range on this receipt: <strong>{{ receipt.from_month|default:"-" }} to {{ receipt.to_month|default:"-" }}</strong>.
+            The range being selected does not mean the amount is fully paid - always check the Due amount below before assuming this receipt is settled.
+        </p>
+    </div>
+</section>
+{% endif %}
+
+{% if receipt_due_status %}
+<section class="section no-print" style="margin-bottom: 20px;">
+    <div style="background: #ffffff; border-left: 4px solid {% if receipt_due_status.has_due %}#dc2626{% elif receipt_due_status.has_credit %}#2563eb{% else %}#059669{% endif %}; padding: 16px 20px; border-radius: 8px; border-top: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);">
+        <h3 style="margin: 0 0 12px 0; color: #0f172a; font-size: 15px; font-weight: 800;">Current fee status after this receipt</h3>
+        {% if receipt_due_status.available %}
+        <div style="display: grid; grid-template-columns: repeat(4, minmax(150px, 1fr)); gap: 12px;">
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px;">
+                <span style="display: block; color: #64748b; font-size: 11px; font-weight: 800; text-transform: uppercase;">Up to month</span>
+                <strong style="display: block; color: #0f172a; font-size: 18px; margin-top: 4px;">{{ receipt_due_status.target_month }}</strong>
+            </div>
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px;">
+                <span style="display: block; color: #64748b; font-size: 11px; font-weight: 800; text-transform: uppercase;">Total demand</span>
+                <strong style="display: block; color: #0f172a; font-size: 18px; margin-top: 4px;">Rs. {{ receipt_due_status.result.gross_demand|indian_number }}</strong>
+            </div>
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px;">
+                <span style="display: block; color: #64748b; font-size: 11px; font-weight: 800; text-transform: uppercase;">Paid in session</span>
+                <strong style="display: block; color: #0f172a; font-size: 18px; margin-top: 4px;">Rs. {{ receipt_due_status.result.received_amount|indian_number }}</strong>
+            </div>
+            <div style="background: {% if receipt_due_status.has_due %}#fef2f2{% elif receipt_due_status.has_credit %}#eff6ff{% else %}#ecfdf5{% endif %}; border: 1px solid {% if receipt_due_status.has_due %}#fecaca{% elif receipt_due_status.has_credit %}#bfdbfe{% else %}#a7f3d0{% endif %}; border-radius: 8px; padding: 10px 12px;">
+                <span style="display: block; color: #64748b; font-size: 11px; font-weight: 800; text-transform: uppercase;">Current balance</span>
+                {% if receipt_due_status.has_due %}
+                    <strong style="display: block; color: #b91c1c; font-size: 18px; margin-top: 4px;">Due Rs. {{ receipt_due_status.result.due_amount|indian_number }}</strong>
+                {% elif receipt_due_status.has_credit %}
+                    <strong style="display: block; color: #1d4ed8; font-size: 18px; margin-top: 4px;">Advance Rs. {{ receipt_due_status.result.credit_amount|indian_number }}</strong>
+                {% else %}
+                    <strong style="display: block; color: #047857; font-size: 18px; margin-top: 4px;">Clear</strong>
+                {% endif %}
+            </div>
+        </div>
+        <p style="margin: 12px 0 0; color: #475569; font-size: 13px;">
+            {% if receipt_due_status.clear_through %}
+                Paid/clear through: <strong>{{ receipt_due_status.clear_through }}</strong>.
+            {% else %}
+                Not fully clear from this receipt month.
+            {% endif %}
+            {% if receipt_due_status.next_due_month %}
+                Next due month: <strong>{{ receipt_due_status.next_due_month }}</strong>.
+            {% endif %}
+            Use <strong>Dues up to Month</strong> for class-wise slips/reports.
+        </p>
+        {% else %}
+        <p style="margin: 0; color: #b45309; font-size: 13px;">
+            Fee engine status could not be calculated: {{ receipt_due_status.error }}
+        </p>
+        {% endif %}
+    </div>
+</section>
+{% endif %}
+<section class="receipt-paper">
+    <header class="receipt-header">
+        <div>
+            <h2>{% if school_profile %}{{ school_profile.name }}{% else %}SchoolSoft Modernization{% endif %}</h2>
+            {% if school_profile %}
+                <p>{{ school_profile.address }}</p>
+                <p>
+                    {% if school_profile.phone %}Phone: {{ school_profile.phone }}{% endif %}
+                    {% if school_profile.email %}{% if school_profile.phone %} | {% endif %}Email: {{ school_profile.email }}{% endif %}
+                </p>
+            {% else %}
+                <p>Legacy migration prototype</p>
+            {% endif %}
+            <div class="receipt-title-badge" {% if receipt.is_cancelled %}style="background: #dc2626;"{% endif %}>
+                {% if receipt.is_cancelled %}VOID RECEIPT{% else %}Fee Receipt{% endif %}
+            </div>
+            {% if not receipt.is_cancelled %}
+                {% if receipt.legacy_due_amount > 0 %}
+                    <div class="receipt-title-badge" style="background: #dc2626; margin-top: 4px;">DUE - Rs. {{ receipt.legacy_due_amount|indian_number }}</div>
+                {% else %}
+                    <div class="receipt-title-badge" style="background: #15803d; margin-top: 4px;">FULLY PAID</div>
+                {% endif %}
+            {% endif %}
+        </div>
+        <div class="receipt-number">
+            <span>Receipt No.</span>
+            <strong>{{ receipt.receipt_no }}</strong>
+        </div>
+    </header>
+
+    <div class="receipt-meta">
+        <div>
+            <span>Student Name</span>
+            <strong>{{ receipt.display_student_name }}</strong>
+        </div>
+        <div>
+            <span>SID / Admission No.</span>
+            <strong>{{ receipt.student.legacy_sid }} {% if receipt.student.admission_no %} / {{ receipt.student.admission_no }}{% endif %}</strong>
+        </div>
+        <div>
+            <span>Class</span>
+            <strong>{{ receipt.display_class_section }}</strong>
+        </div>
+        <div>
+            <span>Date</span>
+            <strong>{{ receipt.receipt_date|date:"d-m-Y" }}</strong>
+        </div>
+        <div>
+            <span>Fee Month</span>
+            <strong>{{ receipt.from_month }}{% if receipt.to_month and receipt.to_month != receipt.from_month %} to {{ receipt.to_month }}{% endif %}</strong>
+        </div>
+        <div>
+            <span>Payment Mode</span>
+            <strong>{{ receipt.get_payment_mode_display }}</strong>
+        </div>
+    </div>
+
+    <div class="print-table">
+        <table>
+            <thead>
+                <tr>
+                    <th>Fee Head Description</th>
+                    <th class="amount" style="width: 150px;">Amount (Rs. )</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for line in receipt.lines.all %}
+                    <tr>
+                        <td>{{ line.fee_head.name }}</td>
+                        <td class="amount">{{ line.amount|indian_number }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr>
+                    <th style="text-align: right;">Fee Total</th>
+                    <td class="amount">{{ receipt.legacy_fee_total|indian_number }}</td>
+                </tr>
+                {% if receipt.previous_due_amount > 0 %}
+                <tr>
+                    <th style="text-align: right; color: #7c3aed;">Previous Due (carried forward)</th>
+                    <td class="amount" style="color: #7c3aed; font-weight: 700;">+ {{ receipt.previous_due_amount|indian_number }}</td>
+                </tr>
+                {% endif %}
+                {% if receipt.concession_amount > 0 %}
+                <tr>
+                    <th style="text-align: right;">Concession / Discount</th>
+                    <td class="amount" style="color: #059669;">- {{ receipt.concession_amount|indian_number }}</td>
+                </tr>
+                {% endif %}
+                {% if receipt.late_fee_amount > 0 %}
+                <tr>
+                    <th style="text-align: right;">Late Fee Fine</th>
+                    <td class="amount" style="color: #d97706;">+ {{ receipt.late_fee_amount|indian_number }}</td>
+                </tr>
+                {% endif %}
+                <tr class="net-total-row">
+                    <th style="text-align: right;">Net Payable</th>
+                    <td class="amount">Rs.  {{ receipt.legacy_net_total|indian_number }}</td>
+                </tr>
+                <tr>
+                    <th style="text-align: right;">Amount Paid</th>
+                    <td class="amount">Rs.  {{ receipt.received_amount|indian_number }}</td>
+                </tr>
+                {% if receipt.legacy_due_amount > 0 %}
+                <tr class="due-row">
+                    <th style="text-align: right;">Balance Due</th>
+                    <td class="amount">Rs.  {{ receipt.legacy_due_amount|indian_number }}</td>
+                </tr>
+                {% endif %}
+            </tfoot>
+        </table>
+    </div>
+
+    {% if receipt.remarks %}
+        <p style="font-size: 13px; color: #64748b; margin-top: 20px; font-style: italic;">
+            <strong>Remarks:</strong> {{ receipt.remarks }}
+        </p>
+    {% endif %}
+
+    <footer class="receipt-footer">
+        <span>Cashier's Signature</span>
+        <span>Parent / Guardian</span>
+    </footer>
+</section>
+
+{% if receipt.audit_logs.exists %}
+<section class="section no-print" style="margin-top: 40px; margin-bottom: 20px;">
+    <div class="classic-titlebar">
+        <div>
+            <strong>Audit History</strong>
+            <span>Changes made to this receipt</span>
+        </div>
+    </div>
+    <div class="table-wrap compact-table-wrap" style="background: #fff; border-radius: 8px; border: 1px solid #e2e8f0; padding: 16px;">
+        <table style="width: 100%; text-align: left; border-collapse: collapse;">
+            <thead>
+                <tr style="border-bottom: 2px solid #cbd5e1;">
+                    <th style="padding: 10px; color: #475569;">Date & Time</th>
+                    <th style="padding: 10px; color: #475569;">Action</th>
+                    <th style="padding: 10px; color: #475569;">User</th>
+                    <th style="padding: 10px; color: #475569;">Reason</th>
+                    <th style="padding: 10px; color: #475569;">Changes</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in receipt.audit_logs.all %}
+                <tr style="border-bottom: 1px solid #e2e8f0;">
+                    <td style="padding: 10px; font-size: 13px;">{{ log.changed_at|date:"d M Y h:i A" }}</td>
+                    <td style="padding: 10px; font-size: 13px;">
+                        <span style="padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; 
+                            {% if log.action == 'cancelled' %}background: #fee2e2; color: #991b1b;
+                            {% elif log.action == 'edited' %}background: #fef3c7; color: #92400e;
+                            {% else %}background: #e0f2fe; color: #075985;{% endif %}">
+                            {{ log.get_action_display|upper }}
+                        </span>
+                    </td>
+                    <td style="padding: 10px; font-size: 13px;">{{ log.changed_by.username|default:"System" }}</td>
+                    <td style="padding: 10px; font-size: 13px; color: #475569;">{{ log.reason }}</td>
+                    <td style="padding: 10px; font-size: 12px; font-family: monospace; color: #334155; white-space: pre-wrap;">{% if log.changes %}{{ log.changes|pprint }}{% else %}-{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+    if (new URLSearchParams(window.location.search).get("autoprint") === "1") {
+        window.print();
+    }
+</script>
+{% endblock %}
+

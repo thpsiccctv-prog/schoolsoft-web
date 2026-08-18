@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}{{ person.name }} | Consolidated Statement{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div class="header-content">
+        <h1>{{ person.name }}</h1>
+        <p class="text-muted">{{ person.get_person_type_display }} | {{ person.contact_info|default:"No contact info" }}</p>
+    </div>
+    <div class="header-actions">
+        <a href="{% url 'core:person_list' %}" class="btn btn-secondary">Back to Persons</a>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card text-center h-100">
+            <div class="card-body">
+                <h5 class="card-title text-muted mb-2">Consolidated Net Balance</h5>
+                <h2 class="mb-2">Rs. {{ person.abs_balance|floatformat:2 }}</h2>
+                {% if person.balance_status == "DR" %}
+                <span class="badge badge-danger p-2" style="font-size: 1rem;">DEBIT (Receivable)</span>
+                {% else %}
+                <span class="badge badge-success p-2" style="font-size: 1rem;">CREDIT (Payable)</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-8">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0">Linked Ledgers</h5>
+            </div>
+            <div class="table-responsive">
+                <table class="table mb-0">
+                    <thead>
+                        <tr>
+                            <th>Account Name</th>
+                            <th>Group</th>
+                            <th>Opening Balance</th>
+                            <th>Current Balance</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for ledger in ledgers %}
+                        <tr>
+                            <td><strong>{{ ledger.name }}</strong></td>
+                            <td>{{ ledger.group.name }}</td>
+                            <td>Rs. {{ ledger.opening_balance }}</td>
+                            <td>
+                                <strong>Rs. {{ ledger.abs_balance|floatformat:2 }}</strong>
+                                {% if ledger.balance_status == "DR" %}
+                                <span class="badge badge-danger">DR</span>
+                                {% else %}
+                                <span class="badge badge-success">CR</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mt-4">
+    <div class="card-header">
+        <h5 class="mb-0">Consolidated Transaction Statement</h5>
+    </div>
+    <div class="table-responsive">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Voucher No.</th>
+                    <th>Particulars (Narration)</th>
+                    <th>Ledger Name</th>
+                    <th class="text-right">Debit</th>
+                    <th class="text-right">Credit</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for voucher in vouchers %}
+                <tr>
+                    <td>{{ voucher.voucher_date|date:"d M Y" }}</td>
+                    <td>
+                        <a href="{% url 'core:voucher_detail' voucher.pk %}">{{ voucher.voucher_no }}</a>
+                    </td>
+                    <td>
+                        {% if voucher.paid_to_or_received_from %}
+                        <strong>{{ voucher.paid_to_or_received_from }}</strong><br>
+                        {% endif %}
+                        <small>{{ voucher.narration }}</small>
+                    </td>
+                    <td>
+                        {% if voucher.debit_account.person_id == person.id %}
+                        {{ voucher.debit_account.name }}
+                        {% elif voucher.credit_account.person_id == person.id %}
+                        {{ voucher.credit_account.name }}
+                        {% endif %}
+                    </td>
+                    <td class="text-right">
+                        {% if voucher.debit_account.person_id == person.id %}
+                        Rs. {{ voucher.amount }}
+                        {% else %}
+                        -
+                        {% endif %}
+                    </td>
+                    <td class="text-right">
+                        {% if voucher.credit_account.person_id == person.id %}
+                        Rs. {{ voucher.amount }}
+                        {% else %}
+                        -
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="text-center">No transactions found across any linked ledgers.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

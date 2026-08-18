@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block title %}Cancel Salary Payment - {{ payment.slip_no }} | SchoolSoft Modernization{% endblock %}
+
+{% block content %}
+<section class="section" style="max-width: 600px; margin: 0 auto;">
+    <div class="section-heading">
+        <div>
+            <h2>Cancel Salary Payment</h2>
+            <p>Are you sure you want to cancel <strong>{{ payment.slip_no }}</strong>?</p>
+        </div>
+    </div>
+
+    <div class="alert alert-danger" style="margin-bottom: 2rem; background: var(--rose-50); border: 1px solid var(--rose-200); padding: 1rem; border-radius: var(--radius-md);">
+        <h4 style="color: var(--rose-800); margin-top: 0;">Warning!</h4>
+        <p style="color: var(--rose-700); margin-bottom: 0;">
+            This action cannot be undone. The salary payment for <strong>{{ payment.staff.full_name }}</strong> ({{ payment.pay_month|date:"F Y" }}) will be marked as cancelled. It will no longer appear in the Cash Book, and its Advance Recovery will be reversed.
+        </p>
+    </div>
+
+    <form method="post" class="entry-form panel">
+        {% csrf_token %}
+        <label>
+            <span>Cancellation Reason <span style="color: var(--rose-600);">*</span></span>
+            <input type="text" name="cancel_reason" class="form-control" required placeholder="Why are you cancelling this payment?">
+            <small style="color: var(--slate-500);">This reason will be logged in the audit trail.</small>
+        </label>
+        
+        <div class="form-actions" style="margin-top: 1.5rem; display: flex; gap: 1rem;">
+            <button type="submit" class="button danger">Confirm Cancellation</button>
+            <a href="{% url 'core:salary_payment_detail' pk=payment.pk %}" class="button secondary">Go Back</a>
+        </div>
+    </form>
+</section>
+{% endblock %}

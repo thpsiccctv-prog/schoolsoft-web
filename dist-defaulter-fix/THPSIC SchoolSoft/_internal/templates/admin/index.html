@@ -1,0 +1,84 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static log %}
+
+{% block bodyclass %}{{ block.super }} dashboard schoolsoft-admin-dashboard{% endblock %}
+
+{% block content %}
+<section class="schoolsoft-admin-hero">
+    <div>
+        <p class="schoolsoft-admin-kicker">Administration Workspace</p>
+        <h1>SchoolSoft Control Center</h1>
+        <p>Manage school master data, student records, fee setup, receipts, marks, staff and transport from one secure desk.</p>
+    </div>
+    <div class="schoolsoft-admin-session">
+        <span>Session</span>
+        <strong>2026-27</strong>
+    </div>
+</section>
+
+<div class="schoolsoft-admin-layout">
+    <section class="schoolsoft-admin-apps">
+        {% if app_list %}
+            {% for app in app_list %}
+            <article class="schoolsoft-admin-card app-{{ app.app_label }}">
+                <header>
+                    <span class="schoolsoft-admin-dot"></span>
+                    <h2>{{ app.name }}</h2>
+                </header>
+                <div class="schoolsoft-admin-model-list">
+                    {% for model in app.models %}
+                    <div class="schoolsoft-admin-model">
+                        {% if model.admin_url %}
+                        <a class="schoolsoft-admin-model-name" href="{{ model.admin_url }}">{{ model.name }}</a>
+                        {% else %}
+                        <span class="schoolsoft-admin-model-name">{{ model.name }}</span>
+                        {% endif %}
+                        <span class="schoolsoft-admin-actions">
+                            {% if model.add_url %}
+                            <a class="schoolsoft-admin-add" href="{{ model.add_url }}">{% translate 'Add' %}</a>
+                            {% endif %}
+                            {% if model.admin_url and model.view_only %}
+                            <a href="{{ model.admin_url }}">{% translate 'View' %}</a>
+                            {% elif model.admin_url %}
+                            <a href="{{ model.admin_url }}">{% translate 'Change' %}</a>
+                            {% endif %}
+                        </span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </article>
+            {% endfor %}
+        {% else %}
+            <p>{% translate "You don't have permission to view or edit anything." %}</p>
+        {% endif %}
+    </section>
+
+    <aside class="schoolsoft-admin-recent">
+        <h2>{% translate 'Recent actions' %}</h2>
+        <h3>{% translate 'My actions' %}</h3>
+        {% get_admin_log 10 as admin_log for_user user %}
+        {% if not admin_log %}
+        <p>{% translate 'None available' %}</p>
+        {% else %}
+        <ul>
+            {% for entry in admin_log %}
+            <li class="{% if entry.is_addition %}addlink{% endif %}{% if entry.is_change %} changelink{% endif %}{% if entry.is_deletion %} deletelink{% endif %}">
+                {% if entry.is_deletion or not entry.get_admin_url %}
+                    <span>{{ entry.object_repr }}</span>
+                {% else %}
+                    <a href="{{ entry.get_admin_url }}">{{ entry.object_repr }}</a>
+                {% endif %}
+                <small>
+                    {% if entry.content_type %}
+                    {{ entry.content_type.name|capfirst }}
+                    {% else %}
+                    {% translate 'Unknown content' %}
+                    {% endif %}
+                </small>
+            </li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+    </aside>
+</div>
+{% endblock %}

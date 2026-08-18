@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator
 from django.db import models
 from django.utils import timezone
 
@@ -248,6 +249,145 @@ class Student(TimeStampedModel):
         null=True,
         blank=True,
     )
+    feeder_school = models.ForeignKey(
+        "FeederSchool",
+        on_delete=models.SET_NULL,
+        related_name="students",
+        null=True,
+        blank=True,
+        verbose_name="Attached Feeder School",
+        help_text="Feeder school (अटैच्ड विद्यालय) if student belongs to Section B/C."
+    )
+    
+    full_name_hindi = models.CharField(
+        blank=True,
+        max_length=120,
+        verbose_name="Full Name (Hindi)",
+        help_text="छात्र/छात्रा का नाम हिंदी में (admission form print ke liye).",
+    )
+    father_name_hindi = models.CharField(
+        blank=True,
+        max_length=120,
+        verbose_name="Father's Name (Hindi)",
+        help_text="पिता का नाम हिंदी में।",
+    )
+    mother_name_hindi = models.CharField(
+        blank=True,
+        max_length=120,
+        verbose_name="Mother's Name (Hindi)",
+        help_text="माता का नाम हिंदी में।",
+    )
+    exam_medium = models.CharField(
+        blank=True,
+        choices=[("H", "Hindi"), ("E", "English")],
+        max_length=1,
+        verbose_name="Exam Medium",
+        help_text="परीक्षा माध्यम: Hindi or English (UP Board form field).",
+    )
+    subject_group = models.CharField(
+        blank=True,
+        choices=[("HS", "High School (IX/X)"), ("A", "Arts / Humanities"), ("B", "Science"), ("C", "Commerce")],
+        help_text="Board subject group for Class IX-XII admission forms.",
+        max_length=10,
+        verbose_name="Subject Group",
+    )
+    subject_1_code = models.CharField(blank=True, max_length=10, verbose_name="1st Subject")
+    subject_2_code = models.CharField(blank=True, max_length=10, verbose_name="2nd Subject")
+    subject_3_code = models.CharField(blank=True, max_length=10, verbose_name="3rd Subject")
+    subject_4_code = models.CharField(blank=True, max_length=10, verbose_name="4th Subject")
+    subject_5_code = models.CharField(blank=True, max_length=10, verbose_name="5th Subject")
+    subject_6_code = models.CharField(blank=True, max_length=10, verbose_name="6th Subject")
+    subject_7_code = models.CharField(blank=True, max_length=10, verbose_name="7th Subject")
+    subject_voc_code = models.CharField(
+        blank=True,
+        help_text="UP Board SubjectVOCCode column.",
+        max_length=10,
+        verbose_name="Subject VOC",
+    )
+    subject_rev_voc_code = models.CharField(
+        blank=True,
+        help_text="UP Board Class 9 SubjectRevVOCCode column.",
+        max_length=10,
+        verbose_name="Subject RevVOC",
+    )
+    address_street_area = models.CharField(blank=True, max_length=150, verbose_name="Street / Mohalla / Area")
+    board_candidate_type_1_code = models.CharField(
+        blank=True,
+        choices=[("1", "1 - Regular"), ("2", "2 - Reappear / Re-admission"), ("3", "3 - Other Recognised School")],
+        default="1",
+        max_length=1,
+        verbose_name="Board Candidate Type 1",
+    )
+    board_candidate_type_2_code = models.CharField(
+        blank=True,
+        choices=[
+            ("0", "0 - None"),
+            ("1", "1 - Blindness"),
+            ("2", "2 - Hearing Impairment"),
+            ("3", "3 - Multiple Disabilities incl. Deaf-blindness"),
+            ("4", "4 - Low Vision"),
+            ("5", "5 - Leprosy Cured"),
+            ("6", "6 - Locomotor Disability"),
+            ("7", "7 - Dwarfism"),
+            ("8", "8 - Intellectual Disability"),
+            ("9", "9 - Mental Illness"),
+            ("10", "10 - Autism Spectrum Disorder"),
+            ("11", "11 - Cerebral Palsy"),
+            ("12", "12 - Muscular Dystrophy"),
+            ("13", "13 - Chronic Neurological Conditions"),
+            ("14", "14 - Specific Learning Disabilities"),
+            ("15", "15 - Multiple Sclerosis"),
+            ("16", "16 - Speech and Language Disability"),
+            ("17", "17 - Thalassemia"),
+            ("18", "18 - Hemophilia"),
+            ("19", "19 - Sickle Cell Disease"),
+            ("20", "20 - Acid Attack Victim"),
+            ("21", "21 - Parkinsons Disease"),
+        ],
+        default="0",
+        max_length=2,
+        verbose_name="Board Candidate Type 2",
+    )
+    board_caste_code = models.CharField(
+        blank=True,
+        choices=[("1", "1 - SC"), ("2", "2 - ST"), ("3", "3 - OBC"), ("4", "4 - General"), ("5", "5 - EWS")],
+        max_length=1,
+        verbose_name="Board Caste Code",
+    )
+    board_sr_number = models.CharField(blank=True, max_length=50, verbose_name="Board Sr Number")
+    class8_unique_id = models.CharField(blank=True, max_length=50, verbose_name="Class 8 Unique ID")
+    nationality_other = models.CharField(blank=True, max_length=100)
+    previous_board_source = models.CharField(
+        blank=True,
+        choices=[("upboard", "Class 11 - UP Board"), ("other", "Class 11 - Other Board")],
+        help_text="Required to choose Class 11 UP Board vs Other Board registration format.",
+        max_length=10,
+        verbose_name="Previous Board Source",
+    )
+    state = models.CharField(blank=True, default="Uttar Pradesh", max_length=100)
+    fee_package_enabled = models.BooleanField(
+        default=False,
+        help_text="Use for Section D/Commerce package students or direct X/XII negotiated admission.",
+        verbose_name="Package Fee Applicable",
+    )
+    fee_package_note = models.CharField(blank=True, max_length=255, verbose_name="Package Note")
+    fee_package_total = models.DecimalField(
+        decimal_places=2,
+        default=Decimal("0.00"),
+        max_digits=10,
+        validators=[MinValueValidator(0)],
+        verbose_name="Package Total",
+    )
+    feeder_school = models.ForeignKey(
+        "FeederSchool",
+        on_delete=models.SET_NULL,
+        related_name="students",
+        null=True,
+        blank=True,
+        verbose_name="Attached Feeder School",
+        help_text="Feeder school (अटैच्ड विद्यालय) if student belongs to Section B/C."
+    )
+
     admission_date = models.DateField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
 
@@ -276,6 +416,35 @@ class Student(TimeStampedModel):
 
     def __str__(self):
         return self.full_name
+
+    @property
+    def fee_section_name(self):
+        return (self.current_section.name if self.current_section else "").strip().upper()
+
+    @property
+    def fee_class_name(self):
+        return (self.current_class.name if self.current_class else "").strip().upper()
+
+    @property
+    def is_zero_fee_section(self):
+        return self.fee_section_name in {"B", "C"}
+
+    @property
+    def is_commerce_class(self):
+        return "COM" in self.fee_class_name
+
+    @property
+    def uses_fee_package(self):
+        if self.is_zero_fee_section:
+            return False
+        return bool(self.fee_package_enabled or self.fee_section_name == "D")
+
+    @property
+    def effective_fee_package_total(self):
+        if not self.uses_fee_package:
+            return Decimal("0.00")
+        return self.fee_package_total if self.fee_package_total > 0 else Decimal("4500.00")
+
 
 
 class FeeHead(TimeStampedModel):
@@ -886,6 +1055,35 @@ class Staff(TimeStampedModel):
     def __str__(self):
         return self.full_name
 
+    @property
+    def fee_section_name(self):
+        return (self.current_section.name if self.current_section else "").strip().upper()
+
+    @property
+    def fee_class_name(self):
+        return (self.current_class.name if self.current_class else "").strip().upper()
+
+    @property
+    def is_zero_fee_section(self):
+        return self.fee_section_name in {"B", "C"}
+
+    @property
+    def is_commerce_class(self):
+        return "COM" in self.fee_class_name
+
+    @property
+    def uses_fee_package(self):
+        if self.is_zero_fee_section:
+            return False
+        return bool(self.fee_package_enabled or self.fee_section_name == "D")
+
+    @property
+    def effective_fee_package_total(self):
+        if not self.uses_fee_package:
+            return Decimal("0.00")
+        return self.fee_package_total if self.fee_package_total > 0 else Decimal("4500.00")
+
+
 
 class SalaryPayment(TimeStampedModel):
     class PaymentMode(models.TextChoices):
@@ -943,15 +1141,15 @@ class SalaryPayment(TimeStampedModel):
 
     @property
     def gross_pay(self):
-        return self.basic_pay + self.da + self.other_allowances
+        return (self.basic_pay or Decimal("0.00")) + (self.da or Decimal("0.00")) + (self.other_allowances or Decimal("0.00"))
 
     @property
     def total_deductions(self):
-        return self.pf_deduction + self.esi_deduction + self.other_deduction
+        return (self.pf_deduction or Decimal("0.00")) + (self.esi_deduction or Decimal("0.00")) + (self.other_deduction or Decimal("0.00"))
 
     @property
     def net_pay(self):
-        return self.gross_pay - self.total_deductions - self.advance_recovery
+        return self.gross_pay - self.total_deductions - (self.advance_recovery or Decimal("0.00"))
 
     def clean(self):
         from django.core.exceptions import ValidationError
@@ -1231,6 +1429,59 @@ class LedgerAccount(TimeStampedModel):
 
     def __str__(self):
         return self.name
+
+
+class FeederSchool(TimeStampedModel):
+    """Attached/Feeder school (अटैच्ड विद्यालय) whose students take admission
+    in Section B / Section C for Classes 9-12 UP Board registration."""
+
+    name = models.CharField(max_length=150, unique=True, verbose_name="School Name")
+    code = models.CharField(max_length=30, unique=True, blank=True, verbose_name="School Code")
+    contact_person = models.CharField(max_length=100, blank=True, verbose_name="Contact Person / Manager / Principal")
+    phone = models.CharField(max_length=50, blank=True, verbose_name="Phone Number")
+    village_address = models.CharField(max_length=200, blank=True, verbose_name="Village / Town / Location")
+    package_rate_per_student = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal("1500.00"),
+        verbose_name="Package Rate per Student (₹)",
+        help_text="Fixed 2-year package rate per student (e.g. ₹1,500 or ₹1,800)."
+    )
+    ledger_account = models.OneToOneField(
+        LedgerAccount, null=True, blank=True, on_delete=models.SET_NULL, related_name="feeder_school_profile",
+        help_text="Linked Sundry Debtors ledger account."
+    )
+    notes = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["name"]
+        verbose_name = "Attached / Feeder School"
+        verbose_name_plural = "Attached / Feeder Schools"
+
+    def __str__(self):
+        return self.name
+
+    @property
+    def total_enrolled_students(self):
+        return self.students.filter(is_active=True).count()
+
+    @property
+    def total_demand(self):
+        return self.total_enrolled_students * self.package_rate_per_student
+
+    @property
+    def total_received(self):
+        if not self.ledger_account:
+            return Decimal("0.00")
+        from django.db.models import Sum
+        received = Voucher.objects.filter(
+            credit_account=self.ledger_account,
+            is_cancelled=False
+        ).aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+        return received
+
+    @property
+    def balance_due(self):
+        return max(Decimal("0.00"), self.total_demand - self.total_received)
 
 
 class VoucherCounter(models.Model):
@@ -1579,6 +1830,72 @@ class StudentConcession(models.Model):
             return (monthly_fee * pct).quantize(Decimal('0.01'))
 
         return Decimal('0.00')
+
+
+class AttendanceSummary(models.Model):
+    """
+    Monthly Attendance Summary for a student.
+    Stores total working days and days present; days_absent and attendance_percentage
+    are computed dynamically to guarantee consistent values.
+    """
+    student = models.ForeignKey(
+        Student,
+        on_delete=models.CASCADE,
+        related_name="attendance_summaries",
+    )
+    session = models.ForeignKey(
+        AcademicSession,
+        on_delete=models.PROTECT,
+        related_name="attendance_summaries",
+    )
+    year = models.PositiveIntegerField(default=2026)
+    month = models.PositiveSmallIntegerField(
+        help_text="Month number 1 to 12"
+    )
+    total_working_days = models.PositiveSmallIntegerField(
+        default=24,
+        help_text="Total school working days in this month",
+    )
+    days_present = models.PositiveSmallIntegerField(
+        default=0,
+        help_text="Number of days the student was present",
+    )
+    remarks = models.CharField(max_length=200, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = [
+            "-year",
+            "-month",
+            "student__current_class__display_order",
+            "student__roll_no",
+            "student__full_name",
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["student", "session", "year", "month"],
+                name="unique_student_attendance_month_summary",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(days_present__lte=models.F("total_working_days")),
+                name="attendance_days_present_lte_working_days",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.student.full_name} - {self.month}/{self.year} ({self.days_present}/{self.total_working_days})"
+
+    @property
+    def days_absent(self) -> int:
+        return max(0, self.total_working_days - self.days_present)
+
+    @property
+    def attendance_percentage(self) -> float:
+        if self.total_working_days > 0:
+            return round((self.days_present / self.total_working_days) * 100, 1)
+        return 0.0
+
 
 from django.db.models.signals import pre_save
 from django.dispatch import receiver

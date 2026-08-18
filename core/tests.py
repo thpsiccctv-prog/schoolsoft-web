@@ -1170,6 +1170,72 @@ class FeeReceiptTests(AuthenticatedClientMixin, TestCase):
         self.assertNotIn(f"fee_head_{admission.id}", amounts)
         self.assertEqual(amounts[f"fee_head_{tuition.id}"], "2700.00")
 
+    def test_thpsic_march_admission_is_continuing_not_new_for_april_session(self):
+        session = AcademicSession.objects.create(
+            name="2026-27",
+            starts_on=date(2026, 4, 1),
+            ends_on=date(2027, 3, 31),
+            is_active=True,
+        )
+        school_class = SchoolClass.objects.create(name="IX", display_order=9)
+        continuing = Student.objects.create(
+            full_name="March Continuing Student",
+            current_class=school_class,
+            admission_date=date(2026, 3, 19),
+        )
+        new_student = Student.objects.create(
+            full_name="May New Student",
+            current_class=school_class,
+            admission_date=date(2026, 5, 11),
+        )
+        admission = FeeHead.objects.create(
+            name="Admission / Reg Fee",
+            applies_to=FeeHead.AppliesTo.NEW,
+            new_student_charge_rule=FeeHead.ChargeRule.ADMISSION_MONTH,
+            old_student_charge_rule=FeeHead.ChargeRule.NOT_APPLICABLE,
+        )
+        tuition = FeeHead.objects.create(
+            name="Tuition Fee",
+            new_student_charge_rule=FeeHead.ChargeRule.MONTHLY,
+            old_student_charge_rule=FeeHead.ChargeRule.MONTHLY,
+        )
+        exam = FeeHead.objects.create(
+            name="Exam Fee",
+            new_student_charge_rule=FeeHead.ChargeRule.FIXED_MONTHS,
+            old_student_charge_rule=FeeHead.ChargeRule.FIXED_MONTHS,
+            new_student_charge_months=["AUG", "NOV", "JAN"],
+            old_student_charge_months=["AUG", "NOV", "JAN"],
+        )
+        FeeStructure.objects.create(
+            session=session,
+            school_class=school_class,
+            fee_head=admission,
+            amount=Decimal("2000.00"),
+            is_active=True,
+        )
+        FeeStructure.objects.create(
+            session=session,
+            school_class=school_class,
+            fee_head=tuition,
+            amount=Decimal("500.00"),
+            is_active=True,
+        )
+        FeeStructure.objects.create(
+            session=session,
+            school_class=school_class,
+            fee_head=exam,
+            amount=Decimal("1500.00"),
+            is_active=True,
+        )
+
+        continuing_due = calculate_student_due(student=continuing, session=session, through_month="AUG")
+        new_due = calculate_student_due(student=new_student, session=session, through_month="AUG")
+
+        self.assertFalse(continuing_due.is_new_student)
+        self.assertEqual(continuing_due.scheduled_fee_demand, Decimal("3000.00"))
+        self.assertTrue(new_due.is_new_student)
+        self.assertEqual(new_due.scheduled_fee_demand, Decimal("5000.00"))
+
     def test_ix_x_lab_fee_defaults_and_due_start_in_december(self):
         session = AcademicSession.objects.create(
             name="2026-27",
@@ -1639,6 +1705,8 @@ class DefaulterListTests(AuthenticatedClientMixin, TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["total_defaulters"], 1)
         self.assertEqual(response.context["total_due"], Decimal("800.00"))
+        self.assertEqual(response.context["defaulters"][0]["opening_due"], Decimal("100.00"))
+        self.assertEqual(response.context["defaulters"][0]["ytd_paid"], Decimal("100.00"))
         self.assertContains(response, "Opening Balance Defaulter")
         self.assertContains(response, "9999999999")
         self.assertContains(response, "20-Apr-2026")
@@ -2994,4 +3062,3 @@ class VoucherEditAuditTrailTests(AuthenticatedClientMixin, TestCase):
         # The key assertion: date fields must be stored as strings in JSON, not throwing serialization errors
         self.assertEqual(audit_log.before_snapshot["voucher_date"], "2026-08-12")
         self.assertEqual(audit_log.after_snapshot["voucher_date"], "2026-08-10")
-

@@ -39,6 +39,9 @@
             <div class="nav-section-title">Academics</div>
                 {% if access.students %}
                 <a href="{% url 'core:student_list' %}"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M22 10 12 5 2 10l10 5 10-5z"/><path d="M6 12v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5"/></svg></span><span>Students</span></a>
+                <a href="{% url 'core:attendance_register' %}"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span><span>Attendance Register (पंजिका)</span></a>
+                <a href="{% url 'core:attendance_summary_entry' %}"><span class="nav-icon"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M8 14h8M8 18h5"/></svg></span><span>Attendance Entry (दर्ज करें)</span></a>
+                <a href="{% url 'core:attendance_summary_report' %}"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg></span><span>Attendance Report (रिपोर्ट)</span></a>
                 {% endif %}
                 {% if access.marks %}
                 <a href="{% url 'core:marks_report' %}"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 19V5h16v14z"/><path d="M8 15l3-4 2 2 3-5"/></svg></span><span>Marks</span></a>
@@ -62,6 +65,7 @@
                 {% endif %}
                 {% if access.fee_setup %}
                 <a href="{% url 'core:fee_structure_report' %}"><span class="nav-icon"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg></span><span>Fee Setup</span></a>
+                <a href="{% url 'core:feeder_school_list' %}"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-4h6v4"/></svg></span><span>Attached Schools (फीडर स्कूल)</span></a>
                 {% endif %}
                 {% if access.accounts %}
                 {% if not is_readonly %}

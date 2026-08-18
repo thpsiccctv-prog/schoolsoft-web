@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Fee Collection | SchoolSoft{% endblock %}
+
+{% block content %}
+<section class="section fee-desk">
+    <div class="classic-titlebar">
+        <div>
+            <strong>Correct Fee Receipt: {{ receipt.receipt_no }}</strong>
+            <span>Audited receipt correction. All edits are logged.</span>
+        </div>
+        <div class="classic-title-actions">
+            <a class="mini-button" href="{% url 'core:receipt_list' %}">Receipt Register</a>
+            <a class="mini-button" href="{% url 'core:collection_report' %}">Collection Report</a>
+        </div>
+    </div>
+
+    <form class="entry-form classic-fee-form" method="post" data-fee-defaults-url-template="/api/students/__student__/fee-defaults/" data-locked-legacy-balance="{{ receipt.previous_due_amount }}">
+        {% csrf_token %}
+
+        {% if receipt_form.non_field_errors or line_form.non_field_errors %}
+            <div class="form-errors">
+                {{ receipt_form.non_field_errors }}
+                {{ line_form.non_field_errors }}
+            </div>
+        {% endif %}
+
+        <div class="fee-workbench">
+            <div class="fee-left-stack">
+                <section class="classic-panel student-console">
+                    <div class="classic-panel-title">Student & Receipt</div>
+                    <div id="concession-banner" style="display:none; padding:10px 12px; margin-bottom:12px; border-radius:4px; background:#d1fae5; color:#065f46; border:1px solid #6ee7b7; font-size:13px; line-height:1.5;">
+                        <strong>✓ Policy Concession Active:</strong>
+                        <span id="concession-type"></span> —
+                        <span id="concession-amount"></span>
+                        (<span id="concession-month-range"></span>)<br>
+                        <span style="font-size:12px; opacity:0.85;">Reason: <i id="concession-reason"></i> &nbsp;|&nbsp; Approved by: <span id="concession-approved-by"></span></span>
+                    </div>
+                    <div id="concession-double-count-warning" style="display:none; padding:10px 12px; margin-bottom:12px; border-radius:4px; background:#fef3c7; color:#92400e; border:1px solid #fcd34d; font-size:13px;">
+                        ⚠️ <strong>Double-count risk:</strong> A policy concession is already applied automatically. Entering a manual Concession Amount here will deduct it <em>in addition</em> to the policy concession. Only do this if you intend an extra, separate adjustment.
+                    </div>
+                    <div class="student-filter classic-search">
+                        <label for="student-filter-box">Student Search</label>
+                        <input id="student-filter-box" class="form-control" type="search" data-student-filter placeholder="Name, SID, admission no, father, class, mobile">
+                    </div>
+
+                    <div class="receipt-main-grid">
+                        <label class="wide-field">
+                            <span>{{ receipt_form.student.label }}</span>
+                            {{ receipt_form.student }}
+                            {% if receipt_form.student.errors %}<small>{{ receipt_form.student.errors|striptags }}</small>{% endif %}
+                        </label>
+                        <label>
+                            <span>{{ receipt_form.session.label }}</span>
+                            {{ receipt_form.session }}
+                            {% if receipt_form.session.errors %}<small>{{ receipt_form.session.errors|striptags }}</small>{% endif %}
+                        </label>
+                        <label>
+                            <span>{{ receipt_form.receipt_date.label }}</span>
+                            {{ receipt_form.receipt_date }}
+                            {% if receipt_form.receipt_date.errors %}<small>{{ receipt_form.receipt_date.errors|striptags }}</small>{% endif %}
+                        </label>
+                        <div class="month-range-group">
+                            <label>
+                                <span>{{ receipt_form.from_month.label }}</span>
+                                <div class="hidden-select-wrapper" style="display: none;">
+                                    {{ receipt_form.from_month }}
+                                    {{ receipt_form.to_month }}
+                                </div>
+                                <div class="month-chips" id="month-chips-container">
+                                    <button type="button" data-month="APR">APR</button>
+                                    <button type="button" data-month="MAY">MAY</button>
+                                    <button type="button" data-month="JUN">JUN</button>
+                                    <button type="button" data-month="JUL">JUL</button>
+                                    <button type="button" data-month="AUG">AUG</button>
+                                    <button type="button" data-month="SEP">SEP</button>
+                                    <button type="button" data-month="OCT">OCT</button>
+                                    <button type="button" data-month="NOV">NOV</button>
+                                    <button type="button" data-month="DEC">DEC</button>
+                                    <button type="button" data-month="JAN">JAN</button>
+                                    <button type="button" data-month="FEB">FEB</button>
+                                    <button type="button" data-month="MAR">MAR</button>
+                                </div>
+                                {% if receipt_form.from_month.errors %}<small>{{ receipt_form.from_month.errors|striptags }}</small>{% endif %}
+                                {% if receipt_form.to_month.errors %}<small>{{ receipt_form.to_month.errors|striptags }}</small>{% endif %}
+                            </label>
+                        </div>
+                        <label>
+                            <span>{{ receipt_form.payment_mode.label }}</span>
+                            {{ receipt_form.payment_mode }}
+                            {% if receipt_form.payment_mode.errors %}<small>{{ receipt_form.payment_mode.errors|striptags }}</small>{% endif %}
+                        </label>
+                    </div>
+
+                    <div class="selected-student-card" data-student-summary>
+                        <strong>Select a student</strong>
+                        <span>Fee structure will load automatically after selection.</span>
+                    </div>
+                </section>
+
+                <section class="classic-panel">
+                    <div class="classic-panel-title">Fee Heads</div>
+                    <div class="fee-head-grid classic-fee-heads">
+                        {% for field in line_form %}
+                            <label>
+                                <span>{{ field.label }}</span>
+                                {{ field }}
+                                {% if field.errors %}<small>{{ field.errors|striptags }}</small>{% endif %}
+                            </label>
+                        {% endfor %}
+                    </div>
+                </section>
+            </div>
+
+            <section class="classic-panel totals-console">
+                <div class="classic-panel-title">Payable</div>
+                <div class="pay-total-row">
+                    <span>Fees</span>
+                    <strong data-fee-total>0.00</strong>
+                </div>
+                {% if receipt.previous_due_amount > 0 %}
+                <div class="legacy-value-note">
+                    <span>Historical Previous Due</span>
+                    <strong>{{ receipt.previous_due_amount }}</strong>
+                    <small>Locked audit value. It cannot be changed from this form.</small>
+                </div>
+                {% endif %}
+                <label>
+                    <span>{{ receipt_form.concession_amount.label }}</span>
+                    {{ receipt_form.concession_amount }}
+                    {% if receipt_form.concession_amount.errors %}<small>{{ receipt_form.concession_amount.errors|striptags }}</small>{% endif %}
+                </label>
+                <label>
+                    <span>{{ receipt_form.late_fee_amount.label }}</span>
+                    {{ receipt_form.late_fee_amount }}
+                    {% if receipt_form.late_fee_amount.errors %}<small>{{ receipt_form.late_fee_amount.errors|striptags }}</small>{% endif %}
+                </label>
+                <div class="pay-total-row net">
+                    <span>Net Total</span>
+                    <strong data-net-total>0.00</strong>
+                </div>
+                <label>
+                    <span>{{ receipt_form.received_amount.label }}</span>
+                    {{ receipt_form.received_amount }}
+                    {% if receipt_form.received_amount.errors %}<small>{{ receipt_form.received_amount.errors|striptags }}</small>{% endif %}
+                </label>
+                <div class="pay-total-row due">
+                    <span>Due</span>
+                    <strong data-due-total>0.00</strong>
+                </div>
+                <label>
+                    <span>{{ receipt_form.remarks.label }}</span>
+                    {{ receipt_form.remarks }}
+                    {% if receipt_form.remarks.errors %}<small>{{ receipt_form.remarks.errors|striptags }}</small>{% endif %}
+                </label>
+                
+                <label>
+                    <span style="color: #d9534f; font-weight: 600;">{{ receipt_form.edit_reason.label }} *</span>
+                    {{ receipt_form.edit_reason }}
+                    {% if receipt_form.edit_reason.errors %}<small style="color: #d9534f;">{{ receipt_form.edit_reason.errors|striptags }}</small>{% endif %}
+                </label>
+                
+                <div id="duplicate-warning" class="warning-banner" style="display: none; background: #fff3cd; color: #856404; padding: 10px; border-radius: 4px; margin-bottom: 15px; border: 1px solid #ffeeba;">
+                    <strong>⚠️ Warning:</strong> <span id="duplicate-warning-text"></span>
+                </div>
+
+                <div class="form-actions" style="display: flex; gap: 10px; margin-bottom: 10px;">
+                    <button class="save-print-button" type="submit" name="action" value="save_print" style="flex: 1;">Save & Print (F9)</button>
+                    <button class="button primary" type="submit" name="action" value="save" style="flex: 1;">Save</button>
+                </div>
+                <a class="button secondary block-button" href="{% url 'core:receipt_list' %}">Cancel</a>
+            </section>
+        </div>
+    </form>
+</section>
+{% endblock %}
+
+{% block scripts %}
+    <script src="{% static 'core/receipt-form.js' %}?v=20260813-concession-initial-load"></script>
+{% endblock %}

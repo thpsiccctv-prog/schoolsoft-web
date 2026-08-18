@@ -1,0 +1,252 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#004d40">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="THPSIC SchoolSoft">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="manifest" href="{% url 'core:manifest' %}">
+    <link rel="apple-touch-icon" href="{% static 'core/pwa-icon-192.png' %}">
+    <title>{% block title %}THPSIC SchoolSoft &mdash; Thakur Harikesh Pratap Singh Intermediate College{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'core/styles.css' %}?v=20260803-fee-status-panel">
+</head>
+<body>
+<div class="app">
+    <aside class="sidebar">
+        <div class="brand">
+            <img class="brand-mark" src="{% static 'core/school_logo.png' %}" alt="THPS logo">
+            <div class="brand-text">
+                <strong>THPS Intermediate College</strong>
+                <span>Uday, Kushinagar</span>
+            </div>
+            <button type="button" class="mobile-nav-toggle" aria-expanded="false" aria-controls="primary-navigation">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+                <span>Menu</span>
+            </button>
+        </div>
+
+        <nav class="side-nav" id="primary-navigation" aria-label="Primary">
+            {% if access.dashboard %}
+            <div class="nav-section-title">Overview</div>
+            <a href="{% url 'core:dashboard' %}"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M9 20v-6h6v6"/></svg></span><span>Dashboard</span></a>
+            {% endif %}
+
+            {% if access.students or access.marks %}
+            <div class="nav-section-title">Academics</div>
+                {% if access.students %}
+                <a href="{% url 'core:student_list' %}"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M22 10 12 5 2 10l10 5 10-5z"/><path d="M6 12v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5"/></svg></span><span>Students</span></a>
+                {% endif %}
+                {% if access.marks %}
+                <a href="{% url 'core:marks_report' %}"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 19V5h16v14z"/><path d="M8 15l3-4 2 2 3-5"/></svg></span><span>Marks</span></a>
+                {% endif %}
+            {% endif %}
+
+            {% if access.fee_collection and not is_readonly or access.receipts or access.dues or access.collection or access.fee_setup or access.accounts %}
+            <div class="nav-section-title">Finance</div>
+                {% if access.fee_collection and not is_readonly %}
+                <a href="{% url 'core:receipt_create' %}"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M5 3h14v18l-2-1-2 1-2-1-2 1-2-1-2 1-2-1z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg></span><span>Fee Collection</span></a>
+                {% endif %}
+                {% if access.receipts %}
+                <a href="{% url 'core:receipt_list' %}"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M7 3h10v18H7z"/><path d="M10 7h4M10 11h4M10 15h3"/></svg></span><span>Receipts</span></a>
+                {% endif %}
+                {% if access.dues %}
+                <a href="{% url 'core:due_up_to_month_report' %}"><span class="nav-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></span><span>Dues up to Month</span></a>
+                <a href="{% url 'core:defaulter_list' %}"><span class="nav-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span><span>Fee Defaulters</span></a>
+                {% endif %}
+                {% if access.collection %}
+                <a href="{% url 'core:collection_report' %}"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg></span><span>Collection</span></a>
+                {% endif %}
+                {% if access.fee_setup %}
+                <a href="{% url 'core:fee_structure_report' %}"><span class="nav-icon"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg></span><span>Fee Setup</span></a>
+                {% endif %}
+                {% if access.accounts %}
+                {% if not is_readonly %}
+                <a href="{% url 'core:expense_create' %}"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span><span>Daily Expense</span></a>
+                <a href="{% url 'core:receipt_other_create' %}"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span><span>Other Receipt</span></a>
+                {% endif %}
+                <a href="{% url 'core:voucher_list' %}"><span class="nav-icon"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="8.01" y2="14"/><line x1="12" y1="14" x2="12.01" y2="14"/><line x1="16" y1="14" x2="16.01" y2="14"/><line x1="8" y1="18" x2="8.01" y2="18"/><line x1="12" y1="18" x2="12.01" y2="18"/><line x1="16" y1="18" x2="16.01" y2="18"/></svg></span><span>Voucher Register</span></a>
+                <a href="{% url 'core:cash_book' %}"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg></span><span>Cash Book</span></a>
+                <a href="{% url 'core:ledger_list' %}"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span><span>Ledger Master</span></a>
+                <a href="{% url 'core:person_list' %}"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span><span>Persons (Advances)</span></a>
+                {% endif %}
+            {% endif %}
+
+            {% if access.staff or access.transport or access.inventory or access.family %}
+            <div class="nav-section-title">Operations</div>
+                {% if access.staff %}
+                <a href="{% url 'core:staff_list' %}"><span class="nav-icon"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="4"/><path d="M2 21c0-3.9 3.1-7 7-7s7 3.1 7 7"/><path d="M16 4c2.5.8 4 3.1 4 6"/></svg></span><span>Staff</span></a>
+                <a href="{% url 'core:salary_payment_list' %}"><span class="nav-icon"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M8 14h8M8 18h5"/></svg></span><span>Salary Register</span></a>
+                {% endif %}
+                {% if access.transport %}
+                <a href="{% url 'core:transport_list' %}"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 4h16v11H4z"/><path d="M4 11h16"/><circle cx="8" cy="18.5" r="1.8"/><circle cx="16" cy="18.5" r="1.8"/></svg></span><span>Transport</span></a>
+                {% endif %}
+                {% if access.inventory %}
+                <a href="{% url 'core:inventory_item_list' %}"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg></span><span>Inventory</span></a>
+                {% endif %}
+                {% if access.family %}
+                <a href="{% url 'core:family_list' %}"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span><span>Family Ledger</span></a>
+                {% endif %}
+            {% endif %}
+
+            {% if access.school_profile or can_manage_users %}
+            <div class="nav-section-title">Administration</div>
+                {% if access.school_profile %}
+                <a href="{% url 'core:school_profile_detail' %}"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-4h6v4"/></svg></span><span>School Profile</span></a>
+                {% endif %}
+                {% if can_manage_users %}
+                <a href="{% url 'core:user_list' %}"><span class="nav-icon"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2 21c0-3.6 3.1-6 7-6"/><path d="M15 11l2 2 4-4"/></svg></span><span>Users &amp; Permissions</span></a>
+                {% endif %}
+            {% endif %}
+        </nav>
+
+        <div class="side-foot">
+            {% if request.user.is_staff %}
+            <a href="/admin/">Admin</a>
+            {% endif %}
+            {% if request.user.is_authenticated %}
+            <a href="{% url 'core:password_change' %}">Change password</a>
+            <form method="post" action="{% url 'core:logout' %}">
+                {% csrf_token %}
+                <button type="submit">Logout</button>
+            </form>
+            <span>{{ request.user.username }}</span>
+            {% else %}
+            <a href="{% url 'core:login' %}">Login</a>
+            <span>SchoolSoft</span>
+            {% endif %}
+        </div>
+    </aside>
+
+    <div class="main">
+        <header class="main-topbar">
+            <div class="topbar-left">
+                <button type="button" class="back-btn" onclick="history.back()"
+                        title="Go back" aria-label="Go back">&#8592; Back (Esc)</button>
+                <span class="topbar-kicker">/ Search</span>
+            </div>
+            <div class="topbar-status" aria-label="Workspace status">
+                <span>Session 2026-27</span>
+                <span class="save-shortcut">F9 Save</span>
+                {% if request.user.is_authenticated %}
+                <span>{{ request.user.username }}</span>
+                {% endif %}
+            </div>
+        </header>
+
+        <main class="page">
+            {% if messages %}
+                <div class="flash-stack" role="status" aria-live="polite">
+                    {% for message in messages %}
+                        <div class="entry-flash {{ message.tags|default:'info' }}">
+                            {{ message }}
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+            {% block content %}{% endblock %}
+        </main>
+        <footer class="desktop-statusbar">
+            <span>THPSIC SchoolSoft v1.x</span>
+            <span>Data: LOCALAPPDATA\THPSIC-InterCollege-SchoolSoft</span>
+            <span>Ctrl + scroll = zoom</span>
+        </footer>
+    </div>
+</div>
+
+<script>
+(function () {
+    var path = window.location.pathname;
+    var links = document.querySelectorAll(".side-nav a");
+    var sidebar = document.querySelector(".sidebar");
+    var navToggle = document.querySelector(".mobile-nav-toggle");
+    var best = null;
+    links.forEach(function (a) {
+        var href = a.getAttribute("href");
+        if (href === "/" ? path === "/" : path.indexOf(href) === 0) {
+            if (!best || href.length > best.getAttribute("href").length) { best = a; }
+        }
+    });
+    if (best) { best.classList.add("active"); }
+
+    function setMobileNav(open) {
+        if (!sidebar || !navToggle) return;
+        sidebar.classList.toggle("nav-open", open);
+        navToggle.setAttribute("aria-expanded", open ? "true" : "false");
+    }
+
+    if (navToggle) {
+        navToggle.addEventListener("click", function () {
+            setMobileNav(!sidebar.classList.contains("nav-open"));
+        });
+    }
+
+    var backButton = document.querySelector(".back-btn");
+    if (backButton && path === "/") {
+        backButton.hidden = true;
+        document.body.classList.add("dashboard-page");
+    }
+
+    var searchHint = document.querySelector(".topbar-kicker");
+    if (searchHint && !document.querySelector("input[type='search'], [data-student-filter]")) {
+        searchHint.hidden = true;
+    }
+
+    var saveHint = document.querySelector(".topbar-status .save-shortcut");
+    if (saveHint && !document.querySelector(".classic-fee-form")) {
+        saveHint.hidden = true;
+    }
+
+    document.addEventListener("keydown", function (event) {
+        var target = event.target;
+        var isTyping = target && ["INPUT", "SELECT", "TEXTAREA"].indexOf(target.tagName) !== -1;
+
+        if (event.key === "Escape" && sidebar && sidebar.classList.contains("nav-open")) {
+            event.preventDefault();
+            setMobileNav(false);
+            navToggle.focus();
+            return;
+        }
+
+        if (event.key === "Escape" && path !== "/") {
+            event.preventDefault();
+            history.back();
+            return;
+        }
+
+        if (event.key === "/" && !isTyping) {
+            var search = document.querySelector("input[type='search'], [data-student-filter]");
+            if (search) {
+                event.preventDefault();
+                search.focus();
+            }
+            return;
+        }
+
+        if (event.key === "F9") {
+            var feeForm = document.querySelector(".classic-fee-form");
+            if (feeForm) {
+                event.preventDefault();
+                feeForm.requestSubmit();
+            }
+        }
+    });
+})();
+</script>
+<script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+            navigator.serviceWorker.register('{% url "core:service_worker" %}').then(function(registration) {
+                console.log('ServiceWorker registration successful with scope: ', registration.scope);
+            }, function(err) {
+                console.log('ServiceWorker registration failed: ', err);
+            });
+        });
+    }
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

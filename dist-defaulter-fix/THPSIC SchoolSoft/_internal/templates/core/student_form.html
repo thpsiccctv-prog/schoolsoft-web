@@ -1,0 +1,1112 @@
+{% extends "base.html" %}
+
+{% block title %}{% if is_edit %}Edit Student{% else %}Student Admission Entry{% endif %} | SchoolSoft{% endblock %}
+
+{% block content %}
+<section class="section student-entry">
+    <div class="student-entry-header">
+        <div>
+            <span class="entry-kicker">{% if is_edit %}Student Record{% else %}Admission Desk{% endif %}</span>
+            <h1>{% if is_edit %}Edit Student{% else %}Student Admission Entry{% endif %}</h1>
+            {% if is_edit %}
+                <p>{{ student.full_name }}{% if student.current_class %} | {{ student.current_class }}{% if student.current_section %}-{{ student.current_section.name }}{% endif %}{% endif %}</p>
+            {% else %}
+                <p>New admission details</p>
+            {% endif %}
+        </div>
+        <div class="entry-header-actions">
+            {% if is_edit %}
+                <a class="entry-btn entry-btn-danger" href="{% url 'core:student_delete' student.pk %}">Delete</a>
+                <a class="entry-btn entry-btn-secondary" href="{% url 'core:student_detail' student.pk %}">Cancel</a>
+            {% else %}
+                <a class="entry-btn entry-btn-secondary" href="{% url 'core:student_list' %}">Student List</a>
+            {% endif %}
+        </div>
+    </div>
+
+    <form class="entry-form student-entry-form" method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+            <div class="entry-alert entry-alert-danger">
+                {{ form.non_field_errors }}
+            </div>
+        {% endif %}
+
+        <div id="duplicate-warning" class="entry-alert entry-alert-warning" hidden></div>
+
+        <div class="student-admission-shell">
+            <div class="student-admission-main">
+                <section class="entry-card">
+                    <div class="entry-card-title">Identity & Enrollment</div>
+                    <div class="entry-grid entry-grid-four">
+                        <div class="entry-field">
+                            <label for="{{ form.registration_no.id_for_label }}">{{ form.registration_no.label }}</label>
+                            {{ form.registration_no }}
+                            {% if form.registration_no.errors %}<div class="error-text">{{ form.registration_no.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.admission_no.id_for_label }}">{{ form.admission_no.label }}</label>
+                            {{ form.admission_no }}
+                            {% if form.admission_no.errors %}<div class="error-text">{{ form.admission_no.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.legacy_sid.id_for_label }}">{{ form.legacy_sid.label }}</label>
+                            {{ form.legacy_sid }}
+                            {% if form.legacy_sid.errors %}<div class="error-text">{{ form.legacy_sid.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.scholar_register_no.id_for_label }}">{{ form.scholar_register_no.label }}</label>
+                            {{ form.scholar_register_no }}
+                            {% if form.scholar_register_no.help_text %}<small>{{ form.scholar_register_no.help_text }}</small>{% endif %}
+                            {% if form.scholar_register_no.errors %}<div class="error-text">{{ form.scholar_register_no.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.admission_date.id_for_label }}">{{ form.admission_date.label }}</label>
+                            {{ form.admission_date }}
+                            {% if form.admission_date.errors %}<div class="error-text">{{ form.admission_date.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.pen_number.id_for_label }}">{{ form.pen_number.label }}</label>
+                            {{ form.pen_number }}
+                            {% if form.pen_number.errors %}<div class="error-text">{{ form.pen_number.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.apaar_id.id_for_label }}">{{ form.apaar_id.label }}</label>
+                            {{ form.apaar_id }}
+                            {% if form.apaar_id.errors %}<div class="error-text">{{ form.apaar_id.errors|striptags }}</div>{% endif %}
+                        </div>
+                    </div>
+                </section>
+
+                <section class="entry-card">
+                    <div class="entry-card-title">Personal Information</div>
+                    <div class="entry-grid entry-grid-four">
+                        <div class="entry-field entry-span-2">
+                            <label for="{{ form.full_name.id_for_label }}">{{ form.full_name.label }}</label>
+                            {{ form.full_name }}
+                            {% if form.full_name.errors %}<div class="error-text">{{ form.full_name.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field entry-span-2">
+                            <label for="{{ form.full_name_hindi.id_for_label }}">{{ form.full_name_hindi.label }}</label>
+                            {{ form.full_name_hindi }}
+                            {% if form.full_name_hindi.errors %}<div class="error-text">{{ form.full_name_hindi.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.current_class.id_for_label }}">{{ form.current_class.label }}</label>
+                            {{ form.current_class }}
+                            {% if form.current_class.errors %}<div class="error-text">{{ form.current_class.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.current_section.id_for_label }}">{{ form.current_section.label }}</label>
+                            {{ form.current_section }}
+                            {% if form.current_section.errors %}<div class="error-text">{{ form.current_section.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.roll_no.id_for_label }}">{{ form.roll_no.label }}</label>
+                            {{ form.roll_no }}
+                            {% if form.roll_no.errors %}<div class="error-text">{{ form.roll_no.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.house.id_for_label }}">{{ form.house.label }}</label>
+                            {{ form.house }}
+                            {% if form.house.errors %}<div class="error-text">{{ form.house.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.date_of_birth.id_for_label }}">{{ form.date_of_birth.label }}</label>
+                            {{ form.date_of_birth }}
+                            {% if form.date_of_birth.errors %}<div class="error-text">{{ form.date_of_birth.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.gender.id_for_label }}">{{ form.gender.label }}</label>
+                            {{ form.gender }}
+                            {% if form.gender.errors %}<div class="error-text">{{ form.gender.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.exam_medium.id_for_label }}">{{ form.exam_medium.label }}</label>
+                            {{ form.exam_medium }}
+                            {% if form.exam_medium.errors %}<div class="error-text">{{ form.exam_medium.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field entry-span-2">
+                            <label for="{{ form.aadhaar_no.id_for_label }}">{{ form.aadhaar_no.label }}</label>
+                            {{ form.aadhaar_no }}
+                            {% if form.aadhaar_no.errors %}<div class="error-text">{{ form.aadhaar_no.errors|striptags }}</div>{% endif %}
+                        </div>
+                    </div>
+                </section>
+
+                <section class="entry-card" id="board-registration-card" style="display: none;">
+                    <div class="entry-card-title">Board Registration</div>
+                    <div id="board-registration-guidance" class="entry-alert entry-alert-warning" style="margin-bottom: 12px;">
+                        Select Class IX or XI stream to show board registration fields.
+                    </div>
+                    <div class="entry-grid entry-grid-four">
+                        <div class="entry-field">
+                            <label for="{{ form.board_candidate_type_1_code.id_for_label }}">{{ form.board_candidate_type_1_code.label }}</label>
+                            {{ form.board_candidate_type_1_code }}
+                            {% if form.board_candidate_type_1_code.errors %}<div class="error-text">{{ form.board_candidate_type_1_code.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.board_candidate_type_2_code.id_for_label }}">{{ form.board_candidate_type_2_code.label }}</label>
+                            {{ form.board_candidate_type_2_code }}
+                            {% if form.board_candidate_type_2_code.errors %}<div class="error-text">{{ form.board_candidate_type_2_code.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.board_caste_code.id_for_label }}">{{ form.board_caste_code.label }}</label>
+                            {{ form.board_caste_code }}
+                            {% if form.board_caste_code.errors %}<div class="error-text">{{ form.board_caste_code.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.previous_board_source.id_for_label }}">{{ form.previous_board_source.label }}</label>
+                            {{ form.previous_board_source }}
+                            {% if form.previous_board_source.errors %}<div class="error-text">{{ form.previous_board_source.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.class8_unique_id.id_for_label }}">{{ form.class8_unique_id.label }}</label>
+                            {{ form.class8_unique_id }}
+                            {% if form.class8_unique_id.errors %}<div class="error-text">{{ form.class8_unique_id.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.board_sr_number.id_for_label }}">{{ form.board_sr_number.label }}</label>
+                            {{ form.board_sr_number }}
+                            {% if form.board_sr_number.errors %}<div class="error-text">{{ form.board_sr_number.errors|striptags }}</div>{% endif %}
+                        </div>
+                    </div>
+                </section>
+
+                <section class="entry-card" id="board-subject-card" style="display: none;">
+                    <div class="entry-card-title">Board Subjects (Class IX/XI)</div>
+                    <div id="subject-guidance" class="entry-alert entry-alert-warning" style="margin-bottom: 12px;">
+                        Select Class IX or XI stream to load the matching Board subject pattern.
+                    </div>
+                    <div class="entry-grid entry-grid-four">
+                        <div class="entry-field entry-span-2">
+                            <label for="{{ form.subject_group.id_for_label }}">{{ form.subject_group.label }}</label>
+                            {{ form.subject_group }}
+                            {% if form.subject_group.errors %}<div class="error-text">{{ form.subject_group.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.subject_1_code.id_for_label }}">{{ form.subject_1_code.label }}</label>
+                            {{ form.subject_1_code }}
+                            {% if form.subject_1_code.errors %}<div class="error-text">{{ form.subject_1_code.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.subject_2_code.id_for_label }}">{{ form.subject_2_code.label }}</label>
+                            {{ form.subject_2_code }}
+                            {% if form.subject_2_code.errors %}<div class="error-text">{{ form.subject_2_code.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.subject_3_code.id_for_label }}">{{ form.subject_3_code.label }}</label>
+                            {{ form.subject_3_code }}
+                            {% if form.subject_3_code.errors %}<div class="error-text">{{ form.subject_3_code.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.subject_4_code.id_for_label }}">{{ form.subject_4_code.label }}</label>
+                            {{ form.subject_4_code }}
+                            {% if form.subject_4_code.errors %}<div class="error-text">{{ form.subject_4_code.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.subject_5_code.id_for_label }}">{{ form.subject_5_code.label }}</label>
+                            {{ form.subject_5_code }}
+                            {% if form.subject_5_code.errors %}<div class="error-text">{{ form.subject_5_code.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.subject_6_code.id_for_label }}">{{ form.subject_6_code.label }}</label>
+                            {{ form.subject_6_code }}
+                            {% if form.subject_6_code.errors %}<div class="error-text">{{ form.subject_6_code.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.subject_7_code.id_for_label }}">{{ form.subject_7_code.label }}</label>
+                            {{ form.subject_7_code }}
+                            {% if form.subject_7_code.errors %}<div class="error-text">{{ form.subject_7_code.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.subject_voc_code.id_for_label }}">{{ form.subject_voc_code.label }}</label>
+                            {{ form.subject_voc_code }}
+                            {% if form.subject_voc_code.errors %}<div class="error-text">{{ form.subject_voc_code.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.subject_rev_voc_code.id_for_label }}">{{ form.subject_rev_voc_code.label }}</label>
+                            {{ form.subject_rev_voc_code }}
+                            {% if form.subject_rev_voc_code.errors %}<div class="error-text">{{ form.subject_rev_voc_code.errors|striptags }}</div>{% endif %}
+                        </div>
+                    </div>
+                    <div class="entry-alert entry-alert-info" style="margin-top: 12px;">
+                        IX default: 901, 917, 928, 931, 932, optional, 944. XI uses Group A/B/C according to stream. SubjectVOC is optional; SubjectRevVOC is only for Class IX.
+                    </div>
+                </section>
+
+                <section class="entry-card" id="fee-package-card" style="display: none;">
+                    <div class="entry-card-title">Fee Package</div>
+                    <div id="fee-package-guidance" class="entry-alert entry-alert-info" style="margin-bottom: 12px;">
+                        Package billing applies when selected.
+                    </div>
+                    <div class="entry-grid entry-grid-three">
+                        <div class="entry-field">
+                            <label class="student-active-toggle">
+                                {{ form.fee_package_enabled }}
+                                <span>{{ form.fee_package_enabled.label }}</span>
+                            </label>
+                            {% if form.fee_package_enabled.errors %}<div class="error-text">{{ form.fee_package_enabled.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.fee_package_total.id_for_label }}">{{ form.fee_package_total.label }}</label>
+                            {{ form.fee_package_total }}
+                            {% if form.fee_package_total.errors %}<div class="error-text">{{ form.fee_package_total.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.fee_package_note.id_for_label }}">{{ form.fee_package_note.label }}</label>
+                            {{ form.fee_package_note }}
+                            {% if form.fee_package_note.errors %}<div class="error-text">{{ form.fee_package_note.errors|striptags }}</div>{% endif %}
+                        </div>
+                    </div>
+                </section>
+
+                <section class="entry-card">
+                    <div class="entry-card-title">Family Details</div>
+                    <div class="entry-grid entry-grid-four">
+                        <div class="entry-field entry-span-2">
+                            <label for="{{ form.father_name.id_for_label }}">{{ form.father_name.label }}</label>
+                            {{ form.father_name }}
+                            {% if form.father_name.errors %}<div class="error-text">{{ form.father_name.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field entry-span-2">
+                            <label for="{{ form.father_name_hindi.id_for_label }}">{{ form.father_name_hindi.label }}</label>
+                            {{ form.father_name_hindi }}
+                            {% if form.father_name_hindi.errors %}<div class="error-text">{{ form.father_name_hindi.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field entry-span-2">
+                            <label for="{{ form.mother_name.id_for_label }}">{{ form.mother_name.label }}</label>
+                            {{ form.mother_name }}
+                            {% if form.mother_name.errors %}<div class="error-text">{{ form.mother_name.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field entry-span-2">
+                            <label for="{{ form.mother_name_hindi.id_for_label }}">{{ form.mother_name_hindi.label }}</label>
+                            {{ form.mother_name_hindi }}
+                            {% if form.mother_name_hindi.errors %}<div class="error-text">{{ form.mother_name_hindi.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field entry-span-2">
+                            <label for="{{ form.guardian_name.id_for_label }}">{{ form.guardian_name.label }}</label>
+                            {{ form.guardian_name }}
+                            {% if form.guardian_name.errors %}<div class="error-text">{{ form.guardian_name.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.mother_aadhaar_no.id_for_label }}">{{ form.mother_aadhaar_no.label }}</label>
+                            {{ form.mother_aadhaar_no }}
+                            {% if form.mother_aadhaar_no.errors %}<div class="error-text">{{ form.mother_aadhaar_no.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.father_aadhaar_no.id_for_label }}">{{ form.father_aadhaar_no.label }}</label>
+                            {{ form.father_aadhaar_no }}
+                            {% if form.father_aadhaar_no.errors %}<div class="error-text">{{ form.father_aadhaar_no.errors|striptags }}</div>{% endif %}
+                        </div>
+                    </div>
+                    
+                    <div id="sibling-detection-panel" class="alert alert-info" style="display: none; margin-top: 15px; background-color: #e2f0fb; border: 1px solid #b8daff; border-radius: 4px; padding: 12px; font-size: 14px;">
+                        <div style="font-weight: 600; margin-bottom: 5px; color: #004085;">🧒 Sibling Records Found:</div>
+                        <div style="margin-bottom: 5px; color: #004085;">This family already has enrolled students:</div>
+                        <ul id="sibling-list" style="margin: 0; padding-left: 20px; color: #004085;">
+                            <!-- Populated via JS -->
+                        </ul>
+                        <div style="margin-top: 8px; font-weight: 500; color: #004085;">You can assign a sibling concession for this new student in the Concession section below.</div>
+                    </div>
+                </section>
+
+                <section class="entry-card">
+                    <div class="entry-card-title">Social Category</div>
+                    <div class="entry-grid entry-grid-four">
+                        <div class="entry-field">
+                            <label for="{{ form.caste.id_for_label }}">{{ form.caste.label }}</label>
+                            {{ form.caste }}
+                            {% if form.caste.errors %}<div class="error-text">{{ form.caste.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.category.id_for_label }}">{{ form.category.label }}</label>
+                            {{ form.category }}
+                            {% if form.category.errors %}<div class="error-text">{{ form.category.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.religion.id_for_label }}">{{ form.religion.label }}</label>
+                            {{ form.religion }}
+                            {% if form.religion.errors %}<div class="error-text">{{ form.religion.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.disability.id_for_label }}">{{ form.disability.label }}</label>
+                            {{ form.disability }}
+                            {% if form.disability.errors %}<div class="error-text">{{ form.disability.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label class="student-active-toggle">
+                                {{ form.is_minority }}
+                                <span>{{ form.is_minority.label }}</span>
+                            </label>
+                            {% if form.is_minority.errors %}<div class="error-text">{{ form.is_minority.errors|striptags }}</div>{% endif %}
+                        </div>
+                    </div>
+                </section>
+
+                <section class="entry-card">
+                    <div class="entry-card-title">Contact & Address</div>
+                    <div class="entry-grid entry-grid-four">
+                        <div class="entry-field">
+                            <label for="{{ form.mobile_primary.id_for_label }}">{{ form.mobile_primary.label }}</label>
+                            {{ form.mobile_primary }}
+                            {% if form.mobile_primary.errors %}<div class="error-text">{{ form.mobile_primary.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.mobile_secondary.id_for_label }}">{{ form.mobile_secondary.label }}</label>
+                            {{ form.mobile_secondary }}
+                            {% if form.mobile_secondary.errors %}<div class="error-text">{{ form.mobile_secondary.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field entry-span-2">
+                            <label for="{{ form.email.id_for_label }}">{{ form.email.label }}</label>
+                            {{ form.email }}
+                            {% if form.email.errors %}<div class="error-text">{{ form.email.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.nationality.id_for_label }}">{{ form.nationality.label }}</label>
+                            {{ form.nationality }}
+                            {% if form.nationality.errors %}<div class="error-text">{{ form.nationality.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.nationality_other.id_for_label }}">{{ form.nationality_other.label }}</label>
+                            {{ form.nationality_other }}
+                            {% if form.nationality_other.errors %}<div class="error-text">{{ form.nationality_other.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field entry-span-2">
+                            <label for="{{ form.address_street_area.id_for_label }}">{{ form.address_street_area.label }}</label>
+                            {{ form.address_street_area }}
+                            {% if form.address_street_area.errors %}<div class="error-text">{{ form.address_street_area.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field entry-span-2">
+                            <label for="{{ form.address_local.id_for_label }}">{{ form.address_local.label }}</label>
+                            {{ form.address_local }}
+                            {% if form.address_local.errors %}<div class="error-text">{{ form.address_local.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field entry-span-2">
+                            <label for="{{ form.address_permanent.id_for_label }}">{{ form.address_permanent.label }}</label>
+                            {{ form.address_permanent }}
+                            {% if form.address_permanent.errors %}<div class="error-text">{{ form.address_permanent.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.village_locality.id_for_label }}">{{ form.village_locality.label }}</label>
+                            {{ form.village_locality }}
+                            {% if form.village_locality.errors %}<div class="error-text">{{ form.village_locality.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.post.id_for_label }}">{{ form.post.label }}</label>
+                            {{ form.post }}
+                            {% if form.post.errors %}<div class="error-text">{{ form.post.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.block.id_for_label }}">{{ form.block.label }}</label>
+                            {{ form.block }}
+                            {% if form.block.errors %}<div class="error-text">{{ form.block.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.district.id_for_label }}">{{ form.district.label }}</label>
+                            {{ form.district }}
+                            {% if form.district.errors %}<div class="error-text">{{ form.district.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.state.id_for_label }}">{{ form.state.label }}</label>
+                            {{ form.state }}
+                            {% if form.state.errors %}<div class="error-text">{{ form.state.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.pin_code.id_for_label }}">{{ form.pin_code.label }}</label>
+                            {{ form.pin_code }}
+                            {% if form.pin_code.errors %}<div class="error-text">{{ form.pin_code.errors|striptags }}</div>{% endif %}
+                        </div>
+                    </div>
+                </section>
+
+                <section class="entry-card">
+                    <div class="entry-card-title">Health</div>
+                    <div class="entry-grid entry-grid-four">
+                        <div class="entry-field">
+                            <label for="{{ form.blood_group.id_for_label }}">{{ form.blood_group.label }}</label>
+                            {{ form.blood_group }}
+                            {% if form.blood_group.errors %}<div class="error-text">{{ form.blood_group.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.weight_kg.id_for_label }}">{{ form.weight_kg.label }}</label>
+                            {{ form.weight_kg }}
+                            {% if form.weight_kg.errors %}<div class="error-text">{{ form.weight_kg.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.height_cm.id_for_label }}">{{ form.height_cm.label }}</label>
+                            {{ form.height_cm }}
+                            {% if form.height_cm.errors %}<div class="error-text">{{ form.height_cm.errors|striptags }}</div>{% endif %}
+                        </div>
+                    </div>
+                </section>
+
+                <section class="entry-card">
+                    <div class="entry-card-title">Transport Details</div>
+                    <div class="entry-grid entry-grid-four">
+                        <div class="entry-field">
+                            <label class="student-active-toggle">
+                                {{ form.transport_required }}
+                                <span>{{ form.transport_required.label }}</span>
+                            </label>
+                            {% if form.transport_required.errors %}<div class="error-text">{{ form.transport_required.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field entry-span-2 transport-field" style="display: none;">
+                            <label for="{{ form.transport_route.id_for_label }}">{{ form.transport_route.label }}</label>
+                            {{ form.transport_route }}
+                            {% if form.transport_route.errors %}<div class="error-text">{{ form.transport_route.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field transport-field" style="display: none;">
+                            <label for="{{ form.stop_name.id_for_label }}">{{ form.stop_name.label }}</label>
+                            {{ form.stop_name }}
+                            {% if form.stop_name.errors %}<div class="error-text">{{ form.stop_name.errors|striptags }}</div>{% endif %}
+                        </div>
+                    </div>
+                </section>
+
+                <section class="entry-card">
+                    <div class="entry-card-title">Previous School (if admitted by transfer)</div>
+                    <div class="entry-grid entry-grid-four">
+                        <div class="entry-field entry-span-2">
+                            <label for="{{ form.previous_school_name.id_for_label }}">{{ form.previous_school_name.label }}</label>
+                            {{ form.previous_school_name }}
+                            {% if form.previous_school_name.errors %}<div class="error-text">{{ form.previous_school_name.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.previous_board_name.id_for_label }}">{{ form.previous_board_name.label }}</label>
+                            {{ form.previous_board_name }}
+                            {% if form.previous_board_name.errors %}<div class="error-text">{{ form.previous_board_name.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.previous_passing_year.id_for_label }}">{{ form.previous_passing_year.label }}</label>
+                            {{ form.previous_passing_year }}
+                            {% if form.previous_passing_year.errors %}<div class="error-text">{{ form.previous_passing_year.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.previous_roll_no.id_for_label }}">{{ form.previous_roll_no.label }}</label>
+                            {{ form.previous_roll_no }}
+                            {% if form.previous_roll_no.errors %}<div class="error-text">{{ form.previous_roll_no.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.previous_marks_obtained.id_for_label }}">{{ form.previous_marks_obtained.label }}</label>
+                            {{ form.previous_marks_obtained }}
+                            {% if form.previous_marks_obtained.errors %}<div class="error-text">{{ form.previous_marks_obtained.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.previous_total_marks.id_for_label }}">{{ form.previous_total_marks.label }}</label>
+                            {{ form.previous_total_marks }}
+                            {% if form.previous_total_marks.errors %}<div class="error-text">{{ form.previous_total_marks.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="entry-field">
+                            <label for="{{ form.previous_percentage.id_for_label }}">{{ form.previous_percentage.label }}</label>
+                            {{ form.previous_percentage }}
+                            {% if form.previous_percentage.errors %}<div class="error-text">{{ form.previous_percentage.errors|striptags }}</div>{% endif %}
+                        </div>
+                    </div>
+                </section>
+
+                <section class="entry-card">
+                    <div class="entry-card-title">Documents Received</div>
+                    <div class="entry-grid entry-grid-four">
+                        <div class="entry-field">
+                            <label class="student-active-toggle">
+                                {{ form.doc_tc_received }}
+                                <span>{{ form.doc_tc_received.label }}</span>
+                            </label>
+                        </div>
+                        <div class="entry-field">
+                            <label class="student-active-toggle">
+                                {{ form.doc_aadhar_received }}
+                                <span>{{ form.doc_aadhar_received.label }}</span>
+                            </label>
+                        </div>
+                        <div class="entry-field">
+                            <label class="student-active-toggle">
+                                {{ form.doc_marksheet_received }}
+                                <span>{{ form.doc_marksheet_received.label }}</span>
+                            </label>
+                        </div>
+                        <div class="entry-field">
+                            <label class="student-active-toggle">
+                                {{ form.doc_birth_certificate_received }}
+                                <span>{{ form.doc_birth_certificate_received.label }}</span>
+                            </label>
+                        </div>
+                        <div class="entry-field">
+                            <label class="student-active-toggle">
+                                {{ form.doc_character_certificate_received }}
+                                <span>{{ form.doc_character_certificate_received.label }}</span>
+                            </label>
+                        </div>
+                        <div class="entry-field">
+                            <label class="student-active-toggle">
+                                {{ form.doc_photo_received }}
+                                <span>{{ form.doc_photo_received.label }}</span>
+                            </label>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="entry-card" id="concession-section">
+                    <div class="entry-card-title">💰 Concession / Waiver (Session-bound)</div>
+                    {% if existing_concession %}
+                    <div style="margin-bottom:10px; padding:8px 12px; background:#d1fae5; color:#065f46; border-radius:4px; font-size:13px; border:1px solid #6ee7b7;">
+                        ✓ Active concession found for current session —
+                        <strong>{{ existing_concession.get_concession_type_display }}</strong>
+                        {% if existing_concession.amount %}₹{{ existing_concession.amount }}{% endif %}
+                        ({{ existing_concession.from_month|default:"APR" }} → {{ existing_concession.to_month|default:"MAR" }}).
+                        Edit fields below to update, or leave blank to keep unchanged.
+                    </div>
+                    {% endif %}
+                    <div class="entry-grid entry-grid-three">
+                        <div class="entry-field">
+                            <label for="concession_type">Concession Type</label>
+                            <select name="concession_type" id="concession_type" class="form-control">
+                                <option value="">-- None --</option>
+                                {% with ct=existing_concession.concession_type|default:"" %}
+                                <option value="monthly_waiver" {% if ct == "monthly_waiver" %}selected{% endif %}>Monthly Fee Waiver</option>
+                                <option value="sibling_discount" {% if ct == "sibling_discount" %}selected{% endif %}>Sibling Discount (Monthly)</option>
+                                <option value="one_time" {% if ct == "one_time" %}selected{% endif %}>One-time Concession</option>
+                                <option value="full_free" {% if ct == "full_free" %}selected{% endif %}>100% Free</option>
+                                {% endwith %}
+                            </select>
+                        </div>
+                        {% with fm=existing_concession.from_month|default:"" %}
+                        <div class="entry-field">
+                            <label for="concession_from_month">From Month</label>
+                            <select name="concession_from_month" id="concession_from_month" class="form-control">
+                                <option value="">-- Start of Session --</option>
+                                <option value="APR" {% if fm == "APR" %}selected{% endif %}>April</option>
+                                <option value="MAY" {% if fm == "MAY" %}selected{% endif %}>May</option>
+                                <option value="JUN" {% if fm == "JUN" %}selected{% endif %}>June</option>
+                                <option value="JUL" {% if fm == "JUL" %}selected{% endif %}>July</option>
+                                <option value="AUG" {% if fm == "AUG" %}selected{% endif %}>August</option>
+                                <option value="SEP" {% if fm == "SEP" %}selected{% endif %}>September</option>
+                                <option value="OCT" {% if fm == "OCT" %}selected{% endif %}>October</option>
+                                <option value="NOV" {% if fm == "NOV" %}selected{% endif %}>November</option>
+                                <option value="DEC" {% if fm == "DEC" %}selected{% endif %}>December</option>
+                                <option value="JAN" {% if fm == "JAN" %}selected{% endif %}>January</option>
+                                <option value="FEB" {% if fm == "FEB" %}selected{% endif %}>February</option>
+                                <option value="MAR" {% if fm == "MAR" %}selected{% endif %}>March</option>
+                            </select>
+                        </div>
+                        {% endwith %}
+                        {% with tm=existing_concession.to_month|default:"" %}
+                        <div class="entry-field">
+                            <label for="concession_to_month">To Month</label>
+                            <select name="concession_to_month" id="concession_to_month" class="form-control">
+                                <option value="">-- End of Session --</option>
+                                <option value="APR" {% if tm == "APR" %}selected{% endif %}>April</option>
+                                <option value="MAY" {% if tm == "MAY" %}selected{% endif %}>May</option>
+                                <option value="JUN" {% if tm == "JUN" %}selected{% endif %}>June</option>
+                                <option value="JUL" {% if tm == "JUL" %}selected{% endif %}>July</option>
+                                <option value="AUG" {% if tm == "AUG" %}selected{% endif %}>August</option>
+                                <option value="SEP" {% if tm == "SEP" %}selected{% endif %}>September</option>
+                                <option value="OCT" {% if tm == "OCT" %}selected{% endif %}>October</option>
+                                <option value="NOV" {% if tm == "NOV" %}selected{% endif %}>November</option>
+                                <option value="DEC" {% if tm == "DEC" %}selected{% endif %}>December</option>
+                                <option value="JAN" {% if tm == "JAN" %}selected{% endif %}>January</option>
+                                <option value="FEB" {% if tm == "FEB" %}selected{% endif %}>February</option>
+                                <option value="MAR" {% if tm == "MAR" %}selected{% endif %}>March</option>
+                            </select>
+                        </div>
+                        {% endwith %}
+                        <div class="entry-field">
+                            <label for="concession_amount">Amount (₹) <small style="color:#6b7280;">(blank for 100% Free)</small></label>
+                            <input type="number" step="0.01" name="concession_amount" id="concession_amount" class="form-control"
+                                   placeholder="0.00" value="{{ existing_concession.amount|default:'' }}">
+                        </div>
+                        <div class="entry-field">
+                            <label for="concession_reason">Reason</label>
+                            <input type="text" name="concession_reason" id="concession_reason" class="form-control"
+                                   placeholder="e.g. Sibling of Rahul" value="{{ existing_concession.reason|default:'' }}">
+                        </div>
+                        <div class="entry-field">
+                            <label for="concession_approved_by">Approved By</label>
+                            <input type="text" name="concession_approved_by" id="concession_approved_by" class="form-control"
+                                   placeholder="e.g. Principal" value="{{ existing_concession.approved_by_name|default:'' }}">
+                        </div>
+                        <div class="entry-field">
+                            <label class="student-active-toggle" style="margin-top: 25px;">
+                                <input type="checkbox" name="concession_is_active" id="concession_is_active"
+                                       {% if not existing_concession or existing_concession.is_active %}checked{% endif %}>
+                                <span>Active Concession</span>
+                            </label>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <aside class="student-entry-rail">
+                <section class="entry-card student-photo-card">
+                    <div class="student-photo-box" id="student-photo-box">
+                        {% if student.photo %}
+                            <img src="{{ student.photo.url }}" alt="{{ student.full_name }}" class="student-photo-preview" id="student-photo-preview-img">
+                        {% else %}
+                            <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true" id="student-photo-placeholder-icon">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M4 16l4.4-4.4a2 2 0 0 1 2.8 0L16 16m-2-2 1.5-1.5a2 2 0 0 1 2.8 0L20 14M7 5h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z" />
+                            </svg>
+                            <span id="student-photo-placeholder-text">No Photo</span>
+                        {% endif %}
+                    </div>
+                    <div class="entry-field">
+                        <label for="{{ form.photo.id_for_label }}">{{ form.photo.label }}</label>
+                        {{ form.photo }}
+                        {% if form.photo.errors %}<div class="error-text">{{ form.photo.errors|striptags }}</div>{% endif %}
+                    </div>
+                </section>
+
+                <section class="entry-card student-command-card">
+                    <label class="student-active-toggle">
+                        {{ form.is_active }}
+                        <span>Active Student</span>
+                    </label>
+                    {% if form.is_active.errors %}<div class="error-text">{{ form.is_active.errors|striptags }}</div>{% endif %}
+
+                    <div class="student-command-actions">
+                        <button class="entry-btn entry-btn-primary" type="submit" name="action" value="save">Save</button>
+                        {% if not is_edit %}
+                            <button class="entry-btn entry-btn-secondary" type="submit" name="action" value="save_new">Save & New</button>
+                        {% endif %}
+                    </div>
+                </section>
+            </aside>
+        </div>
+    </form>
+
+    {% if not is_edit and recent_students %}
+        <section class="entry-card recent-admissions-card">
+            <div class="entry-card-title">Recent Admissions</div>
+            <div class="table-wrap compact-table-wrap">
+                <table class="recent-admissions-table">
+                    <thead>
+                        <tr>
+                            <th>SID</th>
+                            <th>Date</th>
+                            <th>Student's Name</th>
+                            <th>Class</th>
+                            <th>Father's Name</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for st in recent_students %}
+                            <tr>
+                                <td>{{ st.legacy_sid|default:"" }}</td>
+                                <td>{{ st.admission_date|date:"d/m/Y"|default:"" }}</td>
+                                <td><a class="record-link" href="{% url 'core:student_detail' st.pk %}">{{ st.full_name }}</a></td>
+                                <td>{{ st.current_class|default:"" }}{% if st.current_section %}-{{ st.current_section }}{% endif %}</td>
+                                <td>{{ st.father_name }}</td>
+                                <td class="table-actions">
+                                    <a class="record-link edit" href="{% url 'core:student_update' st.pk %}">Edit</a>
+                                    <a class="record-link delete" href="{% url 'core:student_delete' st.pk %}">Delete</a>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    {% endif %}
+</section>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const warningBanner = document.getElementById("duplicate-warning");
+        const sidInput = document.getElementById("{{ form.legacy_sid.id_for_label }}");
+        const admissionInput = document.getElementById("{{ form.admission_no.id_for_label }}");
+        const mobileInput = document.getElementById("{{ form.mobile_primary.id_for_label }}");
+        
+        // Transport toggle
+        const transportRequiredCb = document.getElementById("{{ form.transport_required.id_for_label }}");
+        const transportFields = document.querySelectorAll(".transport-field");
+        function toggleTransportFields() {
+            if (transportRequiredCb) {
+                const isChecked = transportRequiredCb.checked;
+                transportFields.forEach(function(el) {
+                    el.style.display = isChecked ? "block" : "none";
+                });
+            }
+        }
+        if (transportRequiredCb) {
+            transportRequiredCb.addEventListener("change", toggleTransportFields);
+            toggleTransportFields();
+        }
+
+        // Only show sections belonging to the selected class.
+        const classSelect = document.getElementById("{{ form.current_class.id_for_label }}");
+        const sectionSelect = document.getElementById("{{ form.current_section.id_for_label }}");
+
+        function filterSectionsByClass() {
+            if (!classSelect || !sectionSelect) return;
+            const classId = classSelect.value;
+            let selectedStillVisible = false;
+            Array.from(sectionSelect.options).forEach(function (opt) {
+                if (!opt.value) {
+                    opt.hidden = false;
+                    return;
+                }
+                const matches = classId && opt.dataset.class === classId;
+                opt.hidden = !matches;
+                if (matches && opt.selected) {
+                    selectedStillVisible = true;
+                }
+            });
+            if (!selectedStillVisible) {
+                sectionSelect.value = "";
+            }
+        }
+
+        if (classSelect && sectionSelect) {
+            classSelect.addEventListener("change", filterSectionsByClass);
+            filterSectionsByClass();
+        }
+
+        const feePackageCard = document.getElementById("fee-package-card");
+        const feePackageGuidance = document.getElementById("fee-package-guidance");
+        const feePackageEnabled = document.getElementById("{{ form.fee_package_enabled.id_for_label }}");
+        const feePackageTotal = document.getElementById("{{ form.fee_package_total.id_for_label }}");
+
+        function currentClassLabel() {
+            if (!classSelect || classSelect.selectedIndex < 0) return "";
+            const option = classSelect.options[classSelect.selectedIndex];
+            return option ? option.textContent.trim().toUpperCase() : "";
+        }
+
+        function currentSectionLabel() {
+            if (!sectionSelect || sectionSelect.selectedIndex < 0) return "";
+            const option = sectionSelect.options[sectionSelect.selectedIndex];
+            return option ? option.textContent.trim().toUpperCase() : "";
+        }
+
+        function feePackageAmountIsBlank() {
+            if (!feePackageTotal) return true;
+            const raw = (feePackageTotal.value || "").trim();
+            return raw === "" || raw === "0" || raw === "0.0" || raw === "0.00";
+        }
+
+        function updateFeePackageCard() {
+            if (!feePackageCard) return;
+            const classLabel = currentClassLabel();
+            const sectionLabel = currentSectionLabel();
+            const isZeroSection = sectionLabel === "B" || sectionLabel === "C";
+            const isCommerce = classLabel.includes("COM");
+            const isSectionPackage = sectionLabel === "D";
+            const isDirectNegotiatedClass = classLabel === "X" || classLabel.startsWith("XII");
+            const manuallyEnabled = feePackageEnabled && feePackageEnabled.checked;
+            const shouldShow = !isZeroSection && (isSectionPackage || isCommerce || isDirectNegotiatedClass || manuallyEnabled);
+
+            feePackageCard.style.display = shouldShow ? "block" : "none";
+            if (!shouldShow) {
+                if (feePackageEnabled && isZeroSection) {
+                    feePackageEnabled.checked = false;
+                }
+                return;
+            }
+
+            if (isSectionPackage) {
+                if (feePackageEnabled) {
+                    feePackageEnabled.checked = true;
+                }
+                if (feePackageTotal && feePackageAmountIsBlank()) {
+                    feePackageTotal.value = "4500.00";
+                }
+                if (feePackageGuidance) {
+                    feePackageGuidance.textContent = "Section D package billing: Rs. 4500 default, manual override allowed.";
+                }
+            } else if (isCommerce) {
+                if (feePackageGuidance) {
+                    feePackageGuidance.textContent = "Commerce regular fee applies by default. Tick package only for approved Rs. 4500 package cases.";
+                }
+                if (feePackageEnabled && feePackageEnabled.checked && feePackageTotal && feePackageAmountIsBlank()) {
+                    feePackageTotal.value = "4500.00";
+                }
+            } else if (isDirectNegotiatedClass && feePackageGuidance) {
+                feePackageGuidance.textContent = "Direct X/XII admission: enter negotiated package amount only when applicable.";
+            }
+        }
+
+        if (classSelect) {
+            classSelect.addEventListener("change", updateFeePackageCard);
+        }
+        if (sectionSelect) {
+            sectionSelect.addEventListener("change", updateFeePackageCard);
+        }
+        if (feePackageEnabled) {
+            feePackageEnabled.addEventListener("change", updateFeePackageCard);
+        }
+        updateFeePackageCard();
+
+        // Board registration + subject helper for Class IX and Class XI.
+        const boardRegistrationCard = document.getElementById("board-registration-card");
+        const boardRegistrationGuidance = document.getElementById("board-registration-guidance");
+        const subjectCard = document.getElementById("board-subject-card");
+        const subjectGuidance = document.getElementById("subject-guidance");
+        const subjectGroupSelect = document.getElementById("{{ form.subject_group.id_for_label }}");
+        const subjectVocSelect = document.getElementById("{{ form.subject_voc_code.id_for_label }}");
+        const subjectRevVocSelect = document.getElementById("{{ form.subject_rev_voc_code.id_for_label }}");
+        const candidateType1Select = document.getElementById("{{ form.board_candidate_type_1_code.id_for_label }}");
+        const candidateType2Select = document.getElementById("{{ form.board_candidate_type_2_code.id_for_label }}");
+        const previousBoardSourceSelect = document.getElementById("{{ form.previous_board_source.id_for_label }}");
+        const class8UniqueInput = document.getElementById("{{ form.class8_unique_id.id_for_label }}");
+        const subjectCodeSelects = [
+            document.getElementById("{{ form.subject_1_code.id_for_label }}"),
+            document.getElementById("{{ form.subject_2_code.id_for_label }}"),
+            document.getElementById("{{ form.subject_3_code.id_for_label }}"),
+            document.getElementById("{{ form.subject_4_code.id_for_label }}"),
+            document.getElementById("{{ form.subject_5_code.id_for_label }}"),
+            document.getElementById("{{ form.subject_6_code.id_for_label }}"),
+            document.getElementById("{{ form.subject_7_code.id_for_label }}")
+        ].filter(Boolean);
+
+        const subjectProfiles = {
+            high_school: {
+                group: "HS",
+                codes: ["901", "917", "928", "931", "932", "936", "944"],
+                message: "Class IX/X: choose five compulsory subjects, one optional subject, and 944 as the 7th compulsory activity subject."
+            },
+            arts: {
+                group: "A",
+                codes: ["101", "117", "128", "129", "142", "140", "173"],
+                message: "Arts/Humanities: Hindi/General Hindi + four optional subjects + 173 activity subject."
+            },
+            science_bio: {
+                group: "B",
+                codes: ["102", "117", "151", "152", "153", "", "173"],
+                message: "Science BIO: General Hindi, English, Physics, Chemistry, Biology, and 173 activity subject."
+            },
+            science_maths: {
+                group: "B",
+                codes: ["102", "117", "151", "152", "131", "", "173"],
+                message: "Science MATHS: General Hindi, English, Physics, Chemistry, Mathematics, and 173 activity subject."
+            },
+            commerce: {
+                group: "C",
+                codes: ["102", "156", "157", "117", "136", "", "173"],
+                message: "Commerce: General Hindi, Accountancy, Business Studies, two optional subjects, and 173 activity subject."
+            }
+        };
+
+        function selectedClassLabel() {
+            if (!classSelect || classSelect.selectedIndex < 0) return "";
+            const option = classSelect.options[classSelect.selectedIndex];
+            return option ? option.textContent.trim().toUpperCase() : "";
+        }
+
+        function subjectProfileForClass() {
+            const label = selectedClassLabel();
+            if (label === "IX") {
+                return {
+                    mode: "class9",
+                    profile: subjectProfiles.high_school,
+                    boardMessage: "Class IX board registration: fill candidate type, caste code, Class 8 Unique ID, subjects, VOC/RevVOC if applicable."
+                };
+            }
+            if (label.startsWith("XI")) {
+                let profile = null;
+                if (label.includes("ART")) profile = subjectProfiles.arts;
+                if (label.includes("BIO")) profile = subjectProfiles.science_bio;
+                if (label.includes("MATH")) profile = subjectProfiles.science_maths;
+                if (label.includes("COM")) profile = subjectProfiles.commerce;
+                if (profile) {
+                    return {
+                        mode: "class11",
+                        profile: profile,
+                        boardMessage: "Class XI board registration: choose UP Board or Other Board format, fill Class 10 board/year/roll in Previous School section, then confirm subjects."
+                    };
+                }
+            }
+            return null;
+        }
+
+        function fieldWrapper(element) {
+            return element ? element.closest(".entry-field") : null;
+        }
+
+        function setFieldVisible(element, visible) {
+            const wrapper = fieldWrapper(element);
+            if (wrapper) {
+                wrapper.style.display = visible ? "" : "none";
+            }
+        }
+
+        function setValueIfBlank(element, value) {
+            if (element && !element.value) {
+                element.value = value;
+            }
+        }
+
+        function subjectFieldsAreBlank() {
+            const groupBlank = !subjectGroupSelect || !subjectGroupSelect.value;
+            const codesBlank = subjectCodeSelects.every(function (el) { return !el.value; });
+            const vocBlank = !subjectVocSelect || !subjectVocSelect.value;
+            const revVocBlank = !subjectRevVocSelect || !subjectRevVocSelect.value;
+            return groupBlank && codesBlank && vocBlank && revVocBlank;
+        }
+
+        function applySubjectProfile() {
+            if (!subjectGroupSelect || subjectCodeSelects.length === 0) return;
+            const config = subjectProfileForClass();
+            if (!config) {
+                if (boardRegistrationCard) {
+                    boardRegistrationCard.style.display = "none";
+                }
+                if (subjectCard) {
+                    subjectCard.style.display = "none";
+                }
+                if (subjectGuidance) {
+                    subjectGuidance.textContent = "Select Class IX or an XI stream class to load Board subject choices.";
+                }
+                return;
+            }
+            const profile = config.profile;
+            if (boardRegistrationCard) {
+                boardRegistrationCard.style.display = "block";
+            }
+            if (subjectCard) {
+                subjectCard.style.display = "block";
+            }
+            if (boardRegistrationGuidance) {
+                boardRegistrationGuidance.textContent = config.boardMessage;
+            }
+            if (subjectGuidance) {
+                subjectGuidance.textContent = profile.message;
+            }
+
+            setValueIfBlank(candidateType1Select, "1");
+            setValueIfBlank(candidateType2Select, "0");
+            setFieldVisible(subjectGroupSelect, false);
+            setFieldVisible(previousBoardSourceSelect, config.mode === "class11");
+            setFieldVisible(class8UniqueInput, config.mode === "class9");
+            setFieldVisible(subjectVocSelect, true);
+            setFieldVisible(subjectRevVocSelect, config.mode === "class9");
+
+            if (subjectFieldsAreBlank()) {
+                subjectGroupSelect.value = profile.group;
+                subjectCodeSelects.forEach(function (select, index) {
+                    select.value = profile.codes[index] || "";
+                });
+            } else if (!subjectGroupSelect.value) {
+                subjectGroupSelect.value = profile.group;
+            }
+        }
+
+        if (classSelect && subjectGroupSelect) {
+            classSelect.addEventListener("change", applySubjectProfile);
+            applySubjectProfile();
+        }
+
+        // Instant photo preview - the file only actually saves on form submit,
+        // but the clerk should see what they picked immediately.
+        const photoInput = document.getElementById("{{ form.photo.id_for_label }}");
+        const photoBox = document.getElementById("student-photo-box");
+        if (photoInput && photoBox) {
+            photoInput.addEventListener("change", function () {
+                const file = this.files && this.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = function (event) {
+                    photoBox.innerHTML = "";
+                    const img = document.createElement("img");
+                    img.src = event.target.result;
+                    img.alt = "Selected photo";
+                    img.className = "student-photo-preview";
+                    photoBox.appendChild(img);
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function hideWarning() {
+            warningBanner.hidden = true;
+            warningBanner.textContent = "";
+        }
+
+        function checkDuplicate(field, value) {
+            if (!value) {
+                hideWarning();
+                return;
+            }
+
+            let url = "{% url 'core:check_student_duplicate' %}?field=" + encodeURIComponent(field) + "&value=" + encodeURIComponent(value);
+            {% if is_edit %}
+                url += "&exclude_id={{ student.pk }}";
+            {% endif %}
+
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.duplicate) {
+                        warningBanner.textContent = "Warning: " + data.message;
+                        warningBanner.hidden = false;
+                    } else {
+                        hideWarning();
+                    }
+                })
+                .catch(err => console.error("Error checking duplicate:", err));
+        }
+
+        if (sidInput) {
+            sidInput.addEventListener("blur", function() {
+                checkDuplicate("legacy_sid", this.value);
+            });
+        }
+
+        if (admissionInput) {
+            admissionInput.addEventListener("blur", function() {
+                checkDuplicate("admission_no", this.value);
+            });
+        }
+
+        if (mobileInput) {
+            mobileInput.addEventListener("blur", function() {
+                checkDuplicate("mobile", this.value);
+            });
+        }
+        
+        // Sibling Detection
+        const fatherInput = document.getElementById("{{ form.father_name.id_for_label }}");
+        const siblingPanel = document.getElementById("sibling-detection-panel");
+        const siblingList = document.getElementById("sibling-list");
+
+        function checkSiblings() {
+            const mobile = mobileInput ? mobileInput.value.trim() : "";
+            const father = fatherInput ? fatherInput.value.trim() : "";
+            
+            if (mobile.length < 10 && father.length < 3) {
+                siblingPanel.style.display = "none";
+                return;
+            }
+            
+            let url = "{% url 'core:check_siblings' %}?mobile=" + encodeURIComponent(mobile) + "&father=" + encodeURIComponent(father);
+            {% if is_edit %}
+                url += "&exclude_id={{ student.pk }}";
+            {% endif %}
+            
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.siblings && data.siblings.length > 0) {
+                        siblingList.innerHTML = "";
+                        data.siblings.forEach(sib => {
+                            const li = document.createElement("li");
+                            li.innerHTML = `<strong>${sib.name}</strong> (${sib.class_name}${sib.section_name ? "-" + sib.section_name : ""}) — SID: ${sib.sid}`;
+                            siblingList.appendChild(li);
+                        });
+                        siblingPanel.style.display = "block";
+                    } else {
+                        siblingPanel.style.display = "none";
+                    }
+                })
+                .catch(err => console.error("Error checking siblings:", err));
+        }
+
+        if (mobileInput) { mobileInput.addEventListener("blur", checkSiblings); }
+        if (fatherInput) { fatherInput.addEventListener("blur", checkSiblings); }
+        
+        setTimeout(checkSiblings, 500);
+
+    });
+</script>
+{% endblock %}

@@ -3,6 +3,7 @@ from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
+from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
@@ -22,7 +23,7 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument(
             "--source-dir",
-            default=r"D:\english medium\migration_audit\exports",
+            default=r"E:\THPSIC-INTER-COLLEGE\05-reports\access-audit-raw\school7-comp35\csv-for-analysis",
             help="Folder containing Emp_Mast.csv.",
         )
         parser.add_argument(
@@ -30,11 +31,19 @@ class Command(BaseCommand):
             action="store_true",
             help="Parse and validate CSV without writing to the database.",
         )
+        parser.add_argument(
+            "--confirm",
+            default="",
+            help="Required for live import. Use: THPSIC",
+        )
 
     def handle(self, *args, **options):
         source_dir = Path(options["source_dir"])
         staff_csv = source_dir / "Emp_Mast.csv"
         dry_run = options["dry_run"]
+
+        if not dry_run and options["confirm"] != "THPSIC":
+            raise CommandError("Live staff import requires --confirm THPSIC")
 
         if not staff_csv.exists():
             raise CommandError(
@@ -69,6 +78,8 @@ class Command(BaseCommand):
 
         mode = "DRY RUN" if dry_run else "IMPORT"
         self.stdout.write(self.style.SUCCESS(f"{mode} complete."))
+        self.stdout.write(f"DB: {settings.DATABASES['default']['NAME']}")
+        self.stdout.write(f"Source: {staff_csv}")
         for key, value in summary.items():
             self.stdout.write(f"{key}: {value}")
 
@@ -87,6 +98,7 @@ class Command(BaseCommand):
         defaults = {
             "full_name": full_name,
             "designation": self.clean(row.get("Designation")),
+            "staff_type": self.map_staff_type(row.get("Designation")),
             "qualification": self.clean(row.get("Qualification")),
             "phone": self.clean(row.get("PHONE")),
             "email": self.clean(row.get("EMAIL")) if self.looks_like_email(row.get("EMAIL")) else "",
@@ -95,9 +107,9 @@ class Command(BaseCommand):
             "date_of_joining": self.parse_date(row.get("DOJ")),
             "date_of_leaving": self.parse_date(row.get("DOL")),
             "pf_applicable": self.clean(row.get("PF_A")) not in {"", "0"},
-            "pf_account_no": self.clean(row.get("PF_Account")),
+            "pf_account_no": self.clean_account(row.get("PF_Account")),
             "esi_applicable": self.clean(row.get("ESI_A")) not in {"", "0"},
-            "esi_account_no": self.clean(row.get("ESI_Account_No")),
+            "esi_account_no": self.clean_account(row.get("ESI_Account_No")),
             "basic_pay": self.to_decimal(row.get("Basic")) or Decimal("0.00"),
             "da": self.to_decimal(row.get("DA")) or Decimal("0.00"),
             "other_allowances": self.to_decimal(row.get("O_Allownces")) or Decimal("0.00"),
@@ -112,6 +124,7 @@ class Command(BaseCommand):
         summary["rows_imported"] += 1
 
     def read_csv(self, path):
+        csv.field_size_limit(2_147_483_647)
         with path.open("r", encoding="utf-8-sig", newline="") as handle:
             return list(csv.DictReader(handle))
 
@@ -123,6 +136,20 @@ class Command(BaseCommand):
     def looks_like_email(self, value):
         cleaned = self.clean(value)
         return "@" in cleaned
+
+    def clean_account(self, value):
+        cleaned = self.clean(value)
+        return "" if cleaned == "0" else cleaned
+
+    def map_staff_type(self, designation):
+        cleaned = self.clean(designation).upper()
+        if cleaned in {"PRINCIPAL", "CLERK", "COMPUTER OPERATOR"}:
+            return Staff.StaffType.ADMIN
+        if cleaned in {"PEON", "GATE MAN", "BUS DRIVER"}:
+            return Staff.StaffType.NON_TEACHING
+        if "TEACHER" in cleaned or "LECTURER" in cleaned:
+            return Staff.StaffType.TEACHING
+        return Staff.StaffType.OTHER
 
     def to_int(self, value):
         cleaned = self.clean(value)

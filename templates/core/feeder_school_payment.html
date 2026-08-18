@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% load schoolsoft_extras %}
+
+{% block title %}Record Payment - {{ school.name }} | SchoolSoft{% endblock %}
+
+{% block content %}
+<section class="section" style="max-width: 680px; margin: 0 auto;">
+    <div class="section-heading">
+        <div>
+            <h2>Record School Payment (फीस भुगतान दर्ज करें)</h2>
+            <p><strong>{{ school.name }}</strong> से प्राप्त बोर्ड रजिस्ट्रेशन / एफिलिएशन फीस की प्रविष्टि।</p>
+        </div>
+    </div>
+
+    <!-- Outstanding Balance Pill Box -->
+    <div style="background: #FEF2F2; border: 1px solid #FCA5A5; border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center;">
+        <div>
+            <div style="font-size: 0.85rem; color: #991B1B; font-weight: 500;">वर्तमान कुल बकाया (Current Outstanding Balance)</div>
+            <div style="font-size: 1.5rem; font-weight: 700; color: #DC2626;">₹{{ balance_due|indian_number }}</div>
+        </div>
+        <div style="text-align: right; font-size: 0.85rem; color: #7F1D1D;">
+            <div>कुल नामांकित छात्र: <strong>{{ school.total_enrolled_students }}</strong></div>
+            <div>पैकेज मांग: <strong>₹{{ school.total_demand|indian_number }}</strong></div>
+        </div>
+    </div>
+
+    <form method="post" style="background: var(--surface); padding: 1.5rem; border-radius: 8px; border: 1px solid var(--border);">
+        {% csrf_token %}
+
+        {% if form.errors %}
+        <div class="alert alert-danger" style="background: #FEE2E2; color: #991B1B; padding: 0.75rem; border-radius: 6px; margin-bottom: 1.25rem;">
+            Please correct the errors below.
+        </div>
+        {% endif %}
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+            <div>
+                <label style="display: block; font-weight: 600; margin-bottom: 0.25rem;">Payment Date (भुगतान तिथि) *</label>
+                {{ form.payment_date }}
+                {% if form.payment_date.errors %}<div style="color: #DC2626; font-size: 0.8rem; margin-top: 0.25rem;">{{ form.payment_date.errors.0 }}</div>{% endif %}
+            </div>
+            <div>
+                <label style="display: block; font-weight: 600; margin-bottom: 0.25rem;">Payment Mode (माध्यम) *</label>
+                {{ form.payment_mode }}
+            </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+            <div>
+                <label style="display: block; font-weight: 600; margin-bottom: 0.25rem;">Amount (प्राप्त राशि ₹) *</label>
+                {{ form.amount }}
+                {% if form.amount.errors %}<div style="color: #DC2626; font-size: 0.8rem; margin-top: 0.25rem;">{{ form.amount.errors.0 }}</div>{% endif %}
+            </div>
+            <div>
+                <label style="display: block; font-weight: 600; margin-bottom: 0.25rem;">Deposit To Account (जमा खाता) *</label>
+                {{ form.cash_or_bank_account }}
+                {% if form.cash_or_bank_account.errors %}<div style="color: #DC2626; font-size: 0.8rem; margin-top: 0.25rem;">{{ form.cash_or_bank_account.errors.0 }}</div>{% endif %}
+            </div>
+        </div>
+
+        <div style="margin-bottom: 1rem;">
+            <label style="display: block; font-weight: 600; margin-bottom: 0.25rem;">Reference / Receipt / Slip No (रसीद / चेक / Txn ID)</label>
+            {{ form.reference_no }}
+        </div>
+
+        <div style="margin-bottom: 1.5rem;">
+            <label style="display: block; font-weight: 600; margin-bottom: 0.25rem;">Narration / Remarks (विवरण)</label>
+            {{ form.narration }}
+        </div>
+
+        <div style="display: flex; gap: 0.75rem; justify-content: flex-end;">
+            <a class="button secondary" href="{% url 'core:feeder_school_detail' school.pk %}">Cancel</a>
+            <button type="submit" class="button" style="background: #16A34A; border-color: #16A34A;">
+                Save &amp; Generate Voucher (भुगतान दर्ज करें)
+            </button>
+        </div>
+    </form>
+</section>
+{% endblock %}

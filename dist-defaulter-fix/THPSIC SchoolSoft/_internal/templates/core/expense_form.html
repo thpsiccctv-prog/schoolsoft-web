@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}New Expense | SchoolSoft{% endblock %}
+{% block content %}
+<div class="card" style="max-width: 600px; margin: 2rem auto;">
+    <div class="card-header">
+        <h2 class="card-title">New Daily Expense</h2>
+    </div>
+    <div class="card-body">
+        <form method="post" action="{% url 'core:expense_create' %}">
+            {% csrf_token %}
+            {% include "core/partials/_form_errors.html" %}
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Date</label>
+                    {{ form.voucher_date }}
+                </div>
+                <div class="form-group">
+                    <label>Mode</label>
+                    {{ form.payment_mode }}
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Paid Out From (Credit)</label>
+                    {{ form.credit_account }}
+                    <small>Must be a Cash/Bank account</small>
+                </div>
+                <div class="form-group">
+                    <label>Expense / Advance Head (Debit)</label>
+                    {{ form.debit_account }}
+                    <small>Select Expense, Staff Advance, or Manager Advance</small>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Amount (Rs)</label>
+                    {{ form.amount }}
+                </div>
+                <div class="form-group">
+                    <label>Paid To</label>
+                    <div id="paid-to-text-container">
+                        {{ form.paid_to_or_received_from }}
+                    </div>
+                    <div id="staff-select-container" style="display:none;">
+                        {{ form.staff }}
+                        <small>Staff Advance ke liye staff ka naam select karein.</small>
+                    </div>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Narration (Details)</label>
+                {{ form.narration }}
+            </div>
+            <div class="form-group">
+                <label>Physical Slip No (Optional)</label>
+                {{ form.physical_slip_no }}
+            </div>
+            <div class="card-actions">
+                <button type="submit" class="btn btn-primary">Save Expense</button>
+                <button type="submit" name="save_and_add_another" class="btn btn-secondary">Save & Add Another</button>
+                <a href="{% url 'core:voucher_list' %}" class="btn btn-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const debitSelect = document.getElementById("id_debit_account");
+    const paidTextInput = document.getElementById("id_paid_to_or_received_from");
+    const staffSelectInput = document.getElementById("id_staff");
+    
+    const paidToContainer = document.getElementById("paid-to-text-container");
+    const staffContainer = document.getElementById("staff-select-container");
+
+    if (!debitSelect) return;
+
+    function updatePaidToMode() {
+        const selectedText = debitSelect.options[debitSelect.selectedIndex]?.text || "";
+        const isStaffAdvance = selectedText.trim().toLowerCase() === "staff advance";
+
+        if (isStaffAdvance) {
+            paidToContainer.style.display = "none";
+            staffContainer.style.display = "";
+            paidTextInput.value = ""; // clear text
+        } else {
+            staffContainer.style.display = "none";
+            paidToContainer.style.display = "";
+            staffSelectInput.value = ""; // clear staff
+        }
+    }
+
+    debitSelect.addEventListener("change", updatePaidToMode);
+    updatePaidToMode();
+});
+</script>
+{% endblock %}

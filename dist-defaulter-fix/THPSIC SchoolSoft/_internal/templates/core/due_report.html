@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+{% load schoolsoft_extras %}
+
+{% block title %}Receipt Due (Legacy) | SchoolSoft{% endblock %}
+
+{% block content %}
+<section class="dashboard-page">
+    
+    <!-- ─── HEADER ─── -->
+    <div class="dash-header">
+        <div class="dash-header-left">
+            <span class="dash-badge">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+                Receipt-based register
+            </span>
+            <h1 class="dash-title">Receipt Due (Legacy)</h1>
+            <p class="dash-subtitle">Historical receipt balances only. Use Due up to Month for current demand.</p>
+        </div>
+        <div class="dash-header-actions no-print">
+            <a class="dash-action-btn dash-action-outline" href="{% url 'core:due_up_to_month_report' %}">Due up to Month</a>
+            <a class="dash-action-btn dash-action-primary" href="{% url 'core:due_report_pdf' %}{% if request.GET.urlencode %}?{{ request.GET.urlencode }}{% endif %}">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+                Download PDF
+            </a>
+            <button class="dash-action-btn dash-action-outline" type="button" onclick="printReport('portrait')">Print (Portrait)</button>
+            <button class="dash-action-btn dash-action-outline" type="button" onclick="printReport('landscape')">Print (Landscape)</button>
+        </div>
+    </div>
+
+    <!-- ─── KPI STRIP ─── -->
+    <div class="dash-kpi-strip">
+        <article class="dash-kpi dash-kpi-danger">
+            <div class="dash-kpi-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+            </div>
+            <div class="dash-kpi-body">
+                <span class="dash-kpi-label">Total Dues</span>
+                <strong class="dash-kpi-value">&#8377;&nbsp;{{ totals.due|default:"0"|indian_number }}</strong>
+            </div>
+        </article>
+        <article class="dash-kpi dash-kpi-info">
+            <div class="dash-kpi-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            </div>
+            <div class="dash-kpi-body">
+                <span class="dash-kpi-label">Total Net Billed</span>
+                <strong class="dash-kpi-value">&#8377;&nbsp;{{ totals.net|default:"0"|indian_number }}</strong>
+            </div>
+        </article>
+        <article class="dash-kpi dash-kpi-success">
+            <div class="dash-kpi-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+            </div>
+            <div class="dash-kpi-body">
+                <span class="dash-kpi-label">Total Paid</span>
+                <strong class="dash-kpi-value">&#8377;&nbsp;{{ totals.paid|default:"0"|indian_number }}</strong>
+            </div>
+        </article>
+        <article class="dash-kpi dash-kpi-neutral">
+            <div class="dash-kpi-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+            </div>
+            <div class="dash-kpi-body">
+                <span class="dash-kpi-label">Defaulters</span>
+                <strong class="dash-kpi-value">{{ total_students }}</strong>
+            </div>
+        </article>
+    </div>
+
+    <!-- ─── FILTER ─── -->
+    <div class="premium-filterbar no-print">
+        <form class="due-filterbar" method="get">
+            <div class="filterbar-inputs">
+                <input type="search" name="q" value="{{ query }}" placeholder="Search student, father, SID, admission no">
+                <select name="session">
+                    <option value="all">All sessions</option>
+                    {% for sess in sessions %}
+                        <option value="{{ sess.id }}" {% if selected_session == sess.id|stringformat:"s" %}selected{% endif %}>
+                            {{ sess.name }}
+                        </option>
+                    {% endfor %}
+                </select>
+                <select name="status">
+                    <option value="active" {% if selected_status == 'active' %}selected{% endif %}>Active Students</option>
+                    <option value="inactive" {% if selected_status == 'inactive' %}selected{% endif %}>Inactive Students</option>
+                    <option value="all" {% if selected_status == 'all' %}selected{% endif %}>All Students</option>
+                </select>
+                <select name="class">
+                    <option value="">All classes</option>
+                    {% for class in classes %}
+                        <option value="{{ class.id }}" {% if selected_class == class.id|stringformat:"s" %}selected{% endif %}>
+                            {{ class.name }}
+                        </option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="button action-primary">Search</button>
+                <a class="button secondary action-secondary" href="{% url 'core:due_report' %}">Reset</a>
+            </div>
+        </form>
+    </div>
+
+    <!-- ─── TABLE ─── -->
+    <div class="table-wrap premium-table-wrap">
+        <table class="premium-table">
+            <thead>
+                <tr>
+                    <th>SID</th>
+                    <th>Student</th>
+                    <th>Father</th>
+                    <th>Class</th>
+                    <th>Mobile</th>
+                    <th class="amount">Net</th>
+                    <th class="amount">Paid</th>
+                    <th class="amount">Due</th>
+                    <th class="no-print">WhatsApp</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in page.object_list %}
+                    <tr>
+                        <td data-label="SID">{{ row.student__legacy_sid }}</td>
+                        <td data-label="Student" class="font-medium text-brand">{{ row.student__full_name }}</td>
+                        <td data-label="Father">{{ row.student__father_name }}</td>
+                        <td data-label="Class">
+                            <span class="status-badge status-active">
+                                {{ row.student__current_class__name }}{% if row.student__current_section__name %}-{{ row.student__current_section__name }}{% endif %}
+                            </span>
+                        </td>
+                        <td data-label="Mobile">{{ row.student__mobile_primary }}</td>
+                        <td data-label="Net" class="amount font-medium">{{ row.net_amount|indian_number }}</td>
+                        <td data-label="Paid" class="amount text-success font-medium">{{ row.paid_amount|indian_number }}</td>
+                        <td data-label="Due" class="amount due-amount font-bold text-danger">{{ row.due_amount|indian_number }}</td>
+                        <td data-label="WhatsApp" class="no-print">
+                            {% wa_fee_link row.student__mobile_primary row.student__father_name row.student__full_name row.student__current_class__name row.student__current_section__name row.student__admission_no row.due_amount school_name as wa_url %}
+                            {% if wa_url %}
+                                <a class="button secondary action-secondary" href="{{ wa_url }}" target="_blank" rel="noopener" title="Open WhatsApp with fee-due reminder pre-filled - review and press Send yourself">WhatsApp</a>
+                            {% else %}
+                                <span class="text-muted">No mobile</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="9" class="text-center py-8 text-muted">No dues found matching your criteria.</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% include "core/includes/pagination.html" with page=page %}
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function printReport(orientation) {
+    let style = document.getElementById('print-orientation-style');
+    if (!style) {
+        style = document.createElement('style');
+        style.id = 'print-orientation-style';
+        document.head.appendChild(style);
+    }
+    style.innerHTML = `@page { size: ${orientation}; margin: 10mm; }`;
+    window.print();
+}
+</script>
+{% endblock %}

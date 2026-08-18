@@ -74,18 +74,38 @@ class Command(BaseCommand):
         )
         parser.add_argument(
             "--session",
-            default="2018-19",
-            help="Academic session name for imported legacy receipts.",
+            default="",
+            help="Academic session name for imported legacy receipts. Defaults to the active session.",
         )
         parser.add_argument(
             "--dry-run",
             action="store_true",
             help="Parse and validate without writing to the database.",
         )
+        parser.add_argument(
+            "--confirm",
+            default="",
+            help="Required for live imports. Use: THPSIC",
+        )
+        parser.add_argument(
+            "--allow-placeholder-students",
+            action="store_true",
+            help="Create inactive placeholder students for receipt SIDs not found in Student.",
+        )
+        parser.add_argument(
+            "--ledger-impact",
+            action="store_true",
+            help="Count imported receipts in due calculation. Default is history-only/carried-forward.",
+        )
 
     def handle(self, *args, **options):
         source = Path(options["source"])
         dry_run = options["dry_run"]
+        history_only = not options["ledger_impact"]
+        allow_placeholder_students = options["allow_placeholder_students"]
+
+        if not dry_run and options["confirm"] != "THPSIC":
+            raise CommandError("Live import requires --confirm THPSIC")
 
         if not source.exists():
             raise CommandError(f"StuFee CSV not found: {source}")
@@ -106,7 +126,15 @@ class Command(BaseCommand):
         with transaction.atomic():
             session = self.get_session(options["session"], dry_run)
             fee_heads = self.get_fee_heads(dry_run)
-            self.import_receipts(rows, session, fee_heads, dry_run, summary)
+            self.import_receipts(
+                rows,
+                session,
+                fee_heads,
+                dry_run,
+                summary,
+                history_only=history_only,
+                allow_placeholder_students=allow_placeholder_students,
+            )
 
             if dry_run:
                 transaction.set_rollback(True)
@@ -139,14 +167,27 @@ class Command(BaseCommand):
         if dry_run:
             return None
 
+        if not session_name:
+            session = AcademicSession.objects.filter(is_active=True).order_by("-starts_on", "name").first()
+            if not session:
+                raise CommandError("No active AcademicSession found. Pass --session explicitly.")
+            return session
+
         return AcademicSession.objects.get_or_create(
             name=session_name,
-            defaults={
-                "starts_on": date(2018, 4, 1),
-                "ends_on": date(2019, 3, 31),
-                "is_active": False,
-            },
+            defaults=self.session_defaults(session_name),
         )[0]
+
+    def session_defaults(self, session_name):
+        try:
+            start_year = int(str(session_name).split("-")[0])
+        except (TypeError, ValueError):
+            start_year = date.today().year
+        return {
+            "starts_on": date(start_year, 4, 1),
+            "ends_on": date(start_year + 1, 3, 31),
+            "is_active": False,
+        }
 
     def get_fee_heads(self, dry_run):
         heads = {}
@@ -167,7 +208,17 @@ class Command(BaseCommand):
 
         return heads
 
-    def import_receipts(self, rows, session, fee_heads, dry_run, summary):
+    def import_receipts(
+        self,
+        rows,
+        session,
+        fee_heads,
+        dry_run,
+        summary,
+        *,
+        history_only,
+        allow_placeholder_students,
+    ):
         for row in rows:
             legacy_receipt_no = self.to_int(row.get("rcpno"))
             legacy_sid = self.to_int(row.get("sid"))
@@ -180,12 +231,19 @@ class Command(BaseCommand):
             if dry_run:
                 if not Student.objects.filter(legacy_sid=legacy_sid).exists():
                     summary["missing_students"] += 1
-                    summary["placeholder_students_created"] += 1
+                    if allow_placeholder_students:
+                        summary["placeholder_students_created"] += 1
+                    else:
+                        summary["receipts_skipped"] += 1
+                        continue
             else:
                 student = Student.objects.filter(legacy_sid=legacy_sid).first()
                 if student is None:
-                    student = self.create_placeholder_student(row, legacy_sid)
                     summary["missing_students"] += 1
+                    if not allow_placeholder_students:
+                        summary["receipts_skipped"] += 1
+                        continue
+                    student = self.create_placeholder_student(row, legacy_sid)
                     summary["placeholder_students_created"] += 1
 
             receipt_no = f"SF-{legacy_receipt_no}"
@@ -224,6 +282,7 @@ class Command(BaseCommand):
                     "legacy_fee_total": fee_total or line_total,
                     "legacy_net_total": net_total,
                     "legacy_due_amount": due_amount,
+                    "carried_forward": history_only,
                     "remarks": self.build_remarks(row),
                 },
             )
@@ -271,7 +330,7 @@ class Command(BaseCommand):
             mobile_primary=self.clean(row.get("MOBNO")),
             current_class=school_class,
             current_section=section,
-            is_active=True,
+            is_active=False,
         )
 
     def normalize_class_name(self, value):

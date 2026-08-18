@@ -329,7 +329,7 @@
         }
 
         function selectedTargetMonth() {
-            return (toSelect && toSelect.value) || (fromSelect && fromSelect.value) || "MAR";
+            return (toSelect && toSelect.value) || (fromSelect && fromSelect.value) || form.dataset.defaultDueMonth || "APR";
         }
 
         function renderMonthStatus(rows) {
@@ -423,13 +423,20 @@
             var creditAmount = toNumber(status.credit_amount);
             var paidAmount = toNumber(status.received_amount);
             var demandAmount = toNumber(status.gross_demand);
+            var openingAmount = toNumber(status.opening_balance_amount);
+            var scheduledAmount = toNumber(status.scheduled_fee_demand);
+            var demandLabel = "Up to " + status.target_month + ": demand Rs. " + formatMoney(demandAmount);
+            if (openingAmount > 0) {
+                demandLabel += " (fees Rs. " + formatMoney(scheduledAmount) + " + opening due Rs. " + formatMoney(openingAmount) + ")";
+            }
+            demandLabel += ", paid Rs. " + formatMoney(paidAmount) + ".";
             if (paidThrough) {
                 paidThrough.textContent = (status.last_payment && status.last_payment.month_range) || status.clear_through || "-";
             }
             if (nextDue) nextDue.textContent = status.next_due_month || "No due";
             if (lastPayment) {
                 if (status.last_payment) {
-                    lastPayment.textContent = status.last_payment.date + " / " + status.last_payment.receipt_no + " / Rs. " + formatMoney(toNumber(status.last_payment.amount));
+                    lastPayment.textContent = status.last_payment.date + " / " + status.last_payment.receipt_no + " / Rs. " + formatMoney(toNumber(status.last_payment.amount)) + (status.last_payment.is_legacy ? " (old)" : "");
                 } else {
                     lastPayment.textContent = "No receipt in this session";
                 }
@@ -438,17 +445,17 @@
             if (dueAmount > 0) {
                 dueCard.classList.add("is-due");
                 dueValue.textContent = "Rs. " + formatMoney(dueAmount);
-                dueNote.textContent = "Up to " + status.target_month + ": demand Rs. " + formatMoney(demandAmount) + ", paid Rs. " + formatMoney(paidAmount) + ".";
+                dueNote.textContent = demandLabel;
                 if (fillBalanceButton) fillBalanceButton.disabled = !data.balance_fee_field;
             } else if (creditAmount > 0) {
                 dueCard.classList.add("is-credit");
                 dueValue.textContent = "Advance Rs. " + formatMoney(creditAmount);
-                dueNote.textContent = "Up to " + status.target_month + ": demand Rs. " + formatMoney(demandAmount) + ", paid Rs. " + formatMoney(paidAmount) + ".";
+                dueNote.textContent = demandLabel;
                 if (fillBalanceButton) fillBalanceButton.disabled = true;
             } else {
                 dueCard.classList.add("is-clear");
                 dueValue.textContent = "Clear";
-                dueNote.textContent = "Up to " + status.target_month + ": demand Rs. " + formatMoney(demandAmount) + ", paid Rs. " + formatMoney(paidAmount) + ".";
+                dueNote.textContent = demandLabel;
                 if (fillBalanceButton) fillBalanceButton.disabled = true;
             }
         }

@@ -33,6 +33,7 @@ urlpatterns = [
     path("students/", module_required("students")(views.student_list), name="student_list"),
     path("students/register/", module_required("students")(views.student_register), name="student_register"),
     path("students/export/", module_required("students")(views.student_export_csv), name="student_export_csv"),
+    path("students/board-registration/<slug:kind>/export/", module_required("students")(views.board_registration_export_csv), name="board_registration_export_csv"),
     path("students/id-cards/pdf/", module_required("students")(views.id_card_batch_pdf), name="id_card_batch_pdf"),
     path("students/new/", module_required("students", write=True)(views.student_create), name="student_create"),
     path("students/<int:pk>/", module_required("students")(views.student_detail), name="student_detail"),
@@ -51,6 +52,7 @@ urlpatterns = [
     path("receipts/<int:pk>/", module_required("receipts")(views.receipt_detail), name="receipt_detail"),
     path("receipts/<int:pk>/edit/", module_required("receipts", write=True)(views.receipt_edit), name="receipt_edit"),
     path("receipts/<int:pk>/pdf/", module_required("receipts")(views.receipt_pdf), name="receipt_pdf"),
+    path("receipts/<int:pk>/pdf/2up/", module_required("receipts")(views.receipt_pdf_2up), name="receipt_pdf_2up"),
     path("receipts/<int:pk>/print/", module_required("receipts")(views.receipt_print), name="receipt_print"),
     path("receipts/<int:pk>/cancel/", module_required("receipts", write=True)(views.receipt_cancel), name="receipt_cancel"),
     path("api/students/<int:pk>/fee-defaults/", module_required("fee_collection")(views.student_fee_defaults), name="student_fee_defaults"),
@@ -65,6 +67,11 @@ urlpatterns = [
     path("students/<int:pk>/scholar-register/pdf/", module_required("students")(views.scholar_register_pdf), name="scholar_register_pdf"),
     path("students/register/scholar-book/pdf/", module_required("students")(views.scholar_register_book_pdf), name="scholar_register_book_pdf"),
     path("students/register/scholar-book/index/pdf/", module_required("students")(views.scholar_register_index_pdf), name="scholar_register_index_pdf"),
+    path("academics/attendance/register/", module_required("students")(views.attendance_register_view), name="attendance_register"),
+    path("academics/attendance/register/pdf/", module_required("students")(views.attendance_register_pdf), name="attendance_register_pdf"),
+    path("academics/attendance/entry/", module_required("students", write=True)(views.attendance_summary_entry), name="attendance_summary_entry"),
+    path("academics/attendance/report/", module_required("students")(views.attendance_summary_report), name="attendance_summary_report"),
+    path("academics/attendance/report/excel/", module_required("students")(views.attendance_summary_report_excel), name="attendance_summary_report_excel"),
     path("students/<int:pk>/marksheet/", module_required("marks")(views.marksheet_select), name="marksheet_select"),
     path("students/<int:pk>/marksheet/<int:term_id>/pdf/", module_required("marks")(views.marksheet_pdf), name="marksheet_pdf"),
     path("students/<int:pk>/discipline/", admin_only_required("Discipline Records")(views.discipline_list), name="discipline_list"),
@@ -115,6 +122,15 @@ urlpatterns = [
     path("accounts/vouchers/<int:pk>/cancel/", module_required("accounts", write=True)(views.voucher_cancel), name="voucher_cancel"),
     path("accounts/vouchers/<int:pk>/pdf/", module_required("accounts")(views.voucher_pdf), name="voucher_pdf"),
     path("accounts/cash-book/", module_required("accounts")(views.cash_book), name="cash_book"),
+
+    # Attached / Feeder Schools (अटैच्ड विद्यालय)
+    path("feeder-schools/", module_required("fee_setup")(views.feeder_school_list), name="feeder_school_list"),
+    path("feeder-schools/new/", module_required("fee_setup", write=True)(views.feeder_school_create), name="feeder_school_create"),
+    path("feeder-schools/<int:pk>/", module_required("fee_setup")(views.feeder_school_detail), name="feeder_school_detail"),
+    path("feeder-schools/<int:pk>/edit/", module_required("fee_setup", write=True)(views.feeder_school_edit), name="feeder_school_edit"),
+    path("feeder-schools/<int:pk>/payment/", module_required("fee_setup", write=True)(views.feeder_school_payment), name="feeder_school_payment"),
+    path("feeder-schools/<int:pk>/statement/pdf/", module_required("fee_setup")(views.feeder_school_statement_pdf), name="feeder_school_statement_pdf"),
+    path("feeder-schools/<int:pk>/statement/excel/", module_required("fee_setup")(views.feeder_school_statement_excel), name="feeder_school_statement_excel"),
 
     # Self-service password change (any logged-in user)
     path(

@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+
+{% block title %}{{ staff.full_name }} | Staff{% endblock %}
+
+{% block content %}
+<section class="section">
+    <div class="section-heading with-actions">
+        <div>
+            <h2>{{ staff.full_name }}</h2>
+            <p>
+                Code {{ staff.legacy_emp_code|default:"-" }}
+                {% if staff.designation %} | {{ staff.designation }}{% endif %}
+                | {{ staff.get_staff_type_display }}
+            </p>
+        </div>
+        <div class="action-row">
+            <a class="button secondary" href="{% url 'core:staff_list' %}">Back</a>
+            <a class="button secondary" href="/admin/core/staff/{{ staff.pk }}/change/">Edit</a>
+            <a class="button secondary" href="{% url 'core:staff_id_card_pdf' staff.pk %}" target="_blank">Print ID Card</a>
+            <a class="button" href="{% url 'core:salary_payment_create' %}">New Salary Payment</a>
+        </div>
+    </div>
+
+    {% if staff.basic_pay == 1 and staff.da == 0 and staff.other_allowances == 0 %}
+        <p class="hint warning-hint">Basic Pay / DA / Other Allowances look like legacy placeholder values. Correct them in Admin before generating real payslips.</p>
+    {% endif %}
+
+    <div class="detail-grid">
+        <section class="detail-panel">
+            <h3>Staff</h3>
+            <dl class="detail-list">
+                <div>
+                    <dt>Status</dt>
+                    <dd>{% if staff.is_active %}Active{% else %}Left{% endif %}</dd>
+                </div>
+                <div>
+                    <dt>Type</dt>
+                    <dd>{{ staff.get_staff_type_display }}</dd>
+                </div>
+                <div>
+                    <dt>Designation</dt>
+                    <dd>{{ staff.designation|default:"-" }}</dd>
+                </div>
+                <div>
+                    <dt>Qualification</dt>
+                    <dd>{{ staff.qualification|default:"-" }}</dd>
+                </div>
+                <div>
+                    <dt>Date of Joining</dt>
+                    <dd>{{ staff.date_of_joining|date:"d M Y"|default:"-" }}</dd>
+                </div>
+                <div>
+                    <dt>Date of Leaving</dt>
+                    <dd>{{ staff.date_of_leaving|date:"d M Y"|default:"-" }}</dd>
+                </div>
+            </dl>
+        </section>
+
+        <section class="detail-panel">
+            <h3>Contact</h3>
+            <dl class="detail-list">
+                <div>
+                    <dt>Phone</dt>
+                    <dd>{{ staff.phone|default:"-" }}</dd>
+                </div>
+                <div>
+                    <dt>Email</dt>
+                    <dd>{{ staff.email|default:"-" }}</dd>
+                </div>
+                <div>
+                    <dt>Date of Birth</dt>
+                    <dd>{{ staff.date_of_birth|date:"d M Y"|default:"-" }}</dd>
+                </div>
+                <div>
+                    <dt>Address</dt>
+                    <dd>{{ staff.address|default:"-" }}</dd>
+                </div>
+            </dl>
+        </section>
+
+        <section class="detail-panel">
+            <h3>Salary Defaults</h3>
+            <dl class="detail-list">
+                <div>
+                    <dt>Basic Pay</dt>
+                    <dd>{{ staff.basic_pay }}</dd>
+                </div>
+                <div>
+                    <dt>DA</dt>
+                    <dd>{{ staff.da }}</dd>
+                </div>
+                <div>
+                    <dt>Other Allowances</dt>
+                    <dd>{{ staff.other_allowances }}</dd>
+                </div>
+                <div>
+                    <dt>Gross Salary</dt>
+                    <dd>{{ staff.gross_salary }}</dd>
+                </div>
+            </dl>
+        </section>
+
+        <section class="detail-panel">
+            <h3>PF / ESI</h3>
+            <dl class="detail-list">
+                <div>
+                    <dt>PF Applicable</dt>
+                    <dd>{% if staff.pf_applicable %}Yes{% else %}No{% endif %}</dd>
+                </div>
+                <div>
+                    <dt>PF Account</dt>
+                    <dd>{{ staff.pf_account_no|default:"-" }}</dd>
+                </div>
+                <div>
+                    <dt>ESI Applicable</dt>
+                    <dd>{% if staff.esi_applicable %}Yes{% else %}No{% endif %}</dd>
+                </div>
+                <div>
+                    <dt>ESI Account</dt>
+                    <dd>{{ staff.esi_account_no|default:"-" }}</dd>
+                </div>
+            </dl>
+        </section>
+
+        <section class="detail-panel detail-panel-wide">
+            <h3>Salary Payments</h3>
+            <div class="table-wrap embedded-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Slip No.</th>
+                            <th>Pay Month</th>
+                            <th>Payment Date</th>
+                            <th class="amount">Gross</th>
+                            <th class="amount">Net</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for payment in salary_payments %}
+                            <tr {% if payment.is_cancelled %}style="text-decoration: line-through; opacity: 0.6;"{% endif %}>
+                                <td>{{ payment.slip_no }} {% if payment.is_cancelled %}(Cancelled){% endif %}</td>
+                                <td>{{ payment.pay_month|date:"M Y" }}</td>
+                                <td>{{ payment.payment_date|date:"d M Y" }}</td>
+                                <td class="amount">{{ payment.gross_pay }}</td>
+                                <td class="amount">{{ payment.net_pay }}</td>
+                                <td><a class="table-link" href="{% url 'core:salary_payslip_pdf' payment.pk %}">PDF</a></td>
+                            </tr>
+                        {% empty %}
+                            <tr>
+                                <td colspan="6">No salary payments recorded yet.</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+</section>
+{% endblock %}

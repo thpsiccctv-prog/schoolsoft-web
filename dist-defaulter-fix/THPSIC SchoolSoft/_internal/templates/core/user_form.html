@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+
+{% block title %}{% if editing %}Edit user{% else %}New user{% endif %} | SchoolSoft{% endblock %}
+
+{% block content %}
+<section class="section student-entry">
+    <div class="classic-titlebar">
+        <div>
+            <strong>{% if editing %}Edit user{% else %}New user{% endif %}</strong>
+            <span>Role chuno — module checkbox apne aap bhar jayenge, phir chaho to badlo</span>
+        </div>
+        <div class="classic-title-actions">
+            <a class="mini-button" href="{% url 'core:user_list' %}">Back to users</a>
+        </div>
+    </div>
+
+    {% if errors %}
+    <div class="entry-flash error">
+        {% for e in errors %}<div>{{ e }}</div>{% endfor %}
+    </div>
+    {% endif %}
+
+    <form method="post" class="entry-form">
+        {% csrf_token %}
+        <div class="user-form-grid">
+            <section class="entry-card">
+                <div class="entry-card-title">Account</div>
+                <div class="entry-grid entry-grid-four">
+                    <div class="entry-field entry-span-2">
+                        <label>Username</label>
+                        {% if editing %}
+                        <input type="text" value="{{ form.username }}" readonly>
+                        {% else %}
+                        <input type="text" name="username" value="{{ form.username }}" autofocus>
+                        {% endif %}
+                    </div>
+                    <div class="entry-field entry-span-2">
+                        <label>Full name</label>
+                        <input type="text" name="first_name" value="{{ form.first_name }}">
+                    </div>
+                    {% if not editing %}
+                    <div class="entry-field entry-span-2">
+                        <label>Password</label>
+                        <input type="text" name="password" value="" placeholder="At least 6 characters">
+                    </div>
+                    {% endif %}
+                    <div class="entry-field entry-span-2">
+                        <label>Role preset</label>
+                        <select name="role" id="role-select">
+                            {% for value, label in roles %}
+                            <option value="{{ value }}" {% if form.role == value %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% if editing %}
+                    <div class="entry-field entry-span-2">
+                        <label>Account status</label>
+                        <label class="check-inline">
+                            <input type="checkbox" name="is_active" {% if form.is_active %}checked{% endif %}> Active (can log in)
+                        </label>
+                    </div>
+                    {% endif %}
+                </div>
+            </section>
+
+            <section class="entry-card">
+                <div class="entry-card-title">Module permissions</div>
+                <div class="modules-grid">
+                    {% for key, label in modules %}
+                    <label class="module-check">
+                        <input type="checkbox" name="modules" value="{{ key }}" data-mod="{{ key }}"
+                               {% if key in form.modules %}checked{% endif %}>
+                        <span>{{ label }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+                <label class="check-inline viewonly-row">
+                    <input type="checkbox" name="view_only" id="view-only" {% if form.view_only %}checked{% endif %}>
+                    <span><strong>View / print only</strong> — sab kuch dekh/print kar sakta hai, par kuch save/edit/delete nahi kar sakta</span>
+                </label>
+                <p class="muted-note">Dashboard sabhi users ko milta hai. Administrator role sab modules de deta hai.</p>
+            </section>
+        </div>
+
+        <div class="user-form-actions">
+            <button type="submit" class="save-print-button">{% if editing %}Save changes{% else %}Create user{% endif %}</button>
+            <a class="button secondary" href="{% url 'core:user_list' %}">Cancel</a>
+        </div>
+    </form>
+
+    {% if editing and not target.is_superuser %}
+    <section class="entry-card reset-card">
+        <div class="entry-card-title">Reset password</div>
+        <form method="post" action="{% url 'core:user_reset_password' target.pk %}" class="reset-row">
+            {% csrf_token %}
+            <input type="text" name="password" placeholder="New password (min 6 characters)">
+            <button type="submit" class="button primary">Set new password</button>
+        </form>
+    </section>
+    {% endif %}
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    var presets = {{ presets_json|safe }};
+    var roleSelect = document.getElementById("role-select");
+    var viewOnly = document.getElementById("view-only");
+    if (!roleSelect) return;
+    roleSelect.addEventListener("change", function () {
+        var preset = presets[roleSelect.value];
+        if (!preset) return;
+        var wanted = preset.modules || [];
+        document.querySelectorAll("input[name='modules']").forEach(function (box) {
+            box.checked = wanted.indexOf(box.getAttribute("data-mod")) !== -1;
+        });
+        if (viewOnly) viewOnly.checked = !!preset.view_only;
+    });
+})();
+</script>
+{% endblock %}

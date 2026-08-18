@@ -1,0 +1,652 @@
+:root {
+    --ss-admin-bg: #eef5f4;
+    --ss-admin-panel: #ffffff;
+    --ss-admin-panel-soft: #f7fbfa;
+    --ss-admin-ink: #0f172a;
+    --ss-admin-muted: #64748b;
+    --ss-admin-line: #d7e3ea;
+    --ss-admin-accent: #0f766e;
+    --ss-admin-accent-dark: #0b4f4a;
+    --ss-admin-sidebar: #14342a;
+    --ss-admin-gold: #f4c542;
+    --ss-admin-shadow: 0 18px 45px rgba(15, 23, 42, 0.10);
+}
+
+body {
+    background:
+        radial-gradient(circle at top left, rgba(15, 118, 110, 0.12), transparent 34rem),
+        linear-gradient(135deg, #eef6f7 0%, #f7faf9 48%, #eaf4ef 100%) !important;
+    color: var(--ss-admin-ink);
+    font-family: Inter, "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+a:link,
+a:visited {
+    color: #075985;
+}
+
+a:hover,
+a:focus {
+    color: var(--ss-admin-accent);
+}
+
+#container {
+    background: transparent;
+}
+
+#header {
+    min-height: 72px;
+    padding: 0 32px;
+    background: linear-gradient(135deg, #14342a 0%, #0f4f49 58%, #0f766e 100%);
+    color: #ffffff;
+    box-shadow: 0 8px 28px rgba(15, 23, 42, 0.18);
+}
+
+#branding {
+    display: flex;
+    align-items: center;
+}
+
+.schoolsoft-admin-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    color: #ffffff !important;
+    text-decoration: none;
+}
+
+.schoolsoft-admin-brand img {
+    width: 46px;
+    height: 46px;
+    object-fit: contain;
+    border-radius: 14px;
+    background: #ffffff;
+    padding: 4px;
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18);
+}
+
+.schoolsoft-admin-brand strong {
+    display: block;
+    font-size: 20px;
+    font-weight: 800;
+    line-height: 1.05;
+    letter-spacing: 0;
+}
+
+.schoolsoft-admin-brand small {
+    display: block;
+    margin-top: 3px;
+    color: rgba(255, 255, 255, 0.78);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+#user-tools {
+    color: rgba(255, 255, 255, 0.78);
+    font-size: 12px;
+    letter-spacing: 0;
+}
+
+#user-tools a,
+#logout-form button {
+    color: #ffffff !important;
+    border-bottom-color: rgba(255, 255, 255, 0.35);
+}
+
+.theme-toggle {
+    color: #ffffff;
+}
+
+div.breadcrumbs {
+    padding: 12px 32px;
+    background: rgba(255, 255, 255, 0.72);
+    border-bottom: 1px solid var(--ss-admin-line);
+    color: var(--ss-admin-muted);
+    box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.5);
+}
+
+div.breadcrumbs a {
+    color: var(--ss-admin-accent-dark);
+    font-weight: 700;
+}
+
+#content {
+    max-width: 1220px;
+    margin: 0 auto;
+    padding: 32px;
+}
+
+#content h1 {
+    color: var(--ss-admin-ink);
+    font-size: 28px;
+    font-weight: 850;
+    letter-spacing: 0;
+}
+
+.module,
+.inline-group,
+#changelist,
+.schoolsoft-admin-card,
+.schoolsoft-admin-recent,
+.schoolsoft-login-card {
+    background: rgba(255, 255, 255, 0.94);
+    border: 1px solid rgba(190, 211, 219, 0.92);
+    border-radius: 14px;
+    box-shadow: var(--ss-admin-shadow);
+    overflow: hidden;
+}
+
+.module h2,
+.module caption,
+.inline-group h2 {
+    padding: 13px 16px;
+    background: linear-gradient(135deg, rgba(15, 118, 110, 0.14), rgba(244, 197, 66, 0.13));
+    color: var(--ss-admin-accent-dark);
+    font-size: 13px;
+    font-weight: 850;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+table {
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+thead th,
+tfoot td {
+    background: #eef6f4;
+    color: #334155;
+    font-size: 12px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+td,
+th {
+    border-bottom: 1px solid #e5edf1;
+    font-size: 13px;
+}
+
+tr:nth-child(odd),
+.row-form-errors {
+    background: #ffffff;
+}
+
+tr:nth-child(even),
+tr:nth-child(even) .errorlist,
+tr:nth-child(odd) + .row-form-errors {
+    background: #f8fbfa;
+}
+
+input,
+textarea,
+select,
+.vTextField {
+    border: 1px solid #bfd3dc !important;
+    border-radius: 10px !important;
+    background: #fbfefd !important;
+    color: var(--ss-admin-ink) !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
+}
+
+input:focus,
+textarea:focus,
+select:focus,
+.vTextField:focus {
+    border-color: var(--ss-admin-accent) !important;
+    box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.13) !important;
+    outline: none !important;
+}
+
+.button,
+input[type=submit],
+input[type=button],
+.submit-row input,
+a.button {
+    border: 0 !important;
+    border-radius: 10px !important;
+    background: linear-gradient(135deg, #0f766e, #0b4f4a) !important;
+    color: #ffffff !important;
+    font-weight: 800 !important;
+    box-shadow: 0 10px 22px rgba(15, 118, 110, 0.22);
+}
+
+.button.default,
+input[type=submit].default,
+.submit-row input.default {
+    background: linear-gradient(135deg, #0f766e, #155e75) !important;
+}
+
+.object-tools a:link,
+.object-tools a:visited {
+    border-radius: 10px;
+    background: linear-gradient(135deg, #0f766e, #0b4f4a);
+    color: #ffffff;
+    font-weight: 800;
+}
+
+.selector-chosen h2 {
+    background: var(--ss-admin-accent-dark) !important;
+}
+
+.messagelist li {
+    border-radius: 12px;
+    border: 1px solid rgba(15, 118, 110, 0.18);
+    background-color: #ecfdf5;
+    color: #065f46;
+}
+
+.schoolsoft-admin-hero {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    margin-bottom: 24px;
+    padding: 28px;
+    border: 1px solid rgba(190, 211, 219, 0.9);
+    border-radius: 18px;
+    background:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(232, 246, 240, 0.92)),
+        radial-gradient(circle at right top, rgba(244, 197, 66, 0.20), transparent 28rem);
+    box-shadow: var(--ss-admin-shadow);
+}
+
+.schoolsoft-admin-kicker {
+    display: inline-flex;
+    margin: 0 0 10px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: #e6fffb;
+    color: var(--ss-admin-accent-dark);
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.schoolsoft-admin-hero h1 {
+    margin: 0;
+    font-size: 30px;
+}
+
+.schoolsoft-admin-hero p {
+    max-width: 660px;
+    margin: 8px 0 0;
+    color: var(--ss-admin-muted);
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.schoolsoft-admin-session {
+    min-width: 142px;
+    padding: 16px 18px;
+    border-radius: 16px;
+    background: #ffffff;
+    border: 1px solid var(--ss-admin-line);
+    text-align: center;
+}
+
+.schoolsoft-admin-session span {
+    display: block;
+    color: var(--ss-admin-muted);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.schoolsoft-admin-session strong {
+    display: block;
+    margin-top: 4px;
+    color: var(--ss-admin-accent-dark);
+    font-size: 20px;
+}
+
+.schoolsoft-admin-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 310px;
+    gap: 24px;
+}
+
+.schoolsoft-admin-apps {
+    display: grid;
+    gap: 18px;
+}
+
+.schoolsoft-admin-card {
+    position: relative;
+}
+
+.schoolsoft-admin-card::before,
+.schoolsoft-admin-recent::before,
+.schoolsoft-login-card::before {
+    content: "";
+    display: block;
+    height: 4px;
+    background: linear-gradient(90deg, #2dd4bf, #0f766e, #14342a);
+}
+
+.schoolsoft-admin-card header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 16px 18px;
+    border-bottom: 1px solid #e5edf1;
+}
+
+.schoolsoft-admin-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 999px;
+    background: var(--ss-admin-accent);
+    box-shadow: 0 0 0 5px rgba(15, 118, 110, 0.12);
+}
+
+.schoolsoft-admin-card h2,
+.schoolsoft-admin-recent h2 {
+    margin: 0;
+    color: var(--ss-admin-accent-dark);
+    font-size: 16px;
+    font-weight: 850;
+}
+
+.schoolsoft-admin-model-list {
+    display: grid;
+}
+
+.schoolsoft-admin-model {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    min-height: 44px;
+    padding: 11px 18px;
+    border-bottom: 1px solid #edf2f5;
+}
+
+.schoolsoft-admin-model:last-child {
+    border-bottom: 0;
+}
+
+.schoolsoft-admin-model:hover {
+    background: #f6fbfa;
+}
+
+.schoolsoft-admin-model-name {
+    color: #084c4a !important;
+    font-size: 14px;
+    font-weight: 800;
+    text-decoration: none;
+}
+
+.schoolsoft-admin-actions {
+    display: inline-flex;
+    gap: 8px;
+}
+
+.schoolsoft-admin-actions a {
+    min-width: 68px;
+    padding: 7px 10px;
+    border-radius: 999px;
+    background: #eef6f4;
+    color: var(--ss-admin-accent-dark) !important;
+    font-size: 12px;
+    font-weight: 850;
+    text-align: center;
+    text-decoration: none;
+}
+
+.schoolsoft-admin-actions .schoolsoft-admin-add {
+    background: #e8fff8;
+}
+
+.schoolsoft-admin-recent {
+    align-self: start;
+    position: sticky;
+    top: 18px;
+}
+
+.schoolsoft-admin-recent h2 {
+    padding: 16px 18px 4px;
+}
+
+.schoolsoft-admin-recent h3 {
+    margin: 0;
+    padding: 0 18px 12px;
+    color: var(--ss-admin-muted);
+    font-size: 12px;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.schoolsoft-admin-recent p,
+.schoolsoft-admin-recent ul {
+    margin: 0;
+    padding: 0 18px 18px;
+}
+
+.schoolsoft-admin-recent li {
+    display: grid;
+    gap: 3px;
+    padding: 10px 0;
+    border-top: 1px solid #edf2f5;
+}
+
+.schoolsoft-admin-recent li a,
+.schoolsoft-admin-recent li span {
+    color: var(--ss-admin-ink);
+    font-weight: 750;
+    text-decoration: none;
+}
+
+.schoolsoft-admin-recent li small {
+    color: var(--ss-admin-muted);
+    font-size: 11px;
+}
+
+.schoolsoft-login-page #header,
+.schoolsoft-login-page div.breadcrumbs {
+    display: none;
+}
+
+.schoolsoft-login-page #content {
+    max-width: none;
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    padding: 32px;
+}
+
+.schoolsoft-login-shell {
+    width: min(900px, calc(100vw - 48px));
+    display: grid;
+    grid-template-columns: 1.05fr 0.95fr;
+    overflow: hidden;
+    border-radius: 22px;
+    background: #ffffff;
+    box-shadow: 0 28px 80px rgba(15, 23, 42, 0.20);
+}
+
+.schoolsoft-login-hero {
+    position: relative;
+    min-height: 430px;
+    padding: 42px;
+    background:
+        linear-gradient(145deg, rgba(20, 52, 42, 0.94), rgba(15, 118, 110, 0.90)),
+        radial-gradient(circle at top right, rgba(244, 197, 66, 0.28), transparent 20rem);
+    color: #ffffff;
+}
+
+.schoolsoft-login-hero img {
+    width: 72px;
+    height: 72px;
+    object-fit: contain;
+    padding: 6px;
+    border-radius: 20px;
+    background: #ffffff;
+    box-shadow: 0 14px 30px rgba(0, 0, 0, 0.22);
+}
+
+.schoolsoft-login-kicker {
+    margin: 28px 0 10px;
+    color: var(--ss-admin-gold);
+    font-size: 12px;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.schoolsoft-login-hero h1 {
+    max-width: 360px;
+    margin: 0;
+    color: #ffffff;
+    font-size: 34px;
+    line-height: 1.05;
+}
+
+.schoolsoft-login-hero p:last-child {
+    max-width: 370px;
+    margin-top: 16px;
+    color: rgba(255, 255, 255, 0.78);
+    line-height: 1.55;
+}
+
+.schoolsoft-login-card {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 42px;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.schoolsoft-login-title {
+    display: grid;
+    gap: 5px;
+    margin-bottom: 22px;
+}
+
+.schoolsoft-login-title span {
+    color: var(--ss-admin-accent);
+    font-size: 12px;
+    font-weight: 900;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+}
+
+.schoolsoft-login-title strong {
+    color: var(--ss-admin-ink);
+    font-size: 25px;
+    font-weight: 850;
+}
+
+.schoolsoft-login-card .form-row {
+    padding: 0;
+    margin-bottom: 16px;
+    border: 0;
+}
+
+.schoolsoft-login-card label {
+    display: block;
+    margin-bottom: 7px;
+    color: #334155;
+    font-size: 13px;
+    font-weight: 800;
+}
+
+.schoolsoft-login-card input[type=text],
+.schoolsoft-login-card input[type=password] {
+    width: 100%;
+    min-height: 44px;
+    padding: 10px 12px;
+    font-size: 15px;
+}
+
+.schoolsoft-login-card .submit-row {
+    padding: 0;
+    margin: 8px 0 0;
+    background: transparent;
+    border: 0;
+}
+
+.schoolsoft-login-card .submit-row input {
+    width: 100%;
+    min-height: 46px;
+    font-size: 15px;
+}
+
+.schoolsoft-login-card .errornote {
+    margin: 0 0 16px;
+    border-radius: 12px;
+}
+
+.schoolsoft-admin-footer {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 10px 32px;
+    color: #64748b;
+    font-size: 12px;
+}
+
+@media (max-width: 960px) {
+    #header {
+        padding: 0 18px;
+    }
+
+    #content {
+        padding: 20px;
+    }
+
+    .schoolsoft-admin-hero,
+    .schoolsoft-admin-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .schoolsoft-admin-hero {
+        display: grid;
+    }
+
+    .schoolsoft-admin-recent {
+        position: static;
+    }
+
+    .schoolsoft-login-shell {
+        grid-template-columns: 1fr;
+    }
+
+    .schoolsoft-login-hero {
+        min-height: 250px;
+    }
+}
+
+@media (max-width: 640px) {
+    .schoolsoft-admin-brand small,
+    #user-tools {
+        display: none;
+    }
+
+    .schoolsoft-admin-model {
+        grid-template-columns: 1fr;
+        align-items: start;
+    }
+
+    .schoolsoft-admin-actions {
+        flex-wrap: wrap;
+    }
+
+    .schoolsoft-login-page #content {
+        padding: 16px;
+    }
+
+    .schoolsoft-login-shell {
+        width: 100%;
+        border-radius: 16px;
+    }
+
+    .schoolsoft-login-hero,
+    .schoolsoft-login-card {
+        padding: 28px;
+    }
+}

@@ -85,9 +85,11 @@ class StudentAdmin(admin.ModelAdmin):
         "house",
         "roll_no",
         "mobile_primary",
+        "fee_package_enabled",
+        "fee_package_total",
         "is_active",
     )
-    list_filter = ("is_active", "current_class", "current_section", "house", "gender", "category")
+    list_filter = ("is_active", "fee_package_enabled", "current_class", "current_section", "house", "gender", "category")
     search_fields = ("full_name", "father_name", "mother_name", "admission_no", "legacy_sid")
     autocomplete_fields = ("current_class", "current_section")
 

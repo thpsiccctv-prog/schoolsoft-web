@@ -1,0 +1,26 @@
+{% extends "admin/base.html" %}
+{% load static i18n %}
+
+{% block title %}{% if subtitle %}{{ subtitle }} | {% endif %}{{ title }} | THPSIC SchoolSoft Admin{% endblock %}
+
+{% block extrastyle %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'core/admin.css' %}?v=20260703-admin-1">
+{% endblock %}
+
+{% block branding %}
+<a class="schoolsoft-admin-brand" href="{% url 'admin:index' %}">
+    <img src="{% static 'core/school_logo.png' %}" alt="THPS logo">
+    <span>
+        <strong>THPSIC SchoolSoft Admin</strong>
+        <small>Thakur Harikesh Pratap Singh Intermediate College</small>
+    </span>
+</a>
+{% endblock %}
+
+{% block footer %}
+<div class="schoolsoft-admin-footer">
+    <span>THPSIC SchoolSoft v1.x</span>
+    <span>Thakur Harikesh Pratap Singh Intermediate College, Uday</span>
+</div>
+{% endblock %}

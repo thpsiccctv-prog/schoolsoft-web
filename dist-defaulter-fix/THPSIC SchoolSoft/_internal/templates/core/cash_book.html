@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title %}Cash Book | SchoolSoft{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div class="header-content">
+        <h1>Cash Book</h1>
+    </div>
+    <div class="header-actions no-print">
+        <button onclick="window.print()" class="btn btn-secondary">Print Cash Book</button>
+    </div>
+</div>
+
+<div class="card no-print" style="margin-bottom: 1.5rem;">
+    <div class="filter-bar">
+        <form method="get" class="search-form" style="align-items:flex-end;">
+            <div class="form-group" style="margin-bottom:0;">
+                <label style="font-size:0.8rem; margin-bottom:0.2rem;">From Date</label>
+                <input type="date" name="from_date" value="{{ from_date|date:'Y-m-d' }}" class="form-control" style="width: auto;">
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+                <label style="font-size:0.8rem; margin-bottom:0.2rem;">To Date</label>
+                <input type="date" name="to_date" value="{{ to_date|date:'Y-m-d' }}" class="form-control" style="width: auto;">
+            </div>
+            <div class="form-group checkbox-group" style="margin-bottom:0.5rem; display:flex; align-items:center; gap:0.5rem;">
+                <input type="checkbox" name="include_salary" id="inc_sal" value="1" {% if include_salary %}checked{% endif %}>
+                <label for="inc_sal" style="margin:0;">Include Salary Payments</label>
+            </div>
+            <button type="submit" class="btn btn-primary" style="margin-bottom:0.2rem;">Refresh Report</button>
+        </form>
+    </div>
+</div>
+
+<div class="card cash-book-page">
+    <div class="cash-book-header print-only">
+        <h2 style="text-align:center; margin:0 0 10px 0;">Thakur Harikesh Pratap Singh Intermediate College</h2>
+        <h3 style="text-align:center; margin:0 0 20px 0;">Cash Book between {{ from_date|date:"d/m/Y" }} and {{ to_date|date:"d/m/Y" }}</h3>
+    </div>
+    
+    {% for day in daily_data %}
+    <div class="daily-cashbook" style="margin-bottom: 30px;">
+        <h4 style="text-align:center; font-weight:bold; margin-bottom: 10px;">DATE ---> {{ day.date|date:"d/m/Y" }}</h4>
+        <div class="table-responsive">
+            <table class="table cb-table t-shape-table" style="width:100%; border-collapse: collapse;">
+                <colgroup>
+                    <col style="width: 15%;">
+                    <col style="width: 20%;">
+                    <col style="width: 15%;">
+                    <col style="width: 15%;">
+                    <col style="width: 20%;">
+                    <col style="width: 15%;">
+                </colgroup>
+                <thead>
+                    <tr style="border-bottom: 2px solid #000;">
+                        <th colspan="3" style="text-align:center; border-right: 2px solid #000; width:50%;">RECEIPTS</th>
+                        <th colspan="3" style="text-align:center; width:50%;">PAYMENTS</th>
+                    </tr>
+                    <tr style="border-bottom: 2px solid #000;">
+                        <th style="width:15%">Ref No.</th>
+                        <th style="width:20%">Particulars</th>
+                        <th style="width:15%; text-align:right; border-right: 2px solid #000;">Amount</th>
+                        <th style="width:15%">Ref No.</th>
+                        <th style="width:20%">Particulars</th>
+                        <th style="width:15%; text-align:right;">Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r, p in day.rows %}
+                    <tr>
+                        <td>{% if r %}{{ r.ref_no }}{% endif %}</td>
+                        <td>{% if r %}<strong>{{ r.desc }}</strong>{% endif %}</td>
+                        <td style="text-align:right; border-right: 2px solid #000;">{% if r %}Rs.  {{ r.amount }}{% endif %}</td>
+                        <td>{% if p %}{{ p.ref_no }}{% endif %}</td>
+                        <td>{% if p %}<strong>{{ p.desc }}</strong>{% endif %}</td>
+                        <td style="text-align:right;">{% if p %}Rs.  {{ p.amount }}{% endif %}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center">No cash transactions on this date.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr style="border-top: 2px solid #333; background:#f8f9fa;">
+                        <td colspan="2" style="text-align:right; font-weight:bold; padding: 12px 16px;">TOTAL RECEIPT</td>
+                        <td style="text-align:right; font-weight:bold; border-right: 2px solid #000; padding: 12px 16px;">Rs.  {{ day.total }}</td>
+                        <td colspan="2" style="text-align:right; font-weight:bold; padding: 12px 16px;">TOTAL PAYMENT</td>
+                        <td style="text-align:right; font-weight:bold; padding: 12px 16px;">Rs.  {{ day.total }}</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+    {% empty %}
+    <div class="alert alert-info text-center">No transactions found in this date range.</div>
+    {% endfor %}
+    
+    <div class="cb-signatures print-only" style="margin-top: 60px; display:flex; justify-content:space-between; padding: 0 40px;">
+        <div style="border-top: 1px solid black; padding-top: 10px; width: 200px; text-align:center;">Cashier / Accountant</div>
+        <div style="border-top: 1px solid black; padding-top: 10px; width: 200px; text-align:center;">Principal / Director</div>
+    </div>
+</div>
+
+<style>
+.cash-book-page { padding: 1.5rem; }
+.cb-table { table-layout: fixed; width: 100%; }
+.cb-table th, .cb-table td { padding: 8px; border-bottom: 1px solid #eee; word-wrap: break-word; overflow-wrap: break-word; word-break: break-word; white-space: normal !important; }
+.t-shape-table td { vertical-align: top; }
+.ob-row { background: #f0f7f4; }
+.print-only { display: none; }
+@media print {
+    @page { margin: 10mm; size: landscape; }
+    body * { visibility: hidden; }
+    .cash-book-page, .cash-book-page * { visibility: visible; }
+    .cash-book-page {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        padding: 0;
+        border: none;
+        box-shadow: none;
+    }
+    .print-only { display: block !important; }
+    .no-print { display: none !important; }
+    .cb-table th { border-top: 1px solid #000; border-bottom: 2px solid #000; }
+    .cb-table td { border-bottom: 1px dashed #ccc; }
+    .cb-table tfoot td { border-bottom: none; }
+    .daily-cashbook { page-break-inside: avoid; }
+}
+</style>
+{% endblock %}

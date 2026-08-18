@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% load schoolsoft_extras %}
+{% block title %}Family Ledger | SchoolSoft{% endblock %}
+
+{% block content %}
+<section class="section">
+    <div class="section-heading with-actions">
+        <div>
+            <h2>Family Ledger</h2>
+            <p>Siblings grouped under one household - combined fee view and one WhatsApp reminder per family.</p>
+        </div>
+        <div class="table-actions">
+            <a class="button secondary" href="{% url 'core:family_suggestions' %}">Suggested Families</a>
+            {% if not is_readonly %}
+                <a class="button primary" href="{% url 'core:family_create' %}">New Family</a>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="premium-filterbar">
+        <form class="student-filterbar" method="get">
+            <div class="filterbar-inputs">
+                <input type="search" name="q" value="{{ query }}" placeholder="Search family name, mobile">
+                <button type="submit" class="button action-primary">Search</button>
+                <a class="button secondary action-secondary" href="{% url 'core:family_list' %}">Reset</a>
+            </div>
+        </form>
+    </div>
+
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Family</th>
+                    <th>Primary Mobile</th>
+                    <th class="amount">Children</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for family in families %}
+                    <tr>
+                        <td>{{ family.name }}</td>
+                        <td>{{ family.primary_mobile|default:"-" }}</td>
+                        <td class="amount">{{ family.member_count }}</td>
+                        <td><a class="button secondary" href="{% url 'core:family_detail' family.pk %}">Open</a></td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="4" class="empty-state">No families created yet. Use "Suggested Families" to find siblings already in the system, or add a family manually.</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

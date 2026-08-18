@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+{% load schoolsoft_extras %}
+
+{% block title %}{{ school.name }} | Attached School Statement{% endblock %}
+
+{% block content %}
+<section class="section">
+    <div class="section-heading with-actions">
+        <div>
+            <h2>{{ school.name }}</h2>
+            <p>
+                <strong>Code:</strong> {{ school.code|default:"-" }} &bull; 
+                <strong>Director/Contact:</strong> {{ school.contact_person|default:"-" }} &bull; 
+                <strong>Phone:</strong> {{ school.phone|default:"-" }} &bull; 
+                <strong>Location:</strong> {{ school.village_address|default:"-" }}
+            </p>
+        </div>
+        <div class="action-row">
+            <a class="button" href="{% url 'core:feeder_school_payment' school.pk %}">+ Record Payment (फीस जमा करें)</a>
+            <a class="button secondary" href="{% url 'core:feeder_school_statement_pdf' school.pk %}" target="_blank">Print Statement PDF</a>
+            <a class="button secondary" href="{% url 'core:feeder_school_statement_excel' school.pk %}">Export Excel</a>
+            <a class="button secondary" href="{% url 'core:feeder_school_edit' school.pk %}">Edit School</a>
+        </div>
+    </div>
+
+    <!-- Financial Metrics Strip -->
+    <div class="stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+        <div class="stat-card" style="background: var(--surface); padding: 1rem; border-radius: 8px; border: 1px solid var(--border);">
+            <div style="font-size: 0.8rem; color: var(--text-muted);">नामांकित छात्र संख्या</div>
+            <div style="font-size: 1.5rem; font-weight: 700; color: #0284C7;">{{ enrolled_count }} छात्र</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted);">Section B &amp; C (Classes 9–12)</div>
+        </div>
+        <div class="stat-card" style="background: var(--surface); padding: 1rem; border-radius: 8px; border: 1px solid var(--border);">
+            <div style="font-size: 0.8rem; color: var(--text-muted);">पैकेज दर (2-Year Package)</div>
+            <div style="font-size: 1.5rem; font-weight: 700; color: #475569;">₹{{ school.package_rate_per_student|floatformat:0|indian_number }}</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted);">Per student UP Board package</div>
+        </div>
+        <div class="stat-card" style="background: var(--surface); padding: 1rem; border-radius: 8px; border: 1px solid var(--border);">
+            <div style="font-size: 0.8rem; color: var(--text-muted);">कुल देय मांग (Total Demand)</div>
+            <div style="font-size: 1.5rem; font-weight: 700; color: #1E293B;">₹{{ total_demand|indian_number }}</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted);">{{ enrolled_count }} × ₹{{ school.package_rate_per_student|floatformat:0 }}</div>
+        </div>
+        <div class="stat-card" style="background: var(--surface); padding: 1rem; border-radius: 8px; border: 1px solid var(--border);">
+            <div style="font-size: 0.8rem; color: var(--text-muted);">कुल प्राप्त भुगतान (Total Paid)</div>
+            <div style="font-size: 1.5rem; font-weight: 700; color: #16A34A;">₹{{ total_received|indian_number }}</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted);">Credited to Sundry Debtors</div>
+        </div>
+        <div class="stat-card" style="background: var(--surface); padding: 1rem; border-radius: 8px; border: 1px solid var(--border);">
+            <div style="font-size: 0.8rem; color: var(--text-muted);">शेष बकाया (Balance Due)</div>
+            <div style="font-size: 1.5rem; font-weight: 700; color: {% if balance_due > 0 %}#DC2626{% else %}#16A34A{% endif %};">₹{{ balance_due|indian_number }}</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted);">{% if balance_due <= 0 %}खाता चुकता (Nil){% else %}अपेक्षित भुगतान{% endif %}</div>
+        </div>
+    </div>
+
+    <!-- Section 1: Enrolled Students Roster -->
+    <div style="margin-bottom: 2rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+            <h3 style="margin: 0; font-size: 1.15rem; font-weight: 600; color: var(--primary);">
+                1. Enrolled Students Roster (नामांकित छात्र सूची - {{ students.count }} छात्र)
+            </h3>
+            <form method="get" style="display: flex; gap: 0.5rem;">
+                <input type="search" name="q" value="{{ q }}" placeholder="Search student name, adm no..." style="padding: 0.35rem 0.6rem; font-size: 0.85rem; border-radius: 4px; border: 1px solid var(--border);">
+                <button type="submit" class="button small">Search</button>
+                {% if q %}
+                <a href="{% url 'core:feeder_school_detail' school.pk %}" class="button small secondary">Clear</a>
+                {% endif %}
+            </form>
+        </div>
+
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Adm No / SID</th>
+                        <th>Student Name</th>
+                        <th>Father's Name</th>
+                        <th>Class</th>
+                        <th>Section</th>
+                        <th>Mobile</th>
+                        <th style="text-align: center;">Profile</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for s in students %}
+                    <tr>
+                        <td>{{ forloop.counter }}</td>
+                        <td><strong>{{ s.admission_no|default:s.legacy_sid }}</strong></td>
+                        <td>
+                            <a class="table-link" href="{% url 'core:student_detail' s.pk %}">
+                                {{ s.full_name }}
+                            </a>
+                            {% if s.full_name_hindi %}
+                            <div style="font-size: 0.75rem; color: var(--text-muted);">{{ s.full_name_hindi }}</div>
+                            {% endif %}
+                        </td>
+                        <td>{{ s.father_name }}</td>
+                        <td>{{ s.current_class.name }}</td>
+                        <td>
+                            <span class="badge" style="background: #F1F5F9; color: #334155; font-weight: 600; padding: 0.2rem 0.4rem; border-radius: 3px;">
+                                {{ s.current_section.name }}
+                            </span>
+                        </td>
+                        <td>{{ s.mobile_primary|default:s.mobile_secondary|default:"-" }}</td>
+                        <td style="text-align: center;">
+                            <a class="button small secondary" href="{% url 'core:student_detail' s.pk %}">View</a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" style="text-align: center; padding: 2rem; color: var(--text-muted);">
+                            No students currently mapped to this attached school.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Section 2: Payment History -->
+    <div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+            <h3 style="margin: 0; font-size: 1.15rem; font-weight: 600; color: #065F46;">
+                2. Payment History &amp; Vouchers (जमा की गई किस्तों का विवरण)
+            </h3>
+            <a class="button small" href="{% url 'core:feeder_school_payment' school.pk %}">+ Record Payment Voucher</a>
+        </div>
+
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Voucher Date</th>
+                        <th>Voucher No</th>
+                        <th>Payment Mode</th>
+                        <th>Deposit Account</th>
+                        <th>Ref / Slip No</th>
+                        <th>Narration / Remarks</th>
+                        <th style="text-align: right;">Amount Paid</th>
+                        <th style="text-align: center;">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for v in vouchers %}
+                    <tr>
+                        <td>{{ forloop.counter }}</td>
+                        <td>{{ v.voucher_date|date:"d M Y" }}</td>
+                        <td><strong>{{ v.voucher_no }}</strong></td>
+                        <td>
+                            <span class="badge" style="background: #ECFDF5; color: #047857; font-weight: 600; padding: 0.2rem 0.4rem; border-radius: 3px;">
+                                {{ v.get_payment_mode_display }}
+                            </span>
+                        </td>
+                        <td>{{ v.debit_account.name }}</td>
+                        <td>{{ v.physical_slip_no|default:"-" }}</td>
+                        <td>{{ v.narration|default:"Affiliation fee payment" }}</td>
+                        <td style="text-align: right; color: #16A34A; font-weight: 700;">₹{{ v.amount|indian_number }}</td>
+                        <td style="text-align: center;">
+                            <a class="button small secondary" href="{% url 'core:voucher_pdf' v.pk %}" target="_blank">PDF</a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="9" style="text-align: center; padding: 2rem; color: var(--text-muted);">
+                            No payment vouchers recorded yet. Click "+ Record Payment Voucher" to add received installments.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+{% endblock %}

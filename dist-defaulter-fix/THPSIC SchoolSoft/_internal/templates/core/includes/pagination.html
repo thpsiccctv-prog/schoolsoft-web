@@ -1,0 +1,66 @@
+{% if page %}
+    <div class="pagination-wrapper" style="display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 20px; padding: 15px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px;">
+        
+        <div class="pagination-info" style="font-size: 0.9rem; color: var(--muted);">
+            Showing {{ page.start_index }} - {{ page.end_index }} of {{ page.paginator.count }} results
+        </div>
+
+        <div class="pagination-controls" style="display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px;">
+            
+            <button type="button" class="button secondary mini-button" onclick="goToPage(1)" {% if not page.has_previous %}disabled{% endif %}>
+                &laquo; First
+            </button>
+            
+            <button type="button" class="button secondary mini-button" onclick="goToPage({{ page.number|add:'-1' }})" {% if not page.has_previous %}disabled{% endif %}>
+                &lsaquo; Prev
+            </button>
+
+            <div class="page-input-group" style="display: flex; align-items: center; gap: 5px; margin: 0 10px;">
+                <span>Page</span>
+                <input type="number" id="page-jump-input" class="form-control" value="{{ page.number }}" min="1" max="{{ page.paginator.num_pages }}" style="width: 70px; text-align: center; padding: 4px;">
+                <span>of {{ page.paginator.num_pages }}</span>
+                <button type="button" class="button primary mini-button" onclick="jumpToInputPage()">Go</button>
+            </div>
+
+            <button type="button" class="button secondary mini-button" onclick="goToPage({{ page.number|add:'1' }})" {% if not page.has_next %}disabled{% endif %}>
+                Next &rsaquo;
+            </button>
+
+            <button type="button" class="button secondary mini-button" onclick="goToPage({{ page.paginator.num_pages }})" {% if not page.has_next %}disabled{% endif %}>
+                Last &raquo;
+            </button>
+            
+        </div>
+    </div>
+
+    <script>
+        function goToPage(pageNum) {
+            if (!pageNum || pageNum < 1 || pageNum > {{ page.paginator.num_pages }}) return;
+            const url = new URL(window.location.href);
+            url.searchParams.set('page', pageNum);
+            window.location.href = url.toString();
+        }
+
+        function jumpToInputPage() {
+            let input = document.getElementById('page-jump-input').value;
+            let pageNum = parseInt(input);
+            const maxPage = {{ page.paginator.num_pages }};
+            
+            if (isNaN(pageNum) || pageNum < 1) {
+                pageNum = 1;
+            } else if (pageNum > maxPage) {
+                pageNum = maxPage;
+            }
+            
+            goToPage(pageNum);
+        }
+
+        // Allow Enter key to trigger Go button
+        document.getElementById('page-jump-input')?.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                jumpToInputPage();
+            }
+        });
+    </script>
+{% endif %}

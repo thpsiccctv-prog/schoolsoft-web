@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Cancel Voucher | SchoolSoft{% endblock %}
+{% block content %}
+<div class="card" style="max-width: 500px; margin: 2rem auto;">
+    <div class="card-header">
+        <h2 class="card-title">Cancel Voucher: {{ voucher.voucher_no }}</h2>
+    </div>
+    <div class="card-body">
+        <p>Are you sure you want to cancel this voucher?</p>
+        <p><strong>Amount:</strong> Rs.  {{ voucher.amount }}<br>
+        <strong>Date:</strong> {{ voucher.voucher_date|date:"d/m/Y" }}</p>
+        
+        <form method="post">
+            {% csrf_token %}
+            <div class="form-group">
+                <label>Reason for Cancellation <span style="color:red;">*</span></label>
+                <input type="text" name="cancel_reason" class="form-control" required placeholder="Entered wrong amount">
+            </div>
+            <div class="card-actions" style="margin-top: 1.5rem;">
+                <button type="submit" class="btn btn-danger">Confirm Cancellation</button>
+                <a href="{% url 'core:voucher_detail' voucher.pk %}" class="btn btn-secondary">Go Back</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

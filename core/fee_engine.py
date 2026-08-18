@@ -11,6 +11,7 @@ from .models import (
     AcademicSession,
     FeeHead,
     FeeReceipt,
+    FeeReceiptLine,
     FeeStructure,
     Student,
     StudentOpeningBalance,
@@ -20,6 +21,8 @@ from .models import (
 
 ZERO = Decimal("0.00")
 PENNY = Decimal("0.01")
+DEFAULT_PACKAGE_TOTAL = Decimal("4500.00")
+PACKAGE_FEE_HEAD_NAME = "Package Fee"
 MONTH_NUMBER = {
     "APR": 4,
     "MAY": 5,
@@ -77,6 +80,12 @@ def _academic_month_cutoff(session, through_month):
     return candidates[0]
 
 
+def _is_new_student_for_session(student: Student, session: AcademicSession):
+    if not student.admission_date:
+        return False
+    return session.starts_on <= student.admission_date <= session.ends_on
+
+
 def _fixed_month_installments(total, months):
     ordered_months = sorted(months, key=ACADEMIC_MONTHS.index)
     if not ordered_months:
@@ -97,6 +106,60 @@ def _is_ix_x_lab_fee(structure):
     head_name = (structure.fee_head.name or "").strip().lower()
     class_name = _normalised_class_name(structure.school_class)
     return head_name == "lab fee" and class_name in {"ix", "x", "9", "9th", "10", "10th"}
+
+
+def student_is_zero_fee(student: Student):
+    return bool(getattr(student, "is_zero_fee_section", False))
+
+
+def student_uses_fee_package(student: Student):
+    return bool(getattr(student, "uses_fee_package", False))
+
+
+def student_fee_package_amount(student: Student):
+    if not student_uses_fee_package(student):
+        return ZERO
+    amount = getattr(student, "fee_package_total", ZERO) or ZERO
+    return _money(amount if amount > ZERO else DEFAULT_PACKAGE_TOTAL)
+
+
+def _fee_structure_queryset_for_student(*, student: Student, session: AcademicSession):
+    structures = FeeStructure.objects.select_related("fee_head").filter(
+        session=session,
+        school_class=student.current_class,
+        is_active=True,
+        fee_head__is_active=True,
+        fee_head__is_transport=False,
+    )
+    if student_is_zero_fee(student) or student_uses_fee_package(student):
+        return structures.none()
+    return structures
+
+
+def _package_demand(student: Student):
+    if student_is_zero_fee(student):
+        return ZERO
+    return student_fee_package_amount(student)
+
+
+def package_receipt_default_amount(*, student: Student, session: AcademicSession):
+    package_total = student_fee_package_amount(student)
+    if package_total <= ZERO:
+        return ZERO
+
+    package_head = FeeHead.objects.filter(name=PACKAGE_FEE_HEAD_NAME, is_active=True).first()
+    if not package_head:
+        return package_total
+
+    paid = _money(
+        FeeReceiptLine.objects.filter(
+            receipt__student=student,
+            receipt__session=session,
+            receipt__is_cancelled=False,
+            fee_head=package_head,
+        ).aggregate(total=Sum("amount"))["total"]
+    )
+    return max(_money(package_total - paid), ZERO)
 
 
 def _effective_charge_rule_and_months(structure, *, is_new_student):
@@ -165,7 +228,7 @@ def calculate_structure_receipt_amount(*, structure, student: Student, session: 
     if start_index > end_index:
         start_index, end_index = end_index, start_index
 
-    is_new_student = session.starts_on <= student.admission_date <= session.ends_on
+    is_new_student = _is_new_student_for_session(student, session)
     end_cutoff = _academic_month_cutoff(session, ACADEMIC_MONTHS[end_index])
     end_amount = _scheduled_structure_demand(
         structure,
@@ -280,31 +343,30 @@ def calculate_student_due(*, student: Student, session: AcademicSession, through
 
     cutoff = _academic_month_cutoff(session, through_month)
     target_index = ACADEMIC_MONTHS.index(through_month)
-    is_new_student = session.starts_on <= student.admission_date <= session.ends_on
+    is_new_student = _is_new_student_for_session(student, session)
 
-    structures = FeeStructure.objects.select_related("fee_head").filter(
-        session=session,
-        school_class=student.current_class,
-        is_active=True,
-        fee_head__is_active=True,
-        fee_head__is_transport=False,
-    )
-    scheduled_fee_demand = _money(
-        sum(
-            (
-                _scheduled_structure_demand(
-                    structure,
-                    is_new_student=is_new_student,
-                    student=student,
-                    session=session,
-                    cutoff=cutoff,
-                    target_index=target_index,
-                )
-                for structure in structures
-            ),
-            ZERO,
+    structures = _fee_structure_queryset_for_student(student=student, session=session)
+    if student_is_zero_fee(student):
+        scheduled_fee_demand = ZERO
+    elif student_uses_fee_package(student):
+        scheduled_fee_demand = _package_demand(student)
+    else:
+        scheduled_fee_demand = _money(
+            sum(
+                (
+                    _scheduled_structure_demand(
+                        structure,
+                        is_new_student=is_new_student,
+                        student=student,
+                        session=session,
+                        cutoff=cutoff,
+                        target_index=target_index,
+                    )
+                    for structure in structures
+                ),
+                ZERO,
+            )
         )
-    )
     transport_demand = _transport_demand(student, session, target_index)
 
     opening_balance_amount = _money(

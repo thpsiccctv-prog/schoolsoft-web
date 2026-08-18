@@ -16,7 +16,7 @@ from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.db import connection, transaction
 from django.db.models import Count, F, Max, ProtectedError, Q, Sum
-from django.http import HttpResponse, JsonResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -27,7 +27,15 @@ from .access import (
     user_can_manage_users,
     user_is_readonly,
 )
-from .fee_engine import calculate_student_due, calculate_structure_receipt_amount
+from .board_registration_exports import build_rows, export_columns, export_filename
+from .fee_engine import (
+    PACKAGE_FEE_HEAD_NAME,
+    calculate_student_due,
+    calculate_structure_receipt_amount,
+    package_receipt_default_amount,
+    student_is_zero_fee,
+    student_uses_fee_package,
+)
 from .forms import DisciplineRecordForm, FamilyForm, FeeReceiptEditForm, FeeReceiptEntryForm, FeeReceiptLineEntryForm, InventoryIssueForm, InventoryItemForm, SalaryPaymentForm, StudentForm, TransferCertificateForm
 from .models import (
     ACADEMIC_MONTHS,
@@ -66,6 +74,7 @@ from .pdf import (
     build_due_slip_pdf,
     build_due_up_to_month_report_pdf,
     build_fee_receipt_pdf,
+    build_fee_receipt_pdf_2up,
     build_id_card_batch_pdf,
     build_id_card_pdf,
     build_staff_id_card_pdf,
@@ -199,9 +208,18 @@ def _student_due_status_payload(student, session, target_month):
             }
         )
 
+    target_due_result = calculate_student_due(
+        student=student,
+        session=session,
+        through_month=target_month,
+    )
     target_result = month_results[-1]
     latest_receipt = (
-        FeeReceipt.objects.filter(student=student, session=session, is_cancelled=False)
+        FeeReceipt.objects.filter(
+            student=student,
+            session=session,
+            is_cancelled=False,
+        )
         .order_by("-receipt_date", "-id")
         .first()
     )
@@ -215,11 +233,14 @@ def _student_due_status_payload(student, session, target_month):
             "date": latest_receipt.receipt_date.strftime("%d/%m/%Y"),
             "amount": str(latest_receipt.received_amount),
             "month_range": month_range,
+            "is_legacy": latest_receipt.carried_forward,
         }
 
     return {
         "available": True,
         "target_month": target_month,
+        "scheduled_fee_demand": str(target_due_result.scheduled_fee_demand),
+        "opening_balance_amount": str(target_due_result.opening_balance_amount),
         "gross_demand": target_result["gross_demand"],
         "received_amount": target_result["received_amount"],
         "due_amount": target_result["due_amount"],
@@ -1279,19 +1300,29 @@ def defaulter_list(request):
 
     candidates = [] if invalid_id_filter else list(students)
 
-    # Pre-fetch last payment dates
+    # Current paid excludes carried-forward imports because opening balances are
+    # already net of those old receipts. Keep the latest historical receipt
+    # visible as an information-only last payment so old deposits do not look
+    # missing in the defaulters list.
     candidate_ids = [s.id for s in candidates]
-    last_payments = FeeReceipt.objects.filter(
+    last_receipt_map = {}
+    last_receipts = FeeReceipt.objects.filter(
         student_id__in=candidate_ids,
         is_cancelled=False,
-        session=active_session
-    ).values("student_id").annotate(last_date=Max("receipt_date"))
-    last_payment_map = {item["student_id"]: item["last_date"] for item in last_payments}
+        session=active_session,
+    ).order_by("student_id", "-receipt_date", "-id").only(
+        "student_id",
+        "receipt_date",
+        "received_amount",
+        "carried_forward",
+    )
+    for receipt in last_receipts:
+        last_receipt_map.setdefault(receipt.student_id, receipt)
 
     ytd_payments = FeeReceipt.objects.filter(
         student_id__in=candidate_ids,
         is_cancelled=False,
-        session=active_session
+        session=active_session,
     ).values("student_id").annotate(total_paid=Sum("received_amount"))
     ytd_payment_map = {item["student_id"]: item["total_paid"] for item in ytd_payments}
 
@@ -1315,29 +1346,21 @@ def defaulter_list(request):
             if student.current_section:
                 class_name = f"{class_name}-{student.current_section.name}"
 
-            # Calculate Arrears (Previous month due or Opening Balance)
-            if target_idx > 0:
-                prev_month = available_months[target_idx - 1]
-                try:
-                    prev_result = calculate_student_due(
-                        student=student,
-                        session=active_session,
-                        through_month=prev_month,
-                    )
-                    arrears = prev_result.due_amount
-                except ValidationError:
-                    arrears = Decimal("0.00")
-            else:
-                ytd = ytd_payment_map.get(student.id) or Decimal("0.00")
-                arrears = max(Decimal("0.00"), result.opening_balance_amount - ytd)
-
             defaulters.append({
                 "student": student,
                 "class_name": class_name,
                 "due_amount": result.due_amount,
-                "arrears": arrears,
+                "opening_due": result.opening_balance_amount,
                 "ytd_paid": ytd_payment_map.get(student.id) or Decimal("0.00"),
-                "last_payment_date": last_payment_map.get(student.id)
+                "last_payment_date": (
+                    last_receipt_map[student.id].receipt_date if student.id in last_receipt_map else None
+                ),
+                "last_payment_amount": (
+                    last_receipt_map[student.id].received_amount if student.id in last_receipt_map else Decimal("0.00")
+                ),
+                "last_payment_is_legacy": (
+                    last_receipt_map[student.id].carried_forward if student.id in last_receipt_map else False
+                ),
             })
             total_due += result.due_amount
 
@@ -1555,6 +1578,7 @@ def receipt_create(request):
             "line_form": line_form,
             "recent_receipts": recent_receipts,
             "today_totals": today_totals,
+            "default_due_month": _default_due_month(AcademicSession.objects.filter(is_active=True).first()),
         },
     )
 
@@ -1777,6 +1801,22 @@ def receipt_pdf(request, pk):
     return response
 
 
+def receipt_pdf_2up(request, pk):
+    receipt = get_object_or_404(
+        FeeReceipt.objects.select_related(
+            "student",
+            "student__current_class",
+            "student__current_section",
+            "session",
+        ).prefetch_related("lines", "lines__fee_head"),
+        pk=pk,
+    )
+    pdf_bytes = build_fee_receipt_pdf_2up(receipt, get_active_school_profile())
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
+    response["Content-Disposition"] = f'inline; filename="receipt_{receipt.receipt_no}_2up.pdf"'
+    return response
+
+
 def _local_print_allowed(request):
     host = request.get_host().split(":", 1)[0].strip("[]").lower()
     return os.name == "nt" and (host == "localhost" or host == "::1" or host.startswith("127."))
@@ -1862,16 +1902,19 @@ def student_fee_defaults(request, pk):
         school_class=student.current_class,
         is_active=True,
         fee_head__is_active=True,
+        fee_head__is_transport=False,
     )
     if selected_session:
         structures = structures.filter(session=selected_session)
     else:
         structures = structures.none()
+    if student_is_zero_fee(student) or student_uses_fee_package(student):
+        structures = structures.none()
 
     due_status = None
-    target_month = _normalise_academic_month(request.GET.get("month")) or ACADEMIC_MONTHS[-1]
+    target_month = _normalise_academic_month(request.GET.get("month")) or _default_due_month(selected_session)
     if target_month not in ACADEMIC_MONTHS:
-        target_month = ACADEMIC_MONTHS[-1]
+        target_month = _default_due_month(selected_session)
     from_month = _normalise_academic_month(request.GET.get("from_month")) or target_month
     if from_month not in ACADEMIC_MONTHS:
         from_month = target_month
@@ -1892,6 +1935,11 @@ def student_fee_defaults(request, pk):
             if amount > Decimal("0.00"):
                 amounts[f"fee_head_{structure.fee_head_id}"] = str(amount)
 
+        if student_uses_fee_package(student):
+            package_head = FeeHead.objects.filter(name=PACKAGE_FEE_HEAD_NAME, is_active=True).first()
+            package_amount = package_receipt_default_amount(student=student, session=selected_session)
+            if package_head and package_amount > Decimal("0.00"):
+                amounts[f"fee_head_{package_head.id}"] = str(package_amount)
 
     active_concession = None
     if selected_session:
@@ -2260,7 +2308,8 @@ def check_duplicate_receipt(request):
     
     existing = FeeReceipt.objects.filter(
         student_id=student_id,
-        session_id=session_id
+        session_id=session_id,
+        is_cancelled=False,
     ).values("receipt_no", "from_month", "to_month")
 
     for receipt in existing:
@@ -3126,6 +3175,23 @@ def student_export_csv(request):
         
     return response
 
+
+def board_registration_export_csv(request, kind):
+    """
+    Exports UP Board registration-ready CSV files with exact template headings.
+    """
+    if kind not in {"class9", "class11-upboard", "class11-others"}:
+        raise Http404("Unknown board registration export type")
+
+    response = HttpResponse(content_type="text/csv")
+    response["Content-Disposition"] = f'attachment; filename="{export_filename(kind)}"'
+    response.write("\ufeff")
+
+    writer = csv.writer(response)
+    writer.writerow(export_columns(kind))
+    writer.writerows(build_rows(kind))
+    return response
+
 def student_delete(request, pk):
     student = get_object_or_404(Student, pk=pk)
     
@@ -3964,3 +4030,779 @@ def check_siblings(request):
         })
         
     return JsonResponse({"siblings": siblings})
+
+
+# ---------------------------------------------------------------------------
+# Feeder / Attached Schools (अटैच्ड विद्यालय) Views
+# ---------------------------------------------------------------------------
+
+@login_required
+def feeder_school_list(request):
+    """Directory and overview of all attached/feeder schools."""
+    from core.models import FeederSchool, Student, AccountGroup, LedgerAccount
+    schools = FeederSchool.objects.all().prefetch_related('students', 'ledger_account')
+    
+    total_schools = schools.count()
+    total_students = Student.objects.filter(is_active=True, feeder_school__isnull=False).count()
+    
+    school_data = []
+    total_demand_all = Decimal("0.00")
+    total_received_all = Decimal("0.00")
+    total_balance_all = Decimal("0.00")
+    
+    for s in schools:
+        s_enrolled = s.total_enrolled_students
+        s_demand = s.total_demand
+        s_received = s.total_received
+        s_balance = s.balance_due
+        
+        total_demand_all += s_demand
+        total_received_all += s_received
+        total_balance_all += s_balance
+        
+        school_data.append({
+            "school": s,
+            "enrolled": s_enrolled,
+            "demand": s_demand,
+            "received": s_received,
+            "balance": s_balance,
+        })
+        
+    context = {
+        "schools_data": school_data,
+        "total_schools": total_schools,
+        "total_students": total_students,
+        "total_demand": total_demand_all,
+        "total_received": total_received_all,
+        "total_balance": total_balance_all,
+    }
+    return render(request, "core/feeder_school_list.html", context)
+
+
+@login_required
+def feeder_school_detail(request, pk):
+    """Detailed profile, student roster, and ledger statement for a feeder school."""
+    from core.models import FeederSchool, Voucher
+    school = get_object_or_404(FeederSchool, pk=pk)
+    students = school.students.filter(is_active=True).select_related("current_class", "current_section").order_by("current_class__display_order", "full_name")
+    
+    q = request.GET.get("q", "").strip()
+    if q:
+        students = students.filter(
+            Q(full_name__icontains=q) |
+            Q(father_name__icontains=q) |
+            Q(admission_no__icontains=q) |
+            Q(legacy_sid__icontains=q)
+        )
+        
+    vouchers = []
+    if school.ledger_account:
+        vouchers = Voucher.objects.filter(
+            credit_account=school.ledger_account,
+            is_cancelled=False
+        ).select_related("debit_account").order_by("-voucher_date", "-id")
+        
+    context = {
+        "school": school,
+        "students": students,
+        "vouchers": vouchers,
+        "enrolled_count": school.total_enrolled_students,
+        "total_demand": school.total_demand,
+        "total_received": school.total_received,
+        "balance_due": school.balance_due,
+        "q": q,
+    }
+    return render(request, "core/feeder_school_detail.html", context)
+
+
+@login_required
+def feeder_school_create(request):
+    """Add a new attached/feeder school."""
+    from core.forms import FeederSchoolForm
+    from core.models import AccountGroup, LedgerAccount, FeederSchool
+    if request.method == "POST":
+        form = FeederSchoolForm(request.POST)
+        if form.is_valid():
+            school = form.save(commit=False)
+            debtors_group, _ = AccountGroup.objects.get_or_create(
+                name="Sundry Debtors",
+                defaults={"group_type": AccountGroup.GroupType.ASSET, "display_order": 15}
+            )
+            ledger, _ = LedgerAccount.objects.get_or_create(
+                name=f"{school.name} A/C",
+                defaults={"group": debtors_group, "opening_balance": Decimal("0.00")}
+            )
+            school.ledger_account = ledger
+            school.save()
+            messages.success(request, f"Attached school '{school.name}' successfully added with Sundry Debtors ledger.")
+            return redirect("core:feeder_school_detail", pk=school.pk)
+    else:
+        form = FeederSchoolForm()
+        
+    return render(request, "core/feeder_school_form.html", {"form": form, "title": "Add New Attached School (नया अटैच्ड स्कूल जोड़ें)"})
+
+
+@login_required
+def feeder_school_edit(request, pk):
+    """Edit an existing feeder school."""
+    from core.forms import FeederSchoolForm
+    from core.models import FeederSchool
+    school = get_object_or_404(FeederSchool, pk=pk)
+    if request.method == "POST":
+        form = FeederSchoolForm(request.POST, instance=school)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f"Attached school '{school.name}' updated successfully.")
+            return redirect("core:feeder_school_detail", pk=school.pk)
+    else:
+        form = FeederSchoolForm(instance=school)
+        
+    return render(request, "core/feeder_school_form.html", {"form": form, "school": school, "title": f"Edit School: {school.name}"})
+
+
+@login_required
+def feeder_school_payment(request, pk):
+    """Record payment received from a feeder school."""
+    from core.forms import FeederSchoolPaymentForm
+    from core.models import FeederSchool, AccountGroup, LedgerAccount, AcademicSession, Voucher, VoucherCounter
+    school = get_object_or_404(FeederSchool, pk=pk)
+    if not school.ledger_account:
+        debtors_group, _ = AccountGroup.objects.get_or_create(
+            name="Sundry Debtors",
+            defaults={"group_type": AccountGroup.GroupType.ASSET, "display_order": 15}
+        )
+        ledger, _ = LedgerAccount.objects.get_or_create(
+            name=f"{school.name} A/C",
+            defaults={"group": debtors_group, "opening_balance": Decimal("0.00")}
+        )
+        school.ledger_account = ledger
+        school.save(update_fields=["ledger_account"])
+
+    session = AcademicSession.objects.filter(is_active=True).first()
+    if not session:
+        session = AcademicSession.objects.first()
+
+    if request.method == "POST":
+        form = FeederSchoolPaymentForm(request.POST)
+        if form.is_valid():
+            cd = form.cleaned_data
+            p_date = cd["payment_date"]
+            cash_bank_acc = cd["cash_or_bank_account"]
+            amount = cd["amount"]
+            mode = cd["payment_mode"]
+            ref_no = cd["reference_no"]
+            narration = cd["narration"] or f"Affiliation / Registration fee installment from {school.name}"
+            
+            v_type = Voucher.VoucherType.CASH_RECEIPT if mode == Voucher.PaymentMode.CASH else Voucher.VoucherType.BANK
+            
+            with transaction.atomic():
+                counter, _ = VoucherCounter.objects.select_for_update().get_or_create(
+                    session=session, voucher_type=v_type
+                )
+                counter.last_number += 1
+                counter.save()
+                v_num_str = f"{v_type}-{session.name[:4] if session else '2026'}-{counter.last_number:04d}"
+                
+                voucher = Voucher.objects.create(
+                    voucher_no=v_num_str,
+                    voucher_type=v_type,
+                    session=session,
+                    voucher_date=p_date,
+                    debit_account=cash_bank_acc,
+                    credit_account=school.ledger_account,
+                    amount=amount,
+                    paid_to_or_received_from=school.name,
+                    narration=narration,
+                    payment_mode=mode,
+                    physical_slip_no=ref_no,
+                )
+                
+            messages.success(request, f"Payment of Rs. {amount:,.2f} recorded successfully! Voucher #{voucher.voucher_no}")
+            return redirect("core:feeder_school_detail", pk=school.pk)
+    else:
+        form = FeederSchoolPaymentForm()
+        
+    context = {
+        "school": school,
+        "form": form,
+        "balance_due": school.balance_due,
+    }
+    return render(request, "core/feeder_school_payment.html", context)
+
+
+@login_required
+def feeder_school_statement_pdf(request, pk):
+    """Generate professional A4 PDF statement for an attached school."""
+    from core.models import FeederSchool, Voucher, SchoolProfile
+    from core.pdf import build_feeder_school_statement_pdf
+    school = get_object_or_404(FeederSchool, pk=pk)
+    students = school.students.filter(is_active=True).select_related("current_class", "current_section").order_by("current_class__display_order", "full_name")
+    
+    vouchers = []
+    if school.ledger_account:
+        vouchers = list(Voucher.objects.filter(
+            credit_account=school.ledger_account,
+            is_cancelled=False
+        ).select_related("debit_account").order_by("voucher_date", "id"))
+        
+    profile = SchoolProfile.objects.first()
+    pdf_bytes = build_feeder_school_statement_pdf(school, students, vouchers, school_profile=profile)
+    
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
+    response["Content-Disposition"] = f'inline; filename="{school.code or "SCHOOL"}_Statement.pdf"'
+    return response
+
+
+@login_required
+def feeder_school_statement_excel(request, pk):
+    """Export Feeder School statement & roster to Excel."""
+    from core.models import FeederSchool
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+    
+    school = get_object_or_404(FeederSchool, pk=pk)
+    students = school.students.filter(is_active=True).select_related("current_class", "current_section").order_by("current_class__display_order", "full_name")
+    
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "School Statement"
+    
+    ws.merge_cells("A1:G1")
+    t_cell = ws["A1"]
+    t_cell.value = "THPS INTERMEDIATE COLLEGE - ATTACHED SCHOOL STATEMENT"
+    t_cell.font = Font(name="Calibri", size=14, bold=True, color="1E3A8A")
+    t_cell.alignment = Alignment(horizontal="center")
+    
+    ws.merge_cells("A2:G2")
+    ws["A2"].value = f"School: {school.name} | Contact: {school.contact_person} ({school.phone}) | Location: {school.village_address}"
+    ws["A2"].font = Font(name="Calibri", size=11, bold=True)
+    ws["A2"].alignment = Alignment(horizontal="center")
+    
+    ws.append([])
+    
+    ws.append(["Enrolled Students", "Package Rate / Student", "Total Demand (Rs.)", "Total Received (Rs.)", "Balance Due (Rs.)"])
+    ws.append([school.total_enrolled_students, float(school.package_rate_per_student), float(school.total_demand), float(school.total_received), float(school.balance_due)])
+    
+    ws.append([])
+    ws.append(["#", "Adm No / SID", "Student Name", "Father Name", "Class", "Section", "Mobile"])
+    
+    for idx, s in enumerate(students, 1):
+        ws.append([
+            idx,
+            s.admission_no or s.legacy_sid or "",
+            s.full_name,
+            s.father_name,
+            str(s.current_class or ""),
+            str(s.current_section.name if s.current_section else ""),
+            s.mobile_primary or s.mobile_secondary or ""
+        ])
+        
+    for col in ws.columns:
+        max_len = max(len(str(cell.value or "")) for cell in col)
+        col_letter = get_column_letter(col[0].column)
+        ws.column_dimensions[col_letter].width = max(max_len + 3, 12)
+        
+    response = HttpResponse(content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    response["Content-Disposition"] = f'attachment; filename="{school.code or "SCHOOL"}_Statement.xlsx"'
+    wb.save(response)
+    return response
+
+
+# ---------------------------------------------------------------------------
+# Attendance Register (उपस्थिति पंजिका) Views
+# ---------------------------------------------------------------------------
+
+@login_required
+def attendance_register_view(request):
+    """Interactive preview and filter bar for Student Monthly Attendance Register."""
+    import calendar
+    from datetime import date
+    from core.models import SchoolClass, Section, Student, AcademicSession, SchoolProfile
+
+    today = date.today()
+    selected_month = int(request.GET.get("month", today.month))
+    selected_year = int(request.GET.get("year", today.year))
+    
+    classes = SchoolClass.objects.all().order_by("display_order")
+    selected_class_id = request.GET.get("class_id")
+    
+    selected_class = None
+    if selected_class_id:
+        selected_class = SchoolClass.objects.filter(pk=selected_class_id).first()
+    if not selected_class and classes.exists():
+        selected_class = classes.first()
+
+    sections = Section.objects.filter(school_class=selected_class).order_by("name") if selected_class else Section.objects.all().order_by("name")
+    selected_section_id = request.GET.get("section_id")
+    selected_section = None
+    if selected_section_id:
+        selected_section = Section.objects.filter(pk=selected_section_id).first()
+
+    students = []
+    if selected_class:
+        qs = Student.objects.filter(is_active=True, current_class=selected_class)
+        if selected_section:
+            qs = qs.filter(current_section=selected_section)
+        students = qs.select_related("current_class", "current_section").order_by("roll_no", "full_name")
+
+    num_days = calendar.monthrange(selected_year, selected_month)[1]
+    days_list = []
+    day_abbrs = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    for d in range(1, num_days + 1):
+        w = calendar.weekday(selected_year, selected_month, d)
+        days_list.append({
+            "day": d,
+            "weekday": day_abbrs[w],
+            "is_sunday": (w == 6),
+        })
+
+    months_choices = [(m, calendar.month_name[m]) for m in range(1, 13)]
+    years_choices = [2025, 2026, 2027]
+
+    context = {
+        "classes": classes,
+        "sections": sections,
+        "selected_class": selected_class,
+        "selected_section": selected_section,
+        "selected_month": selected_month,
+        "selected_month_name": calendar.month_name[selected_month],
+        "selected_year": selected_year,
+        "months_choices": months_choices,
+        "years_choices": years_choices,
+        "days_list": days_list,
+        "students": students,
+        "total_students": len(students),
+    }
+    return render(request, "core/attendance_register.html", context)
+
+
+@login_required
+def attendance_register_pdf(request):
+    """Stream printable A4 Landscape Monthly Attendance Register PDF."""
+    import calendar
+    from datetime import date
+    from core.models import SchoolClass, Section, Student, AcademicSession, SchoolProfile
+    from core.pdf import build_attendance_register_pdf
+
+    today = date.today()
+    month = int(request.GET.get("month", today.month))
+    year = int(request.GET.get("year", today.year))
+    
+    class_id = request.GET.get("class_id")
+    school_class = get_object_or_404(SchoolClass, pk=class_id) if class_id else SchoolClass.objects.first()
+    
+    section_id = request.GET.get("section_id")
+    section = Section.objects.filter(pk=section_id).first() if section_id else None
+
+    qs = Student.objects.filter(is_active=True, current_class=school_class)
+    if section:
+        qs = qs.filter(current_section=section)
+    students = list(qs.select_related("current_class", "current_section").order_by("roll_no", "full_name"))
+
+    session = AcademicSession.objects.filter(is_active=True).first() or AcademicSession.objects.first()
+    school_profile = SchoolProfile.objects.first()
+
+    pdf_bytes = build_attendance_register_pdf(
+        students=students,
+        school_class=school_class,
+        section=section,
+        month=month,
+        year=year,
+        session=session,
+        school_profile=school_profile,
+    )
+
+    sec_name = f"_{section.name}" if section else ""
+    filename = f"Attendance_{school_class.name}{sec_name}_{calendar.month_name[month]}_{year}.pdf".replace(" ", "_")
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
+    response["Content-Disposition"] = f'inline; filename="{filename}"'
+    return response
+
+
+# ---------------------------------------------------------------------------
+# Attendance Summary Entry & Reports (Part B)
+# ---------------------------------------------------------------------------
+
+@login_required
+def attendance_summary_entry(request):
+    """Batch entry screen to record monthly working days and present days for a class/section."""
+    import calendar
+    from datetime import date
+    from core.models import SchoolClass, Section, Student, AcademicSession, AttendanceSummary
+
+    today = date.today()
+    selected_month = int(request.GET.get("month", today.month))
+    selected_year = int(request.GET.get("year", today.year))
+
+    classes = SchoolClass.objects.all().order_by("display_order")
+    selected_class_id = request.GET.get("class_id")
+    selected_class = None
+    if selected_class_id:
+        selected_class = SchoolClass.objects.filter(pk=selected_class_id).first()
+    if not selected_class and classes.exists():
+        selected_class = classes.first()
+
+    sections = Section.objects.filter(school_class=selected_class).order_by("name") if selected_class else Section.objects.all().order_by("name")
+    selected_section_id = request.GET.get("section_id")
+    selected_section = None
+    if selected_section_id:
+        selected_section = Section.objects.filter(pk=selected_section_id).first()
+
+    session = AcademicSession.objects.filter(is_active=True).first() or AcademicSession.objects.first()
+
+    students = []
+    if selected_class:
+        qs = Student.objects.filter(is_active=True, current_class=selected_class)
+        if selected_section:
+            qs = qs.filter(current_section=selected_section)
+        students = list(qs.select_related("current_class", "current_section").order_by("roll_no", "full_name"))
+
+    # Load existing summaries for these students in this session/month/year
+    existing_summaries = {}
+    if students:
+        student_ids = [s.id for s in students]
+        summaries = AttendanceSummary.objects.filter(
+            student_id__in=student_ids,
+            session=session,
+            year=selected_year,
+            month=selected_month,
+        )
+        for summ in summaries:
+            existing_summaries[summ.student_id] = summ
+
+    # Default working days (if previously saved by any student in batch, use that, else default to 24)
+    default_working_days = 24
+    if existing_summaries:
+        first_summ = next(iter(existing_summaries.values()))
+        default_working_days = first_summ.total_working_days
+
+    if request.method == "POST":
+        post_class_id = request.POST.get("class_id")
+        post_section_id = request.POST.get("section_id")
+        post_month = int(request.POST.get("month", selected_month))
+        post_year = int(request.POST.get("year", selected_year))
+        
+        try:
+            batch_working_days = int(request.POST.get("batch_working_days", default_working_days))
+        except (ValueError, TypeError):
+            batch_working_days = 24
+
+        if batch_working_days < 1:
+            messages.error(request, "Total Working Days must be at least 1.")
+            return redirect(f"{request.path}?class_id={selected_class.id if selected_class else ''}&section_id={selected_section.id if selected_section else ''}&month={post_month}&year={post_year}")
+
+        saved_count = 0
+        validation_errors = []
+
+        with transaction.atomic():
+            for student in students:
+                p_days_key = f"present_days_{student.id}"
+                w_days_key = f"working_days_{student.id}"
+                rem_key = f"remarks_{student.id}"
+
+                p_days_raw = request.POST.get(p_days_key, "").strip()
+                if p_days_raw == "":
+                    continue  # Skip unentered rows
+
+                try:
+                    p_days = int(p_days_raw)
+                except ValueError:
+                    validation_errors.append(f"{student.full_name}: Invalid number of present days.")
+                    continue
+
+                try:
+                    w_days = int(request.POST.get(w_days_key, batch_working_days))
+                except (ValueError, TypeError):
+                    w_days = batch_working_days
+
+                if p_days < 0:
+                    validation_errors.append(f"{student.full_name}: Present days cannot be negative.")
+                    continue
+                if p_days > w_days:
+                    validation_errors.append(f"{student.full_name}: Present days ({p_days}) cannot exceed Total Working Days ({w_days}).")
+                    continue
+
+                remarks = request.POST.get(rem_key, "").strip()
+
+                AttendanceSummary.objects.update_or_create(
+                    student=student,
+                    session=session,
+                    year=post_year,
+                    month=post_month,
+                    defaults={
+                        "total_working_days": w_days,
+                        "days_present": p_days,
+                        "remarks": remarks,
+                    }
+                )
+                saved_count += 1
+
+        if validation_errors:
+            for err in validation_errors[:5]:
+                messages.error(request, err)
+            if len(validation_errors) > 5:
+                messages.error(request, f"...and {len(validation_errors) - 5} more validation errors.")
+
+        if saved_count > 0:
+            messages.success(request, f"Attendance successfully saved for {saved_count} students in {selected_class.name} ({calendar.month_name[post_month]} {post_year})!")
+            return redirect(f"{reverse('core:attendance_summary_report')}?class_id={selected_class.id if selected_class else ''}&section_id={selected_section.id if selected_section else ''}&month={post_month}&year={post_year}")
+
+    # Build student row objects for template
+    student_rows = []
+    for idx, s in enumerate(students, 1):
+        summary = existing_summaries.get(s.id)
+        p_days = summary.days_present if summary else ""
+        w_days = summary.total_working_days if summary else default_working_days
+        rem = summary.remarks if summary else ""
+        student_rows.append({
+            "index": idx,
+            "student": s,
+            "roll_no": s.roll_no or idx,
+            "admission_no": s.admission_no or s.legacy_sid or "",
+            "present_days": p_days,
+            "working_days": w_days,
+            "absent_days": summary.days_absent if summary else "",
+            "percentage": summary.attendance_percentage if summary else "",
+            "remarks": rem,
+            "has_record": (summary is not None),
+        })
+
+    months_choices = [(m, calendar.month_name[m]) for m in range(1, 13)]
+    years_choices = [2025, 2026, 2027]
+
+    context = {
+        "classes": classes,
+        "sections": sections,
+        "selected_class": selected_class,
+        "selected_section": selected_section,
+        "selected_month": selected_month,
+        "selected_month_name": calendar.month_name[selected_month],
+        "selected_year": selected_year,
+        "default_working_days": default_working_days,
+        "months_choices": months_choices,
+        "years_choices": years_choices,
+        "student_rows": student_rows,
+        "total_students": len(student_rows),
+    }
+    return render(request, "core/attendance_summary_entry.html", context)
+
+
+@login_required
+def attendance_summary_report(request):
+    """Comprehensive Monthly Attendance Summary Report with KPIs and statistics."""
+    import calendar
+    from datetime import date
+    from core.models import SchoolClass, Section, Student, AcademicSession, AttendanceSummary
+
+    today = date.today()
+    selected_month = int(request.GET.get("month", today.month))
+    selected_year = int(request.GET.get("year", today.year))
+
+    classes = SchoolClass.objects.all().order_by("display_order")
+    selected_class_id = request.GET.get("class_id")
+    selected_class = None
+    if selected_class_id:
+        selected_class = SchoolClass.objects.filter(pk=selected_class_id).first()
+    if not selected_class and classes.exists():
+        selected_class = classes.first()
+
+    sections = Section.objects.filter(school_class=selected_class).order_by("name") if selected_class else Section.objects.all().order_by("name")
+    selected_section_id = request.GET.get("section_id")
+    selected_section = None
+    if selected_section_id:
+        selected_section = Section.objects.filter(pk=selected_section_id).first()
+
+    session = AcademicSession.objects.filter(is_active=True).first() or AcademicSession.objects.first()
+
+    students = []
+    if selected_class:
+        qs = Student.objects.filter(is_active=True, current_class=selected_class)
+        if selected_section:
+            qs = qs.filter(current_section=selected_section)
+        students = list(qs.select_related("current_class", "current_section").order_by("roll_no", "full_name"))
+
+    summaries_map = {}
+    if students:
+        student_ids = [s.id for s in students]
+        summaries = AttendanceSummary.objects.filter(
+            student_id__in=student_ids,
+            session=session,
+            year=selected_year,
+            month=selected_month,
+        )
+        for summ in summaries:
+            summaries_map[summ.student_id] = summ
+
+    report_rows = []
+    total_present_sum = 0
+    total_working_sum = 0
+    short_attendance_count = 0
+    marked_count = 0
+
+    for idx, s in enumerate(students, 1):
+        summ = summaries_map.get(s.id)
+        if summ:
+            marked_count += 1
+            total_present_sum += summ.days_present
+            total_working_sum += summ.total_working_days
+            pct = summ.attendance_percentage
+            if pct < 75.0:
+                short_attendance_count += 1
+            badge = "danger" if pct < 60.0 else "warning" if pct < 75.0 else "success"
+            status_label = "Short Attendance (<60%)" if pct < 60.0 else "Average (60-74%)" if pct < 75.0 else "Eligible (>=75%)"
+        else:
+            pct = None
+            badge = "secondary"
+            status_label = "Not Recorded"
+
+        report_rows.append({
+            "index": idx,
+            "student": s,
+            "roll_no": s.roll_no or idx,
+            "admission_no": s.admission_no or s.legacy_sid or "",
+            "working_days": summ.total_working_days if summ else "-",
+            "present_days": summ.days_present if summ else "-",
+            "absent_days": summ.days_absent if summ else "-",
+            "percentage": pct,
+            "badge": badge,
+            "status_label": status_label,
+            "remarks": summ.remarks if summ else "",
+            "is_marked": (summ is not None),
+        })
+
+    avg_percentage = round((total_present_sum / total_working_sum * 100), 1) if total_working_sum > 0 else 0.0
+
+    months_choices = [(m, calendar.month_name[m]) for m in range(1, 13)]
+    years_choices = [2025, 2026, 2027]
+
+    context = {
+        "classes": classes,
+        "sections": sections,
+        "selected_class": selected_class,
+        "selected_section": selected_section,
+        "selected_month": selected_month,
+        "selected_month_name": calendar.month_name[selected_month],
+        "selected_year": selected_year,
+        "months_choices": months_choices,
+        "years_choices": years_choices,
+        "report_rows": report_rows,
+        "total_enrolled": len(students),
+        "marked_count": marked_count,
+        "avg_percentage": avg_percentage,
+        "short_attendance_count": short_attendance_count,
+    }
+    return render(request, "core/attendance_summary_report.html", context)
+
+
+@login_required
+def attendance_summary_report_excel(request):
+    """Export filtered monthly attendance report to Excel."""
+    import calendar
+    from datetime import date
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+    from core.models import SchoolClass, Section, Student, AcademicSession, AttendanceSummary
+
+    today = date.today()
+    selected_month = int(request.GET.get("month", today.month))
+    selected_year = int(request.GET.get("year", today.year))
+
+    class_id = request.GET.get("class_id")
+    school_class = get_object_or_404(SchoolClass, pk=class_id) if class_id else SchoolClass.objects.first()
+
+    section_id = request.GET.get("section_id")
+    section = Section.objects.filter(pk=section_id).first() if section_id else None
+
+    session = AcademicSession.objects.filter(is_active=True).first() or AcademicSession.objects.first()
+
+    qs = Student.objects.filter(is_active=True, current_class=school_class)
+    if section:
+        qs = qs.filter(current_section=section)
+    students = list(qs.select_related("current_class", "current_section").order_by("roll_no", "full_name"))
+
+    summaries_map = {}
+    if students:
+        student_ids = [s.id for s in students]
+        summaries = AttendanceSummary.objects.filter(
+            student_id__in=student_ids,
+            session=session,
+            year=selected_year,
+            month=selected_month,
+        )
+        for summ in summaries:
+            summaries_map[summ.student_id] = summ
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Monthly Attendance"
+
+    ws.merge_cells("A1:H1")
+    ws["A1"] = "THPS INTERMEDIATE COLLEGE - MONTHLY ATTENDANCE REPORT"
+    ws["A1"].font = Font(name="Calibri", size=14, bold=True, color="1E3A8A")
+    ws["A1"].alignment = Alignment(horizontal="center")
+
+    sec_name = f" - Section {section.name}" if section else ""
+    ws.merge_cells("A2:H2")
+    ws["A2"] = f"Class: {school_class.name}{sec_name} | Month: {calendar.month_name[selected_month]} {selected_year} | Session: {session.name if session else '2026-27'}"
+    ws["A2"].font = Font(name="Calibri", size=11, bold=True)
+    ws["A2"].alignment = Alignment(horizontal="center")
+
+    ws.append([])
+    headers = ["# / Roll", "Adm No", "Student Name", "Father Name", "Working Days", "Present Days", "Absent Days", "Attendance %", "Status", "Remarks"]
+    ws.append(headers)
+
+    header_fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid")
+    header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+    for col_idx, h in enumerate(headers, 1):
+        cell = ws.cell(row=4, column=col_idx)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal="center" if col_idx in [1, 2, 5, 6, 7, 8] else "left")
+
+    thin_border = Border(
+        left=Side(style="thin", color="CBD5E1"),
+        right=Side(style="thin", color="CBD5E1"),
+        top=Side(style="thin", color="CBD5E1"),
+        bottom=Side(style="thin", color="CBD5E1"),
+    )
+
+    row_num = 5
+    for idx, s in enumerate(students, 1):
+        summ = summaries_map.get(s.id)
+        w_days = summ.total_working_days if summ else ""
+        p_days = summ.days_present if summ else ""
+        a_days = summ.days_absent if summ else ""
+        pct = f"{summ.attendance_percentage}%" if summ else "Not Recorded"
+        status = "Eligible (>=75%)" if (summ and summ.attendance_percentage >= 75.0) else "Average (60-74%)" if (summ and summ.attendance_percentage >= 60.0) else "Short Attendance (<60%)" if summ else "-"
+
+        ws.append([
+            s.roll_no or idx,
+            s.admission_no or s.legacy_sid or "",
+            s.full_name,
+            s.father_name,
+            w_days,
+            p_days,
+            a_days,
+            pct,
+            status,
+            summ.remarks if summ else ""
+        ])
+        for col_idx in range(1, 11):
+            cell = ws.cell(row=row_num, column=col_idx)
+            cell.border = thin_border
+            if col_idx in [1, 2, 5, 6, 7, 8]:
+                cell.alignment = Alignment(horizontal="center")
+        row_num += 1
+
+    for col in ws.columns:
+        max_len = max(len(str(cell.value or "")) for cell in col)
+        col_letter = get_column_letter(col[0].column)
+        ws.column_dimensions[col_letter].width = max(max_len + 4, 12)
+
+    filename = f"Attendance_{school_class.name}{sec_name}_{calendar.month_name[selected_month]}_{selected_year}.xlsx".replace(" ", "_")
+    response = HttpResponse(content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    wb.save(response)
+    return response

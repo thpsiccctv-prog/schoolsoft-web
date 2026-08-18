@@ -4,7 +4,7 @@ from django import forms
 from django.db.models import Count, Max
 from django.utils import timezone
 
-from .models import AcademicSession, AccountGroup, DisciplineRecord, Family, FeeHead, FeeReceipt, House, InventoryIssue, InventoryItem, SalaryPayment, Section, Staff, Student, TransferCertificate, LedgerAccount, Voucher, TransportRoute, StudentTransport
+from .models import AcademicSession, AccountGroup, DisciplineRecord, Family, FeederSchool, FeeHead, FeeReceipt, House, InventoryIssue, InventoryItem, SalaryPayment, Section, Staff, Student, TransferCertificate, LedgerAccount, Voucher, TransportRoute, StudentTransport
 
 class SectionSelect(forms.Select):
     """Renders each <option> with a data-class attribute so student_form.html can
@@ -52,7 +52,129 @@ class TransportRouteChoiceField(forms.ModelChoiceField):
     def label_from_instance(self, obj):
         return f"{obj.name} - ₹{obj.monthly_charge}"
 
+
+SUBJECT_GROUP_CHOICES = [
+    ("", "---------"),
+    ("HS", "High School (IX/X)"),
+    ("A", "Arts / Humanities"),
+    ("B", "Science"),
+    ("C", "Commerce"),
+]
+
+SUBJECT_CODE_CHOICES = [
+    ("", "---------"),
+    (
+        "Class IX/X - High School",
+        (
+            ("901", "901 - Hindi"),
+            ("902", "902 - Elementary Hindi"),
+            ("904", "904 - Urdu"),
+            ("917", "917 - English"),
+            ("923", "923 - Sanskrit"),
+            ("928", "928 - Mathematics"),
+            ("930", "930 - Home Science"),
+            ("931", "931 - Science"),
+            ("932", "932 - Social Science"),
+            ("933", "933 - Music Vocal"),
+            ("934", "934 - Music Instrumental"),
+            ("935", "935 - Commerce"),
+            ("936", "936 - Drawing"),
+            ("937", "937 - Agriculture"),
+            ("938", "938 - Home Science Optional"),
+            ("939", "939 - Tailoring"),
+            ("940", "940 - Painting"),
+            ("941", "941 - Computer"),
+            ("942", "942 - Anthropology"),
+            ("944", "944 - Moral/Yoga/Sports & Physical Education"),
+            ("971", "971 - Retail Trading"),
+            ("972", "972 - Security"),
+            ("973", "973 - Automobile"),
+            ("974", "974 - IT/ITES"),
+            ("975", "975 - Health Care"),
+            ("976", "976 - Plumbing"),
+            ("977", "977 - Electrician"),
+            ("978", "978 - Disaster Management"),
+            ("979", "979 - Solar System Repairing"),
+            ("980", "980 - Mobile Repairing"),
+            ("981", "981 - NCC"),
+        ),
+    ),
+    (
+        "Class XI/XII - Intermediate",
+        (
+            ("101", "101 - Hindi"),
+            ("102", "102 - General Hindi"),
+            ("103", "103 - Sanskrit"),
+            ("104", "104 - Urdu"),
+            ("117", "117 - English"),
+            ("124", "124 - Pali"),
+            ("125", "125 - Arabic"),
+            ("126", "126 - Persian"),
+            ("128", "128 - History"),
+            ("129", "129 - Geography"),
+            ("130", "130 - Civics"),
+            ("131", "131 - Mathematics"),
+            ("133", "133 - Psychology"),
+            ("134", "134 - Education"),
+            ("135", "135 - Home Science"),
+            ("136", "136 - Economics"),
+            ("137", "137 - Logic"),
+            ("138", "138 - Music Vocal"),
+            ("139", "139 - Music Instrumental"),
+            ("140", "140 - Drawing Design"),
+            ("141", "141 - Drawing Technical"),
+            ("142", "142 - Sociology"),
+            ("144", "144 - Computer"),
+            ("149", "149 - Painting"),
+            ("150", "150 - Dancing"),
+            ("151", "151 - Physics"),
+            ("152", "152 - Chemistry"),
+            ("153", "153 - Biology"),
+            ("156", "156 - Accountancy"),
+            ("157", "157 - Business Studies"),
+            ("163", "163 - Agronomy"),
+            ("164", "164 - Agriculture Botany"),
+            ("165", "165 - Agriculture Physics/Climatology"),
+            ("166", "166 - Agriculture Engineering"),
+            ("167", "167 - Agriculture Mathematics/Statistics"),
+            ("168", "168 - Agronomy Sixth"),
+            ("169", "169 - Agriculture Economics"),
+            ("170", "170 - Agriculture Zoology"),
+            ("171", "171 - Animal Husbandry/Veterinary Science"),
+            ("172", "172 - Agriculture Chemistry"),
+            ("173", "173 - Moral/Yoga/Sports & Physical Education"),
+            ("174", "174 - Anthropology"),
+            ("175", "175 - NCC"),
+        ),
+    ),
+]
+
+VOCATIONAL_SUBJECT_CODE_CHOICES = [
+    ("", "---------"),
+    *[(str(code), f"{code} - SubjectVOC") for code in range(945, 970)],
+]
+
+REVISED_VOCATIONAL_SUBJECT_CODE_CHOICES = [
+    ("", "---------"),
+    *[(str(code), f"{code} - SubjectRevVOC") for code in range(701, 705)],
+]
+
+
 class StudentForm(forms.ModelForm):
+    subject_group = forms.ChoiceField(required=False, choices=SUBJECT_GROUP_CHOICES, label="Subject Group")
+    subject_1_code = forms.ChoiceField(required=False, choices=SUBJECT_CODE_CHOICES, label="1st Subject")
+    subject_2_code = forms.ChoiceField(required=False, choices=SUBJECT_CODE_CHOICES, label="2nd Subject")
+    subject_3_code = forms.ChoiceField(required=False, choices=SUBJECT_CODE_CHOICES, label="3rd Subject")
+    subject_4_code = forms.ChoiceField(required=False, choices=SUBJECT_CODE_CHOICES, label="4th Subject")
+    subject_5_code = forms.ChoiceField(required=False, choices=SUBJECT_CODE_CHOICES, label="5th Subject")
+    subject_6_code = forms.ChoiceField(required=False, choices=SUBJECT_CODE_CHOICES, label="6th Subject")
+    subject_7_code = forms.ChoiceField(required=False, choices=SUBJECT_CODE_CHOICES, label="7th Subject")
+    subject_voc_code = forms.ChoiceField(required=False, choices=VOCATIONAL_SUBJECT_CODE_CHOICES, label="Subject VOC")
+    subject_rev_voc_code = forms.ChoiceField(
+        required=False,
+        choices=REVISED_VOCATIONAL_SUBJECT_CODE_CHOICES,
+        label="Subject RevVOC",
+    )
     transport_required = forms.BooleanField(required=False, label="Transport Required?")
     transport_route = TransportRouteChoiceField(
         queryset=TransportRoute.objects.none(),
@@ -73,19 +195,45 @@ class StudentForm(forms.ModelForm):
             "legacy_sid",
             "admission_date",
             "full_name",
+            "full_name_hindi",
             "current_class",
             "current_section",
+            "feeder_school",
             "house",
             "roll_no",
             "photo",
             "date_of_birth",
             "gender",
+            "exam_medium",
+            "board_candidate_type_1_code",
+            "board_candidate_type_2_code",
+            "board_caste_code",
+            "previous_board_source",
+            "subject_group",
+            "subject_1_code",
+            "subject_2_code",
+            "subject_3_code",
+            "subject_4_code",
+            "subject_5_code",
+            "subject_6_code",
+            "subject_7_code",
+            "subject_voc_code",
+            "subject_rev_voc_code",
+            "fee_package_enabled",
+            "fee_package_total",
+            "fee_package_note",
             "aadhaar_no",
+            "class8_unique_id",
+            "board_sr_number",
             "father_name",
+            "father_name_hindi",
             "mother_name",
+            "mother_name_hindi",
             "guardian_name",
             "mother_aadhaar_no",
             "father_aadhaar_no",
+            "nationality",
+            "nationality_other",
             "caste",
             "category",
             "is_minority",
@@ -97,12 +245,14 @@ class StudentForm(forms.ModelForm):
             "blood_group",
             "weight_kg",
             "height_cm",
+            "address_street_area",
             "address_local",
             "address_permanent",
             "village_locality",
             "post",
             "block",
             "district",
+            "state",
             "pin_code",
             "previous_board_name",
             "previous_passing_year",
@@ -131,7 +281,20 @@ class StudentForm(forms.ModelForm):
             "pen_number": "PEN Number",
             "apaar_id": "APAAR ID",
             "caste": "Caste",
-            "category": "Category (General/OBC/SC/ST)",
+            "category": "Category (General/OBC/SC/ST/EWS)",
+            "board_candidate_type_1_code": "Candidate Type 1",
+            "board_candidate_type_2_code": "Candidate Type 2",
+            "board_caste_code": "Board Caste Code",
+            "previous_board_source": "Class 11 Board Format",
+            "class8_unique_id": "Class 8 Unique ID",
+            "board_sr_number": "Sr Number",
+            "nationality_other": "Nationality Other",
+            "fee_package_enabled": "Package Fee Applicable",
+            "fee_package_total": "Package Total",
+            "fee_package_note": "Package Note",
+            "address_street_area": "Street / Mohalla / Area",
+            "block": "Tehsil / Block",
+            "state": "State",
             "is_minority": "Minority",
             "pin_code": "PIN Code",
         }
@@ -153,6 +316,11 @@ class StudentForm(forms.ModelForm):
         if not self.instance.pk:
             if "admission_date" not in self.initial:
                 self.initial["admission_date"] = timezone.localdate()
+            self.fields["board_candidate_type_1_code"].initial = Student.BoardCandidateType1.REGULAR
+            self.fields["board_candidate_type_2_code"].initial = Student.BoardCandidateType2.NONE
+            self.fields["exam_medium"].initial = Student.ExamMedium.HINDI
+            self.fields["nationality"].initial = "Indian"
+            self.fields["state"].initial = "Uttar Pradesh"
             if "legacy_sid" not in self.initial:
                 max_sid = Student.objects.aggregate(max_sid=Max("legacy_sid"))["max_sid"]
                 self.fields["legacy_sid"].initial = (max_sid or 0) + 1
@@ -185,6 +353,21 @@ class StudentForm(forms.ModelForm):
                 self.add_error("transport_route", "Please select a route if transport is required.")
             if not stop_name:
                 self.add_error("stop_name", "Please enter a stop name if transport is required.")
+
+        school_class = cleaned_data.get("current_class")
+        section = cleaned_data.get("current_section")
+        class_name = (school_class.name if school_class else "").upper()
+        section_name = (section.name if section else "").upper()
+        package_enabled = cleaned_data.get("fee_package_enabled")
+        package_total = cleaned_data.get("fee_package_total") or Decimal("0.00")
+        auto_package = section_name == "D"
+
+        if section_name in {"B", "C"}:
+            cleaned_data["fee_package_enabled"] = False
+        elif auto_package or package_enabled or package_total > Decimal("0.00"):
+            cleaned_data["fee_package_enabled"] = True
+            if package_total <= Decimal("0.00"):
+                cleaned_data["fee_package_total"] = Decimal("4500.00")
                 
         return cleaned_data
 
@@ -495,19 +678,41 @@ class SalaryPaymentForm(forms.ModelForm):
         if not cleaned_data:
             return cleaned_data
 
-        gross = sum([
-            cleaned_data.get("basic_pay", Decimal("0.00")),
-            cleaned_data.get("da", Decimal("0.00")),
-            cleaned_data.get("other_allowances", Decimal("0.00"))
-        ])
+        staff_obj = cleaned_data.get("staff")
+        basic = cleaned_data.get("basic_pay")
+        if basic is None and staff_obj:
+            basic = staff_obj.basic_pay
+        basic = basic or Decimal("0.00")
+        cleaned_data["basic_pay"] = basic
 
-        deductions = sum([
-            cleaned_data.get("pf_deduction", Decimal("0.00")),
-            cleaned_data.get("esi_deduction", Decimal("0.00")),
-            cleaned_data.get("other_deduction", Decimal("0.00"))
-        ])
+        da = cleaned_data.get("da")
+        if da is None and staff_obj:
+            da = staff_obj.da
+        da = da or Decimal("0.00")
+        cleaned_data["da"] = da
 
-        advance_recovery = cleaned_data.get("advance_recovery", Decimal("0.00"))
+        allowances = cleaned_data.get("other_allowances")
+        if allowances is None and staff_obj:
+            allowances = staff_obj.other_allowances
+        allowances = allowances or Decimal("0.00")
+        cleaned_data["other_allowances"] = allowances
+
+        gross = basic + da + allowances
+
+        pf = cleaned_data.get("pf_deduction") or Decimal("0.00")
+        cleaned_data["pf_deduction"] = pf
+
+        esi = cleaned_data.get("esi_deduction") or Decimal("0.00")
+        cleaned_data["esi_deduction"] = esi
+
+        other_ded = cleaned_data.get("other_deduction") or Decimal("0.00")
+        cleaned_data["other_deduction"] = other_ded
+
+        deductions = pf + esi + other_ded
+
+        advance_recovery = cleaned_data.get("advance_recovery") or Decimal("0.00")
+        cleaned_data["advance_recovery"] = advance_recovery
+
         net_pay = gross - deductions - advance_recovery
 
         if net_pay < 0:
@@ -651,3 +856,64 @@ class VoucherEditForm(VoucherForm):
 
     class Meta(VoucherForm.Meta):
         fields = VoucherForm.Meta.fields + ["edit_reason"]
+
+
+class FeederSchoolForm(forms.ModelForm):
+    class Meta:
+        model = FeederSchool
+        fields = [
+            "name",
+            "code",
+            "contact_person",
+            "phone",
+            "village_address",
+            "package_rate_per_student",
+            "notes",
+            "is_active",
+        ]
+        widgets = {
+            "name": forms.TextInput(attrs={"class": "form-control", "placeholder": "उदा. SHIVPUJAN SCHOOL"}),
+            "code": forms.TextInput(attrs={"class": "form-control", "placeholder": "उदा. SCH-SHIVPUJAN"}),
+            "contact_person": forms.TextInput(attrs={"class": "form-control", "placeholder": "प्रधानाचार्य / प्रबंधक का नाम"}),
+            "phone": forms.TextInput(attrs={"class": "form-control", "placeholder": "मोबाइल नंबर"}),
+            "village_address": forms.TextInput(attrs={"class": "form-control", "placeholder": "गांव / पता"}),
+            "package_rate_per_student": forms.NumberInput(attrs={"class": "form-control", "step": "50"}),
+            "notes": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
+            "is_active": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+        }
+
+
+class FeederSchoolPaymentForm(forms.Form):
+    payment_date = forms.DateField(
+        initial=timezone.localdate,
+        widget=forms.DateInput(attrs={"type": "date", "class": "form-control"}),
+        label="भुगतान की तिथि (Payment Date)"
+    )
+    cash_or_bank_account = forms.ModelChoiceField(
+        queryset=LedgerAccount.objects.filter(is_cash_or_bank=True, is_active=True),
+        widget=forms.Select(attrs={"class": "form-select"}),
+        label="खाता (Deposit To / Received In)"
+    )
+    amount = forms.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=Decimal("1.00"),
+        widget=forms.NumberInput(attrs={"class": "form-control", "placeholder": "₹ राशि"}),
+        label="प्राप्त राशि (Amount ₹)"
+    )
+    payment_mode = forms.ChoiceField(
+        choices=Voucher.PaymentMode.choices,
+        initial=Voucher.PaymentMode.CASH,
+        widget=forms.Select(attrs={"class": "form-select"}),
+        label="पेमेंट मोड (Payment Mode)"
+    )
+    reference_no = forms.CharField(
+        required=False,
+        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "Txn ID / Cheque No / Slip No"}),
+        label="रेफरेंस नंबर (Ref / Slip No)"
+    )
+    narration = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={"class": "form-control", "rows": 2, "placeholder": "विवरण (उदा. 52 बच्चों की फीस किस्त)"}),
+        label="विवरण / Narration"
+    )
