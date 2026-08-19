@@ -419,7 +419,13 @@ def _build_fee_receipt_story(receipt, school_profile=None):
         Paragraph(f"<b>{escape(school_name.upper())}</b>", title_style),
         Paragraph(escape(school_address), school_sub_style),
         Paragraph(escape(school_contact), school_sub_style),
-        Paragraph("<b>&bull; FEE RECEIPT (फीस रसीद) &bull;</b>", badge_style),
+        _devanagari_flowable(
+            "FEE RECEIPT (फीस रसीद)",
+            7.5,
+            bold=True,
+            align=1,
+            color=(15, 118, 110, 255),
+        ),
     ]
 
     # Top Header Table (3 Columns: Logo, School Info, Receipt Info)
