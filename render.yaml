@@ -8,18 +8,14 @@
 #      thpsic.com, which stays on Netlify) at the Render service via CNAME,
 #      and add that same hostname as a Custom Domain on the Render service.
 
-databases:
-  - name: schoolsoft-db
-    plan: free
-    databaseName: schoolsoft
-    user: schoolsoft
-
+# Render Web Service Specification for THPS Intermediate College
 services:
   - type: web
-    name: schoolsoft-english-medium
+    name: thpsic-schoolsoft
     runtime: python
     plan: free
-    buildCommand: "pip install -r requirements.txt && python manage.py collectstatic --noinput && python manage.py migrate"
+    region: oregon
+    buildCommand: "pip install -r requirements.txt && python manage.py collectstatic --noinput"
     startCommand: "gunicorn schoolsoft.wsgi:application"
     envVars:
       - key: SCHOOLSOFT_SECRET_KEY
@@ -27,12 +23,10 @@ services:
       - key: SCHOOLSOFT_DEBUG
         value: "False"
       - key: SCHOOLSOFT_ALLOWED_HOSTS
-        value: "english-medium.thpsic.com"
+        value: "thpsic-schoolsoft.onrender.com"
       - key: SCHOOLSOFT_CSRF_TRUSTED_ORIGINS
-        value: "https://english-medium.thpsic.com"
+        value: "https://thpsic-schoolsoft.onrender.com"
       - key: PYTHON_VERSION
         value: "3.12.6"
       - key: DATABASE_URL
-        fromDatabase:
-          name: schoolsoft-db
-          property: connectionString
+        sync: false
