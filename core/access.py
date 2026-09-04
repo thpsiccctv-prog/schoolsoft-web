@@ -49,7 +49,7 @@ def user_can_manage_users(user):
 
 
 def user_can_access(user, module):
-    if not user.is_authenticated:
+    if not getattr(user, "is_authenticated", False):
         return False
     if user.is_superuser:
         return True
