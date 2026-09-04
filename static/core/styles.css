@@ -3351,6 +3351,17 @@ th.amount,
 .fee-desk .month-chips button:hover{border-color:var(--fa);color:var(--fa)}
 .fee-desk .month-chips button.selected{background:var(--fa);border-color:var(--fa);color:#fff}
 .fee-desk .month-chips button.in-range{background:#dcefe8;border-color:#9fd3c4;color:var(--fad)}
+.fee-desk .month-chips button.balance-fee-chip{
+    min-width:118px;
+    background:#fff7ed;
+    border-color:#fed7aa;
+    color:#9a3412;
+}
+.fee-desk .month-chips button.balance-fee-chip.selected{
+    background:#b45309;
+    border-color:#b45309;
+    color:#fff;
+}
 
 /* Totals */
 .fee-desk .pay-total-row{

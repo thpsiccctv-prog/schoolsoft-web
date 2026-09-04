@@ -22,6 +22,8 @@ ACADEMIC_MONTHS = (
     "MAR",
 )
 ACADEMIC_MONTH_CHOICES = tuple((month, month) for month in ACADEMIC_MONTHS)
+BALANCE_FEE_MONTH_CODE = "BAL"
+BALANCE_FEE_MONTH_LABEL = "BALANCE FEE"
 
 
 class TimeStampedModel(models.Model):
@@ -174,7 +176,7 @@ class Student(TimeStampedModel):
     )
     admission_no = models.CharField(max_length=30, blank=True)
     registration_no = models.CharField(max_length=30, blank=True)
-    roll_no = models.PositiveIntegerField(null=True, blank=True)
+    roll_no = models.PositiveBigIntegerField(null=True, blank=True)
     photo = models.ImageField(upload_to="student_photos/", null=True, blank=True)
     full_name = models.CharField(max_length=120)
     father_name = models.CharField(max_length=120, blank=True)
@@ -418,6 +420,11 @@ class Student(TimeStampedModel):
         return self.full_name
 
     @property
+    def name_hindi(self):
+        """Compatibility alias: returns full_name_hindi."""
+        return self.full_name_hindi
+
+    @property
     def fee_section_name(self):
         return (self.current_section.name if self.current_section else "").strip().upper()
 
@@ -611,6 +618,42 @@ class StudentOpeningBalance(TimeStampedModel):
         return f"{self.student} / {self.session} / {self.amount}"
 
 
+class StudentFeeWaiver(TimeStampedModel):
+    class WaiverType(models.TextChoices):
+        WRITE_OFF = "write_off", "Write-off / Waiver"
+        SECTION_CHANGE = "section_change", "Section Change Correction"
+        CONCESSION = "concession", "Custom Concession"
+        OTHER = "other", "Other Adjustment"
+
+    student = models.ForeignKey(Student, on_delete=models.PROTECT, related_name="fee_waivers")
+    session = models.ForeignKey(AcademicSession, on_delete=models.PROTECT, related_name="student_fee_waivers")
+    amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
+    waiver_type = models.CharField(max_length=30, choices=WaiverType.choices, default=WaiverType.WRITE_OFF)
+    reason = models.CharField(max_length=500, blank=True)
+    date = models.DateField(default=timezone.localdate)
+    entered_by = models.CharField(max_length=100, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="created_student_fee_waivers",
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        ordering = ["-date", "-created_at"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(amount__gte=0),
+                name="student_fee_waiver_amount_nonnegative",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.student} / {self.session} / Rs.{self.amount} ({self.get_waiver_type_display()})"
+
+
+
 class FeeReceipt(TimeStampedModel):
     class PaymentMode(models.TextChoices):
         CASH = "cash", "Cash"
@@ -719,6 +762,25 @@ class FeeReceipt(TimeStampedModel):
         if class_name and section_name:
             return f"{class_name}-{section_name}"
         return class_name or section_name
+
+    def _display_month(self, month):
+        return BALANCE_FEE_MONTH_LABEL if str(month or "").strip().upper() == BALANCE_FEE_MONTH_CODE else (month or "")
+
+    @property
+    def display_from_month(self):
+        return self._display_month(self.from_month)
+
+    @property
+    def display_to_month(self):
+        return self._display_month(self.to_month)
+
+    @property
+    def display_month_range(self):
+        from_label = self.display_from_month
+        to_label = self.display_to_month
+        if from_label and to_label and from_label != to_label:
+            return f"{from_label} to {to_label}"
+        return from_label or to_label or "-"
 
     def __str__(self):
         return self.receipt_no
@@ -949,12 +1011,19 @@ class ExamTest(TimeStampedModel):
     term = models.ForeignKey(ExamTerm, on_delete=models.CASCADE, related_name="tests")
     school_class = models.ForeignKey(SchoolClass, on_delete=models.CASCADE, related_name="exam_tests")
     subject = models.ForeignKey(Subject, on_delete=models.PROTECT, related_name="exam_tests")
+    theory_max_marks = models.DecimalField(max_digits=6, decimal_places=2, default=Decimal("100.00"))
+    practical_max_marks = models.DecimalField(max_digits=6, decimal_places=2, default=Decimal("0.00"))
     max_marks = models.DecimalField(max_digits=6, decimal_places=2, default=Decimal("100.00"))
     pass_marks = models.DecimalField(max_digits=6, decimal_places=2, default=Decimal("33.00"))
 
     class Meta:
         ordering = ["term__display_order", "school_class__display_order", "subject__display_order"]
         unique_together = [("term", "school_class", "subject")]
+
+    def save(self, *args, **kwargs):
+        if not self.max_marks:
+            self.max_marks = (self.theory_max_marks or Decimal("0.00")) + (self.practical_max_marks or Decimal("0.00"))
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.term} / {self.school_class} / {self.subject}"
@@ -963,6 +1032,8 @@ class ExamTest(TimeStampedModel):
 class ExamMark(TimeStampedModel):
     exam_test = models.ForeignKey(ExamTest, on_delete=models.CASCADE, related_name="marks")
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name="exam_marks")
+    theory_marks_obtained = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    practical_marks_obtained = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
     marks_obtained = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
     is_absent = models.BooleanField(default=False)
     grade = models.CharField(max_length=5, blank=True)
@@ -985,6 +1056,10 @@ class ExamMark(TimeStampedModel):
         return grade_for_percentage(pct)
 
     def save(self, *args, **kwargs):
+        if not self.is_absent and (self.theory_marks_obtained is not None or self.practical_marks_obtained is not None):
+            th = self.theory_marks_obtained or Decimal("0.00")
+            pr = self.practical_marks_obtained or Decimal("0.00")
+            self.marks_obtained = th + pr
         if not self.grade:
             self.grade = self.compute_grade()
         super().save(*args, **kwargs)
@@ -1012,6 +1087,19 @@ def grade_for_percentage(pct):
     if pct >= 33:
         return "D"
     return "E"
+
+
+def division_for_percentage(pct, is_failed=False):
+    if is_failed or pct is None:
+        return 'Fail (अनुत्तीर्ण)'
+    pct = float(pct)
+    if pct >= 60.0:
+        return 'FIRST (प्रथम श्रेणी)'
+    if pct >= 45.0:
+        return 'SECOND (द्वितीय श्रेणी)'
+    if pct >= 33.0:
+        return 'THIRD (तृतीय श्रेणी)'
+    return 'Fail (अनुत्तीर्ण)'
 
 
 class Staff(TimeStampedModel):

@@ -82,6 +82,7 @@
                                     <button type="button" data-month="JAN">JAN</button>
                                     <button type="button" data-month="FEB">FEB</button>
                                     <button type="button" data-month="MAR">MAR</button>
+                                    <button type="button" data-month="BAL" class="balance-fee-chip">BALANCE FEE</button>
                                 </div>
                                 {% if receipt_form.from_month.errors %}<small>{{ receipt_form.from_month.errors|striptags }}</small>{% endif %}
                                 {% if receipt_form.to_month.errors %}<small>{{ receipt_form.to_month.errors|striptags }}</small>{% endif %}
@@ -120,6 +121,47 @@
                             </dl>
                             <div class="student-month-status" data-student-month-status></div>
                         </div>
+
+                        <!-- Running Ledger Live Box -->
+                        <div id="running-ledger" style="display:none; margin-top:10px; background:#f8fafc; border:1px solid #cbd5e1; border-radius:5px; padding:10px 12px; font-size:12px;">
+                            <div style="font-weight:bold; font-size:12px; color:#1e3a5f; margin-bottom:6px; letter-spacing:0.5px;">📊 RUNNING LEDGER</div>
+                            <table style="width:100%; border-collapse:collapse;">
+                                <tbody>
+                                    <tr id="rl-opening-row" style="display:none;">
+                                        <td style="padding:2px 0; color:#555;">Pichhla Bakaya</td>
+                                        <td style="text-align:right; font-family:monospace;" id="rl-opening">₹0.00</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding:2px 0; color:#555;">Chalu Demand</td>
+                                        <td style="text-align:right; font-family:monospace;" id="rl-demand">₹0.00</td>
+                                    </tr>
+                                    <tr id="rl-concession-row" style="display:none;">
+                                        <td style="padding:2px 0; color:#555;">Concession / Chhoot</td>
+                                        <td style="text-align:right; font-family:monospace; color:#166534;" id="rl-concession">-₹0.00</td>
+                                    </tr>
+                                    <tr id="rl-waiver-row" style="display:none;">
+                                        <td style="padding:2px 0; color:#555;">Maafi / Write-off</td>
+                                        <td style="text-align:right; font-family:monospace; color:#166534;" id="rl-waiver">-₹0.00</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding:2px 0; color:#555;">Jama / Paid</td>
+                                        <td style="text-align:right; font-family:monospace; color:#166534;" id="rl-paid">-₹0.00</td>
+                                    </tr>
+                                    <tr>
+                                        <td colspan="2" style="border-top:1.5px solid #334155; padding:0;"></td>
+                                    </tr>
+                                    <tr id="rl-due-row">
+                                        <td style="padding:3px 0; font-weight:bold; font-size:13px; color:#1e3a5f;">Shesh Due</td>
+                                        <td style="text-align:right; font-family:monospace; font-weight:bold; font-size:13px; color:#b91c1c;" id="rl-due">₹0.00</td>
+                                    </tr>
+                                    <tr id="rl-credit-row" style="display:none;">
+                                        <td style="padding:3px 0; font-weight:bold; font-size:13px; color:#166534;">Credit (Jyada Jama)</td>
+                                        <td style="text-align:right; font-family:monospace; font-weight:bold; font-size:13px; color:#166534;" id="rl-credit">₹0.00</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
                         <button type="button" class="button secondary" data-fill-balance-fee>Balance / Due Fee</button>
                     </div>
                 </section>
@@ -181,6 +223,12 @@
                     <button class="save-print-button" type="submit" name="action" value="save_print" style="flex: 1;">Save & Print (F9)</button>
                     <button class="button primary" type="submit" name="action" value="save" style="flex: 1;">Save</button>
                 </div>
+                <button type="button" id="btn-demand-slip" class="button secondary block-button"
+                    title="Guardian Hisab Parchi print karo — koi receipt nahi banega"
+                    onclick="openDemandSlip()"
+                    style="margin-bottom: 8px; background: #0e7490; color: #fff; border-color: #0e7490;">
+                    🖨️ Guardian Hisab Parchi
+                </button>
                 <a class="button secondary block-button" href="{% url 'core:receipt_list' %}">Cancel</a>
             </section>
         </div>
@@ -228,5 +276,27 @@
 {% endblock %}
 
 {% block scripts %}
-    <script src="{% static 'core/receipt-form.js' %}?v=20260815-receipt-history-range"></script>
+    <script src="{% static 'core/receipt-form.js' %}?v=20260824-balance-fee-month"></script>
+    <script>
+    function openDemandSlip() {
+        // Reads student & session from the form — no receipt created
+        const studentSelect = document.querySelector('[name="student"]');
+        const sessionSelect = document.querySelector('[name="session"]');
+        const toMonthSelect = document.querySelector('[name="to_month"]');
+        const studentId = studentSelect ? studentSelect.value : '';
+        const sessionId = sessionSelect ? sessionSelect.value : '';
+        const selectedMonth = toMonthSelect ? toMonthSelect.value : 'MAR';
+        const throughMonth = selectedMonth === 'BAL' ? 'MAR' : selectedMonth;
+        if (!studentId) {
+            alert('Pehle student select karein.');
+            return;
+        }
+        const params = new URLSearchParams({
+            student: studentId,
+            session: sessionId || '',
+            through_month: throughMonth || 'MAR',
+        });
+        window.open('/receipts/demand-slip/?' + params.toString(), '_blank', 'width=700,height=700');
+    }
+    </script>
 {% endblock %}

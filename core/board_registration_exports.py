@@ -184,7 +184,7 @@ def build_rows(kind):
 def _class9_row(index, student):
     dd, mm, yyyy = _dob_parts(student)
     return [
-        _serial(index),
+        _board_serial(index, student),
         _text(student.full_name),
         _text(student.father_name),
         _text(student.mother_name),
@@ -224,13 +224,13 @@ def _class9_row(index, student):
         _text(getattr(student, "nationality_other", "")),
         _text(student.apaar_id),
         _text(student.pen_number),
-        _text(getattr(student, "board_sr_number", "")),
+        _student_sr_number(student),
     ]
 
 
 def _class11_upboard_row(index, student):
     return [
-        _serial(index),
+        _board_serial(index, student),
         _text(student.previous_passing_year),
         _text(student.previous_roll_no),
         _text(student.previous_board_name),
@@ -258,13 +258,13 @@ def _class11_upboard_row(index, student):
         _text(getattr(student, "nationality_other", "")),
         _text(student.apaar_id),
         _text(student.pen_number),
-        _text(getattr(student, "board_sr_number", "")),
+        _student_sr_number(student),
     ]
 
 
 def _class11_others_row(index, student):
     return [
-        _serial(index),
+        _board_serial(index, student),
         _text(student.previous_passing_year),
         _text(student.previous_roll_no),
         _text(student.previous_board_name),
@@ -303,12 +303,20 @@ def _class11_others_row(index, student):
         _text(getattr(student, "nationality_other", "")),
         _text(student.apaar_id),
         _text(student.pen_number),
-        _text(getattr(student, "board_sr_number", "")),
+        _student_sr_number(student),
     ]
 
 
 def _serial(index):
     return f"{index:04d}"
+
+
+def _board_serial(index, student):
+    return _text(getattr(student, "board_sr_number", "")) or _serial(index)
+
+
+def _student_sr_number(student):
+    return _text(getattr(student, "admission_no", "")) or _text(getattr(student, "legacy_sid", ""))
 
 
 def _text(value):
@@ -345,17 +353,17 @@ def _gender_code(student):
 
 
 def _medium_code(student):
-    return {
-        Student.ExamMedium.HINDI: "1",
-        Student.ExamMedium.ENGLISH: "2",
-    }.get(getattr(student, "exam_medium", ""), "1")
+    med = getattr(student, "exam_medium", "") or ""
+    if str(med).upper() in ("E", "ENG", "ENGLISH", "2"):
+        return "2"
+    return "1"  # Default Hindi medium (1 for UP Board)
 
 
 def _subject_group(student):
     group = getattr(student, "subject_group", "") or ""
     if not group:
         group, _codes = _default_subject_profile(student)
-    return "" if group == Student.SubjectGroup.HIGH_SCHOOL else group
+    return "" if group in ("HS", "HIGH_SCHOOL", "HIGH SCHOOL") else str(group)
 
 
 def _subject(student, index):
@@ -430,15 +438,15 @@ def _district_code(student):
 
 
 def _is_up_board_source(student):
-    source = _text(getattr(student, "previous_board_source", ""))
-    if source == Student.PreviousBoardSource.UPBOARD:
+    source = _text(getattr(student, "previous_board_source", "")).lower()
+    if source in ("upboard", "up_board", "up"):
         return True
-    if source == Student.PreviousBoardSource.OTHER:
+    if source in ("other", "others", "cbse", "icse"):
         return False
 
     board_name = _text(student.previous_board_name).upper()
     if not board_name:
-        return None
+        return True
     # Exact markers (original)
     up_markers = ["UP BOARD", "U.P", "UPMSP", "UTTAR PRADESH", "MADHYAMIK SHIKSHA"]
     if any(marker in board_name for marker in up_markers):

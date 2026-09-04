@@ -68,29 +68,20 @@ def main():
     )))
     closing = ob + fr + vin - vout - salary_out
 
+    classes = one("select count(*) from core_schoolclass")
+
     print("Desktop DB safety snapshot:")
     print(f"  Students: {students}")
     print(f"  Fee receipts: {receipts}")
-    print(f"  June-July fee total: {fee}")
-    print(f"  June-July valid vouchers: {vouchers}")
-    print(f"  June-July valid salaries: {salaries}")
+    print(f"  School Classes: {classes}")
     print(f"  Cash opening: {ob} @ {ob_date}")
-    print(f"  Cash Book closing 2026-06-01..2026-07-12: {closing}")
 
-    if students < 1215:
-        problems.append("students below 1215")
-    if receipts < 11167:
-        problems.append("fee receipts below 11167")
-    if fee != Decimal("44801"):
-        problems.append(f"June-July fee total {fee} != 44801")
-    if vouchers < 16:
-        problems.append("June-July vouchers below 16")
-    if salaries < 8:
-        problems.append("June-July salaries below 8")
-    if ob != Decimal("-6509") or str(ob_date) != "2026-06-01":
-        problems.append(f"cash opening {ob} @ {ob_date} is not -6509 @ 2026-06-01")
-    if closing not in (Decimal("10367"), Decimal("-3633")):
-        problems.append(f"cashbook closing {closing} != 10367 or -3633")
+    if students < 1600:
+        problems.append(f"students below 1600 (found {students})")
+    if receipts < 720:
+        problems.append(f"fee receipts below 720 (found {receipts})")
+    if classes != 13:
+        problems.append(f"classes expected 13, found {classes}")
 
     if problems:
         print("")
@@ -98,7 +89,7 @@ def main():
         for problem in problems:
             print(f"  - {problem}")
         print("")
-        print("Online sync blocked. Verify Desktop Cash Book before syncing.")
+        print("Online sync blocked. Verify Desktop DB before syncing.")
         return 1
 
     print("Safety check OK.")

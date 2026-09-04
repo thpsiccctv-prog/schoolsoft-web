@@ -28,39 +28,30 @@ EXCLUDES = [
 
 
 def main():
-    # Build dumpdata args
-    args = [sys.executable, "manage.py", "dumpdata", "--verbosity=0"]
+    out_path = pathlib.Path("data.json")
+    args = [sys.executable, "manage.py", "dumpdata", f"--output={out_path}", "--verbosity=1"]
     for exc in EXCLUDES:
         args += ["-e", exc]
 
     print("[3/6] Exporting desktop DB to data.json (clean UTF-8)...")
-    result = subprocess.run(args, capture_output=True)
+    env = os.environ.copy()
+    env["PYTHONIOENCODING"] = "utf-8"
+    env["PYTHONUTF8"] = "1"
+    result = subprocess.run(args, capture_output=True, env=env)
 
     if result.returncode != 0:
         err = result.stderr.decode("utf-8", errors="replace")
         print(f"ERROR: dumpdata failed:\n{err}", file=sys.stderr)
         sys.exit(1)
 
-    # Decode as Latin-1 first (lossless — every byte 0x00-0xFF is valid Latin-1)
-    # then re-encode as UTF-8. This converts Windows-1252 special chars like
-    # 0x97 (em-dash) to their proper Unicode codepoints (U+2014) in UTF-8.
-    raw_bytes = result.stdout
-
-    # Strip UTF-8 BOM if present
-    if raw_bytes.startswith(b"\xef\xbb\xbf"):
-        raw_bytes = raw_bytes[3:]
-
-    text = raw_bytes.decode("latin-1")
-
-    # Validate it's parseable JSON before writing
+    # Validate it's parseable JSON
     try:
-        obj = json.loads(text)
-    except json.JSONDecodeError as e:
-        print(f"ERROR: dumpdata output is not valid JSON: {e}", file=sys.stderr)
+        with open(out_path, "r", encoding="utf-8") as f:
+            obj = json.load(f)
+    except Exception as e:
+        print(f"ERROR: data.json is not valid JSON: {e}", file=sys.stderr)
         sys.exit(1)
 
-    out_path = pathlib.Path("data.json")
-    out_path.write_text(text, encoding="utf-8")
     print(f"    Export OK: {len(obj)} records written to {out_path}")
 
 

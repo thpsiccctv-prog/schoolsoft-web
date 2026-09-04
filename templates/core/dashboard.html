@@ -40,6 +40,7 @@
             </a>
             {% endif %}
             {% if can_due_report %}
+            <a class="dash-action-btn dash-action-primary" href="{% url 'core:fee_register' %}">Fee Register (पंजिका)</a>
             <a class="dash-action-btn dash-action-outline" href="{% url 'core:due_up_to_month_report' %}">Due up to Month</a>
             {% endif %}
         </div>

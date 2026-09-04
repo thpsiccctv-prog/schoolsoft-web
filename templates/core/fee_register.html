@@ -1,0 +1,309 @@
+{% extends "base.html" %}
+{% load schoolsoft_extras %}
+
+{% block title %}Fee Register | SchoolSoft{% endblock %}
+
+{% block content %}
+<section class="dashboard-page due-month-page fee-register-page">
+    <!-- Header -->
+    <div class="dash-header">
+        <div class="dash-header-left">
+            <span class="dash-badge">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/><path d="M9 10h6M9 14h4"/></svg>
+                मासिक छात्र शुल्क पंजिका
+            </span>
+            <h1 class="dash-title">Fee Register (छात्र शुल्क पंजिका)</h1>
+            <p class="dash-subtitle">
+                Class-wise comprehensive fee billing, collection, concession &amp; due ledger
+                {% if filters_info.session %} &middot; Session {{ filters_info.session }}{% endif %}
+            </p>
+        </div>
+        <div class="dash-header-actions no-print">
+            <a class="dash-action-btn dash-action-outline" href="{% url 'core:fee_register_pdf' %}?{{ request.GET.urlencode }}" target="_blank">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>
+                Print PDF (A4 Landscape)
+            </a>
+            <a class="dash-action-btn dash-action-primary" href="{% url 'core:fee_register_excel' %}?{{ request.GET.urlencode }}">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                Export Excel (.xlsx)
+            </a>
+        </div>
+    </div>
+
+    <!-- Filter Form -->
+    <form class="due-month-filter no-print" method="get" id="fee-register-filter-form">
+        <label class="due-filter-search">
+            <span>Search</span>
+            <input type="search" name="q" value="{{ search_query }}" placeholder="Student name, father, SID, mobile...">
+        </label>
+        <label>
+            <span>Class</span>
+            <select name="class" id="class-select">
+                <option value="">All Classes</option>
+                {% for sc in classes %}
+                <option value="{{ sc.id }}" data-name="{{ sc.name }}" {% if selected_class == sc.id|stringformat:"s" or selected_class == sc.name or selected_class_name == sc.name %}selected{% endif %}>{{ sc.name }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label>
+            <span>Section</span>
+            <select name="section" id="section-select" onchange="this.form.submit()">
+                <option value="">All Sections</option>
+                {% for sec in sections %}
+                <option value="{{ sec.id }}" data-sec-name="{{ sec.name }}" data-class-id="{{ sec.school_class_id }}" data-class-name="{{ sec.school_class.name }}" {% if selected_section == sec.id|stringformat:"s" or selected_section == sec.name %}selected{% endif %}>
+                    Section {{ sec.name }}
+                </option>
+                {% endfor %}
+            </select>
+        </label>
+        <label>
+            <span>Through Month</span>
+            <select name="month" onchange="this.form.submit()">
+                {% for m in academic_months %}
+                <option value="{{ m }}" {% if selected_month == m %}selected{% endif %}>Through {{ m }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label>
+            <span>Category</span>
+            <select name="type" onchange="this.form.submit()">
+                <option value="all" {% if selected_type == 'all' %}selected{% endif %}>All Students</option>
+                <option value="regular" {% if selected_type == 'regular' %}selected{% endif %}>Regular (Fee-paying)</option>
+                <option value="feeder" {% if selected_type == 'feeder' %}selected{% endif %}>Feeder Schools (Zero-Fee)</option>
+                <option value="package" {% if selected_type == 'package' %}selected{% endif %}>Package Students (Sec D)</option>
+            </select>
+        </label>
+        <label>
+            <span>Due Status</span>
+            <select name="status" onchange="this.form.submit()">
+                <option value="all" {% if selected_status == 'all' %}selected{% endif %}>All Records</option>
+                <option value="due_only" {% if selected_status == 'due_only' %}selected{% endif %}>Due Only (&gt; ₹0)</option>
+                <option value="cleared" {% if selected_status == 'cleared' %}selected{% endif %}>Cleared (Paid Full)</option>
+                <option value="zero_fee" {% if selected_status == 'zero_fee' %}selected{% endif %}>Zero-Fee Only</option>
+            </select>
+        </label>
+        <div class="due-filter-actions">
+            <button class="button action-primary" type="submit" id="btn-filter-submit" title="Filter results">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                Filter Lagao
+            </button>
+            <a class="button secondary action-secondary" href="{% url 'core:fee_register' %}" title="Reset all filters">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                Reset
+            </a>
+        </div>
+    </form>
+
+    <!-- KPI Summary Cards Strip -->
+    <div class="dash-kpi-strip dash-kpi-count-6 due-month-summary">
+        <article class="dash-kpi dash-kpi-neutral">
+            <div class="dash-kpi-body">
+                <span class="dash-kpi-label">Students</span>
+                <strong class="dash-kpi-value">{{ totals.count }}</strong>
+                <span class="dash-kpi-context">Active cohort</span>
+            </div>
+        </article>
+        <article class="dash-kpi dash-kpi-info">
+            <div class="dash-kpi-body">
+                <span class="dash-kpi-label">Total Demand</span>
+                <strong class="dash-kpi-value dash-money">&#8377;{{ totals.demand|indian_number }}</strong>
+                <span class="dash-kpi-context">Through {{ selected_month }}</span>
+            </div>
+        </article>
+        <article class="dash-kpi dash-kpi-success">
+            <div class="dash-kpi-body">
+                <span class="dash-kpi-label">Total Paid</span>
+                <strong class="dash-kpi-value dash-money">&#8377;{{ totals.paid|indian_number }}</strong>
+                <span class="dash-kpi-context">Collected amount</span>
+            </div>
+        </article>
+        <article class="dash-kpi dash-kpi-neutral">
+            <div class="dash-kpi-body">
+                <span class="dash-kpi-label">Concessions</span>
+                <strong class="dash-kpi-value dash-money">&#8377;{{ totals.concession|indian_number }}</strong>
+                <span class="dash-kpi-context">Less / Discounts</span>
+            </div>
+        </article>
+        <article class="dash-kpi dash-kpi-danger">
+            <div class="dash-kpi-body">
+                <span class="dash-kpi-label">Outstanding Due</span>
+                <strong class="dash-kpi-value dash-money">&#8377;{{ totals.due|indian_number }}</strong>
+                <span class="dash-kpi-context">Net balance due</span>
+            </div>
+        </article>
+        <article class="dash-kpi dash-kpi-neutral">
+            <div class="dash-kpi-body">
+                <span class="dash-kpi-label">Collection Rate</span>
+                <strong class="dash-kpi-value">{{ totals.collection_pct|floatformat:1 }}%</strong>
+                <span class="dash-kpi-context">Efficiency</span>
+            </div>
+        </article>
+    </div>
+
+    <!-- Active Filter Indicator -->
+    <div class="due-calculation-note">
+        Showing <strong>{{ rows|length }}</strong> student records
+        {% if filters_info.class != 'All Classes' %}for <strong>{{ filters_info.class }}</strong>{% endif %}
+        {% if filters_info.section != 'All Sections' %}<strong>{{ filters_info.section }}</strong>{% endif %}
+        (Through <strong>{{ filters_info.through_month }}</strong>) &middot; Academic Session: {{ filters_info.session }}
+    </div>
+
+    <!-- Data Table -->
+    <div class="table-wrap due-month-table-wrap">
+        <table class="due-month-table" id="fee-register-table">
+            <thead>
+                <tr>
+                    <th style="width: 40px; text-align: center;">#</th>
+                    <th style="width: 85px;">SID / Adm</th>
+                    <th>Student Name</th>
+                    <th>Father's Name</th>
+                    <th style="width: 90px; text-align: center;">Class-Sec</th>
+                    <th style="width: 100px;">Type</th>
+                    <th style="width: 90px; text-align: right;">Opening</th>
+                    <th style="width: 95px; text-align: right;">Demand</th>
+                    <th style="width: 95px; text-align: right;">Paid</th>
+                    <th style="width: 85px; text-align: right;">Concession</th>
+                    <th style="width: 100px; text-align: right;">Final Due</th>
+                    <th style="width: 110px; text-align: center;">Last Receipt</th>
+                    <th style="width: 90px; text-align: center;" class="no-print">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in rows %}
+                <tr>
+                    <td style="text-align: center; color: var(--color-muted);">{{ forloop.counter }}</td>
+                    <td style="font-family: monospace; font-weight: 700;">{{ r.sid }}</td>
+                    <td>
+                        <a href="{% url 'core:student_detail' r.student.pk %}" style="font-weight: 700; color: var(--color-text); text-decoration: none;">
+                            {{ r.name }}
+                        </a>
+                        {% if r.mobile and r.mobile != '-' %}
+                        <div style="font-size: 0.72rem; color: var(--color-muted);">
+                            &#128222; {{ r.mobile }}
+                        </div>
+                        {% endif %}
+                    </td>
+                    <td style="color: var(--color-muted);">{{ r.father_name }}</td>
+                    <td style="text-align: center; font-weight: 600;">{{ r.class_section }}</td>
+                    <td>
+                        {% if r.type_code == 'regular' %}
+                        <span style="display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 0.72rem; background: #e0f2fe; color: #0369a1; font-weight: 600;">Regular</span>
+                        {% elif r.type_code == 'package' %}
+                        <span style="display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 0.72rem; background: #fef3c7; color: #b45309; font-weight: 600;">Package ₹4.5k</span>
+                        {% else %}
+                        <span style="display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 0.72rem; background: #f1f5f9; color: #475569; font-weight: 600;" title="{{ r.type_label }}">Feeder</span>
+                        {% endif %}
+                    </td>
+                    <td style="text-align: right; color: var(--color-muted);">&#8377;{{ r.opening_due|indian_number }}</td>
+                    <td style="text-align: right; font-weight: 600;">&#8377;{{ r.demand|indian_number }}</td>
+                    <td style="text-align: right; color: #15803d; font-weight: 700;">&#8377;{{ r.paid|indian_number }}</td>
+                    <td style="text-align: right; color: #b45309;">
+                        {% if r.concession > 0 %}&#8377;{{ r.concession|indian_number }}{% else %}-{% endif %}
+                    </td>
+                    <td style="text-align: right;">
+                        {% if r.final_due > 0 %}
+                        <strong style="color: #dc2626;">&#8377;{{ r.final_due|indian_number }}</strong>
+                        {% elif r.type_code == 'feeder' %}
+                        <span style="font-size: 0.72rem; color: var(--color-muted);">Zero-Fee</span>
+                        {% else %}
+                        <span style="display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 0.72rem; background: #dcfce7; color: #15803d; font-weight: 600;">PAID</span>
+                        {% endif %}
+                    </td>
+                    <td style="text-align: center; font-family: monospace; font-size: 0.75rem;">
+                        {{ r.last_receipt }}
+                    </td>
+                    <td style="text-align: center;" class="no-print">
+                        <div style="display: flex; justify-content: center; gap: 4px;">
+                            <a class="button secondary action-secondary" style="padding: 2px 6px; font-size: 0.72rem;" href="{% url 'core:receipt_create' %}?student={{ r.student.pk }}" title="Collect Fee">
+                                Pay
+                            </a>
+                            {% if r.final_due > 0 and r.mobile and r.mobile != '-' %}
+                                {% wa_fee_link r.mobile r.father_name r.name r.class_name r.section_name r.adm_no r.final_due "THPSIC" as wa_link %}
+                                {% if wa_link %}
+                                <a class="button action-primary" style="padding: 2px 6px; font-size: 0.72rem; background: #16a34a; border-color: #16a34a;" href="{{ wa_link }}" target="_blank" title="Send WhatsApp Due Reminder">
+                                    WA
+                                </a>
+                                {% endif %}
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="13" style="text-align: center; padding: 40px; color: var(--color-muted);">
+                        No student records found matching the selected filters.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            {% if rows %}
+            <tfoot>
+                <tr style="background: #0f172a; color: #ffffff; font-weight: 700;">
+                    <td colspan="6" style="text-align: center; text-transform: uppercase;">
+                        Total ({{ totals.count }} Students)
+                    </td>
+                    <td style="text-align: right;">&#8377;{{ totals.opening_due|indian_number }}</td>
+                    <td style="text-align: right;">&#8377;{{ totals.demand|indian_number }}</td>
+                    <td style="text-align: right; color: #86efac;">&#8377;{{ totals.paid|indian_number }}</td>
+                    <td style="text-align: right; color: #fde047;">&#8377;{{ totals.concession|indian_number }}</td>
+                    <td style="text-align: right; color: #fca5a5;">&#8377;{{ totals.due|indian_number }}</td>
+                    <td colspan="2" style="text-align: center; font-size: 0.8rem; color: #94a3b8;">
+                        Coll: {{ totals.collection_pct|floatformat:1 }}%
+                    </td>
+                </tr>
+            </tfoot>
+            {% endif %}
+        </table>
+    </div>
+</section>
+
+<script>
+(function() {
+    var classSelect = document.getElementById('class-select');
+    var sectionSelect = document.getElementById('section-select');
+    if (!classSelect || !sectionSelect) return;
+
+    function updateSections(isUserChange) {
+        var selectedClassId = classSelect.value;
+        var selectedOption = classSelect.options[classSelect.selectedIndex];
+        var selectedClassName = selectedOption ? (selectedOption.getAttribute('data-name') || selectedOption.text).trim() : '';
+
+        var seenNames = {};
+        for (var i = 1; i < sectionSelect.options.length; i++) {
+            var opt = sectionSelect.options[i];
+            var optClassId = opt.getAttribute('data-class-id');
+            var optClassName = (opt.getAttribute('data-class-name') || '').trim();
+            var secName = opt.getAttribute('data-sec-name') || opt.text.replace(/^Section\s*/i, '').trim();
+
+            if (!selectedClassId) {
+                // No class selected: show with class prefix like IX-A, X-B
+                opt.style.display = '';
+                opt.text = (optClassName ? optClassName + '-' : '') + secName;
+            } else if (optClassId === selectedClassId || optClassName === selectedClassName) {
+                // Selected class: show clean "Section A", "Section B" etc. without duplicates
+                if (!seenNames[secName]) {
+                    opt.style.display = '';
+                    opt.text = 'Section ' + secName;
+                    seenNames[secName] = true;
+                } else {
+                    opt.style.display = 'none';
+                }
+            } else {
+                opt.style.display = 'none';
+            }
+        }
+
+        if (isUserChange) {
+            sectionSelect.value = '';
+        }
+    }
+
+    classSelect.addEventListener('change', function() {
+        updateSections(true);
+        this.form.submit();
+    });
+
+    updateSections(false);
+})();
+</script>
+{% endblock %}

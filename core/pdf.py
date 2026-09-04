@@ -1,6 +1,7 @@
 from decimal import Decimal
 import math
 import os
+import re
 from io import BytesIO
 from xml.sax.saxutils import escape
 
@@ -14,7 +15,8 @@ from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas as pdf_canvas
-from reportlab.platypus import BaseDocTemplate, Frame, Image, PageBreak, PageTemplate, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.lib.utils import ImageReader
+from reportlab.platypus import BaseDocTemplate, Frame, Image, KeepTogether, PageBreak, PageTemplate, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 try:
     _reg_path = os.path.join(settings.BASE_DIR, 'static', 'core', 'fonts', 'NotoSansDevanagari-Regular.ttf')
@@ -366,7 +368,7 @@ def _build_fee_receipt_story(receipt, school_profile=None):
     )
 
     school_name = school_profile.name if school_profile and school_profile.name else "THAKUR HARIKESH PRATAP SINGH INTERMEDIATE COLLEGE"
-    school_address = school_profile.address if school_profile and school_profile.address else "Uday, Dudahi, Kushinagar, U.P."
+    school_address = school_profile.address if school_profile and school_profile.address else "Dudahi, Kushinagar, U.P."
     
     contact_parts = []
     if school_profile:
@@ -2650,144 +2652,650 @@ def timezone_today():
     return timezone.localdate().strftime("%d-%m-%Y")
 
 
-def build_marksheet_pdf(student, term, exam_marks, school_profile=None):
+
+# ==============================================================================
+# MARKSHEET DESIGN v1 (WORLD-CLASS REPORT CARD WITH DEVANAGARI SHAPING)
+# ==============================================================================
+
+LOGO_PATH = os.path.join(settings.BASE_DIR, "static", "core", "school_logo.png")
+
+HINDI_ONES = ["शून्य", "एक", "दो", "तीन", "चार", "पाँच", "छह", "सात", "आठ", "नौ", "दस",
+              "ग्यारह", "बारह", "तेरह", "चौदह", "पंद्रह", "सोलह", "सत्रह", "अठारह", "उन्नीस", "बीस"]
+ENGLISH_ONES = ["Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten",
+                "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen", "Twenty"]
+
+def _num_to_words_hi(n):
+    n = int(n)
+    if n <= 20:
+        return HINDI_ONES[n]
+    if n < 100:
+        tens = n // 10
+        rem = n % 10
+        return f"{HINDI_ONES[tens * 10 if tens*10 <= 20 else 20]} {HINDI_ONES[rem]}" if rem else f"{n}"
+    if n < 1000:
+        hundreds = n // 100
+        rem = n % 100
+        rem_str = f" {_num_to_words_hi(rem)}" if rem else ""
+        return f"{HINDI_ONES[hundreds]} सौ{rem_str}"
+    return str(n)
+
+def _num_to_words_en(n):
+    n = int(n)
+    if n <= 20:
+        return ENGLISH_ONES[n]
+    if n < 100:
+        tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"]
+        rem = n % 10
+        return f"{tens[n // 10]} {ENGLISH_ONES[rem]}" if rem else tens[n // 10]
+    if n < 1000:
+        hundreds = n // 100
+        rem = n % 100
+        rem_str = f" {_num_to_words_en(rem)}" if rem else ""
+        return f"{ENGLISH_ONES[hundreds]} Hundred{rem_str}"
+    return str(n)
+
+def _draw_marksheet_background(canvas, doc, logo_path=None):
+    canvas.saveState()
+    w, h = doc.pagesize  # A4 210 x 297 mm
+
+    c_green = colors.HexColor("#1B5E20")
+    c_gold = colors.HexColor("#C9A227")
+
+    # 1. Outer Frame: 1.5pt rule at 6mm inset
+    canvas.setStrokeColor(c_green)
+    canvas.setLineWidth(1.5)
+    canvas.rect(6 * mm, 6 * mm, w - 12 * mm, h - 12 * mm)
+
+    # 2. Inner Frame: 0.5pt rule at 7.5mm inset
+    canvas.setStrokeColor(c_gold)
+    canvas.setLineWidth(0.5)
+    canvas.rect(7.5 * mm, 7.5 * mm, w - 15 * mm, h - 15 * mm)
+
+    # 3. Corner Ticks (Gold accents at 6mm inset)
+    canvas.setFillColor(c_gold)
+    canvas.setStrokeColor(c_gold)
+    canvas.setLineWidth(0.8)
+    t_len = 9 * mm
+
+    # Top-Left
+    canvas.line(6 * mm, h - 6 * mm, 6 * mm + t_len, h - 6 * mm)
+    canvas.line(6 * mm, h - 6 * mm, 6 * mm, h - 6 * mm - t_len)
+
+    # Top-Right
+    canvas.line(w - 6 * mm, h - 6 * mm, w - 6 * mm - t_len, h - 6 * mm)
+    canvas.line(w - 6 * mm, h - 6 * mm, w - 6 * mm, h - 6 * mm - t_len)
+
+    # Bottom-Left
+    canvas.line(6 * mm, 6 * mm, 6 * mm + t_len, 6 * mm)
+    canvas.line(6 * mm, 6 * mm, 6 * mm, 6 * mm + t_len)
+
+    # Bottom-Right
+    canvas.line(w - 6 * mm, 6 * mm, w - 6 * mm - t_len, 6 * mm)
+    canvas.line(w - 6 * mm, 6 * mm, w - 6 * mm, 6 * mm + t_len)
+
+    # 4. Subtle Watermark in Center (opacity 0.04)
+    if logo_path and os.path.exists(logo_path):
+        try:
+            wm_size = 90 * mm
+            canvas.setFillAlpha(0.04)
+            canvas.drawImage(
+                logo_path,
+                (w - wm_size) / 2.0,
+                (h - wm_size) / 2.0 + 5 * mm,
+                width=wm_size,
+                height=wm_size,
+                mask="auto",
+                preserveAspectRatio=True
+            )
+            canvas.setFillAlpha(1.0)
+        except Exception:
+            pass
+
+    canvas.restoreState()
+
+
+def render_v1_marksheet_story(story, student, term, exam_marks, school_profile=None):
+    from core.models import grade_for_percentage, division_for_percentage
+    total_w = 188 * mm
+
+    # --- 1. HEADER ---
+    if os.path.exists(LOGO_PATH):
+        logo_img = Image(LOGO_PATH, width=20 * mm, height=20 * mm)
+    else:
+        logo_img = Paragraph("<b>THPSIC</b>", ParagraphStyle("LogoTxt", fontSize=10, textColor=colors.HexColor("#1B5E20"), alignment=1))
+
+    college_name_en = Paragraph(
+        "<b>THAKUR HARIKESH PRATAP SINGH<br/>INTERMEDIATE COLLEGE</b>",
+        ParagraphStyle("HNameEn", fontName="Helvetica-Bold", fontSize=11.5, leading=13.5, textColor=colors.HexColor("#0D3B13"), alignment=1)
+    )
+    college_name_hi = _devanagari_flowable("ठाकुर हरिकेश प्रताप सिंह इन्टरमीडिएट कॉलेज", 9.5, bold=True, align=1, color=(27, 94, 32, 255))
+    college_addr_hi = _devanagari_flowable("दुदही, कुशीनगर (उ०प्र०) — 274302", 7.2, bold=False, align=1, color=(68, 68, 68, 255))
+    college_meta_en = Paragraph(
+        '<font color="#333333" size=6.0>UDISE: 09570806404 &nbsp;|&nbsp; Dist. Code: 78 &nbsp;|&nbsp; School Code: 1200 &nbsp;|&nbsp; Phone: 9919984292</font>',
+        ParagraphStyle("HMeta", alignment=1)
+    )
+
+    head_mid_table = Table([[college_name_en], [college_name_hi], [college_addr_hi], [college_meta_en]], colWidths=[132 * mm])
+    head_mid_table.setStyle(TableStyle([
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 0.3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0.3),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+    ]))
+
+    # Serial Box
+    sr_str = f"THPSIC/26/{student.current_class.name}/{student.legacy_sid}"
+    sr_box = Table([
+        [Paragraph('<font size=5.5 color="#666"><b>Sl. No. / Serial</b></font>', ParagraphStyle("SrL", alignment=1))],
+        [Paragraph(f'<font size=6.5 color="#0D3B13"><b>{sr_str}</b></font>', ParagraphStyle("SrV", alignment=1))],
+    ], colWidths=[28 * mm])
+    sr_box.setStyle(TableStyle([
+        ("BOX", (0, 0), (-1, -1), 0.4, colors.HexColor("#1B5E20")),
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#FDFDFB")),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 1.5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 1.5),
+    ]))
+
+    header_table = Table([[logo_img, head_mid_table, sr_box]], colWidths=[24 * mm, 134 * mm, 30 * mm])
+    header_table.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("ALIGN", (0, 0), (0, 0), "CENTER"),
+        ("ALIGN", (2, 0), (2, 0), "RIGHT"),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 1.5 * mm),
+        ("LINEBELOW", (0, 0), (-1, -1), 0.8, colors.HexColor("#1B5E20")),
+    ]))
+    story.extend([header_table, Spacer(1, 2.0 * mm)])
+
+    # --- 2. TITLE BAND & CHIPS ---
+    band_en = Paragraph('<font color="#FFFFFF" size=9.5><b>P R O G R E S S &nbsp; R E P O R T &nbsp; C A R D</b></font>',
+                        ParagraphStyle("BandEn", alignment=1))
+    band_hi = _devanagari_flowable("प्रगति आख्या / अंक-पत्रक", 7.5, bold=True, align=1, color=(237, 228, 200, 255))
+    band_table = Table([[band_en], [band_hi]], colWidths=[total_w])
+    band_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#0D3B13")),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 1.2),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 1.2),
+        ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#C9A227")),
+    ]))
+
+    # Exam Chips
+    chip1_hi = _devanagari_flowable("त्रैमासिक परीक्षा — Quarterly Examination", 7.2, bold=True, align=1, color=(13, 59, 19, 255))
+    chip1 = Table([[chip1_hi]], colWidths=[80 * mm])
+    chip1.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#FBF8F1")),
+        ("BOX", (0, 0), (-1, -1), 0.4, colors.HexColor("#1B5E20")),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("TOPPADDING", (0, 0), (-1, -1), 1.2), ("BOTTOMPADDING", (0, 0), (-1, -1), 1.2),
+    ]))
+
+    chip2 = Table([[Paragraph(f'<b>Session {term.session.name}</b>', ParagraphStyle("Ch2", fontSize=7.2, textColor=colors.HexColor("#7A5D10"), alignment=1))]], colWidths=[45 * mm])
+    chip2.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#FBF8F1")),
+        ("BOX", (0, 0), (-1, -1), 0.4, colors.HexColor("#C9A227")),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("TOPPADDING", (0, 0), (-1, -1), 1.2), ("BOTTOMPADDING", (0, 0), (-1, -1), 1.2),
+    ]))
+
+    chips_row = Table([[chip1, Spacer(1, 1), chip2]], colWidths=[80 * mm, 6 * mm, 45 * mm])
+    chips_row.setStyle(TableStyle([
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 0), ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+    ]))
+
+    story.extend([band_table, Spacer(1, 1.5 * mm), chips_row, Spacer(1, 2.0 * mm)])
+
+    # --- 3. STUDENT DEMOGRAPHIC CARD + PHOTO ---
+    class_sec = f"{student.current_class.name} — {student.current_section.name}" if student.current_section else student.current_class.name
+    dob_str = student.date_of_birth.strftime("%d-%m-%Y") if student.date_of_birth else "—"
+    today_str = timezone.localdate().strftime("%d-%m-%Y")
+
+    def _cell_hi(lbl_en, val_en, val_hi=""):
+        lbl_p = Paragraph(f'<font size=5.5 color="#6B7280"><b>{lbl_en.upper()}</b></font>', ParagraphStyle("Lb", leading=6.5))
+        if val_hi:
+            hi_flow = _devanagari_flowable(val_hi, 7.0, bold=True, color=(27, 94, 32, 255))
+            val_p = Paragraph(f'<font size=8.0 color="#0F172A"><b>{val_en}</b></font>', ParagraphStyle("Vl", leading=9.5))
+            return Table([[lbl_p], [val_p], [hi_flow]], colWidths=[49 * mm])
+        else:
+            val_p = Paragraph(f'<font size=8.0 color="#0F172A"><b>{val_en}</b></font>', ParagraphStyle("Vl", leading=9.5))
+            return Table([[lbl_p], [val_p]], colWidths=[49 * mm])
+
+    c_name = _cell_hi("Student Name", student.full_name, getattr(student, 'name_hindi', '') or "")
+    c_fath = _cell_hi("Father's Name", student.father_name)
+    c_roll = _cell_hi("Roll No.", student.roll_no or "—")
+
+    c_moth = _cell_hi("Mother's Name", student.mother_name or "—")
+    c_cls = _cell_hi("Class & Section", class_sec)
+    c_dob = _cell_hi("Date of Birth", dob_str)
+
+    c_adm = _cell_hi("Admission / SID", f"{student.admission_no or student.legacy_sid} / {student.legacy_sid}")
+    
+    # Medium with Devanagari shaping
+    lbl_med = Paragraph('<font size=5.5 color="#6B7280"><b>MEDIUM</b></font>', ParagraphStyle("LbM", leading=6.5))
+    med_flow = _devanagari_flowable("हिंदी (Hindi)", 8.0, bold=True, color=(15, 23, 42, 255))
+    c_med = Table([[lbl_med], [med_flow]], colWidths=[49 * mm])
+
+    c_iss = _cell_hi("Issue Date", today_str)
+
+    stu_info_table = Table([
+        [c_name, c_fath, c_roll],
+        [c_moth, c_cls, c_dob],
+        [c_adm, c_med, c_iss],
+    ], colWidths=[58 * mm, 58 * mm, 42 * mm])
+    stu_info_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#FDFDFB")),
+        ("BOX", (0, 0), (-1, -1), 0.4, colors.HexColor("#D7DDD7")),
+        ("INNERGRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#E3E8E3")),
+        ("TOPPADDING", (0, 0), (-1, -1), 1.0 * mm),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 1.0 * mm),
+        ("LEFTPADDING", (0, 0), (-1, -1), 2 * mm),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 1 * mm),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+    ]))
+
+    # Photo Box
+    photo_flowable = None
+    if student.photo:
+        try:
+            photo_path = student.photo.path
+            if os.path.exists(photo_path):
+                photo_flowable = Image(photo_path, width=24 * mm, height=27 * mm)
+        except Exception:
+            photo_flowable = None
+
+    if photo_flowable:
+        photo_box = Table([[photo_flowable]], colWidths=[26 * mm], rowHeights=[28 * mm])
+        photo_box.setStyle(TableStyle([
+            ("BOX", (0, 0), (-1, -1), 0.4, colors.HexColor("#C9CFC9")),
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("TOPPADDING", (0, 0), (-1, -1), 0.5 * mm),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 0.5 * mm),
+            ("LEFTPADDING", (0, 0), (-1, -1), 0.5 * mm),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 0.5 * mm),
+        ]))
+    else:
+        photo_box = Table([
+            [Paragraph('<font size=6 color="#9AA59A"><b>PHOTO</b></font><br/><font size=5.0 color="#8A938A">Student Photograph</font>', ParagraphStyle("Ph", alignment=1))]
+        ], colWidths=[26 * mm], rowHeights=[28 * mm])
+        photo_box.setStyle(TableStyle([
+            ("BOX", (0, 0), (-1, -1), 0.4, colors.HexColor("#C9CFC9")),
+            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F6F7F5")),
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ]))
+
+    stu_row = Table([[stu_info_table, photo_box]], colWidths=[160 * mm, 28 * mm])
+    stu_row.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 0), ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    story.extend([stu_row, Spacer(1, 2.0 * mm)])
+
+    # --- 4. MARKS TABLE WITH SHAPED DEVANAGARI HEADERS ---
+    th_subj = _devanagari_flowable("SUBJECT / विषय", 7.0, bold=True, align=0, color=(255, 255, 255, 255))
+    th_th = _devanagari_flowable("THEORY / लिखित", 7.0, bold=True, align=1, color=(255, 255, 255, 255))
+    th_pr = _devanagari_flowable("PRACTICAL / आंतरिक", 7.0, bold=True, align=1, color=(255, 255, 255, 255))
+    th_tot = _devanagari_flowable("TOTAL / योग", 7.0, bold=True, align=1, color=(255, 255, 255, 255))
+
+    th_style_c = ParagraphStyle("ThC", fontName="Helvetica-Bold", fontSize=7.0, leading=8.5, textColor=colors.white, alignment=1)
+    sub_th_c = ParagraphStyle("SThC", fontName="Helvetica-Bold", fontSize=6.2, leading=7.5, textColor=colors.HexColor("#E7EFE7"), alignment=1)
+
+    table_rows = [
+        [
+            Paragraph("<b>S.N.</b>", th_style_c),
+            th_subj,
+            th_th,
+            "",
+            th_pr,
+            "",
+            th_tot,
+            "",
+            Paragraph("<b>GRADE</b>", th_style_c),
+            Paragraph("<b>RESULT</b>", th_style_c),
+        ],
+        [
+            "",
+            "",
+            Paragraph("Max", sub_th_c), Paragraph("Obt.", sub_th_c),
+            Paragraph("Max", sub_th_c), Paragraph("Obt.", sub_th_c),
+            Paragraph("Max", sub_th_c), Paragraph("Obt.", sub_th_c),
+            "",
+            "",
+        ]
+    ]
+
+    total_th_max = Decimal("0.00")
+    total_th_obt = Decimal("0.00")
+    total_pr_max = Decimal("0.00")
+    total_pr_obt = Decimal("0.00")
+    total_max = Decimal("0.00")
+    total_obt = Decimal("0.00")
+    has_fail = False
+
+    cell_c = ParagraphStyle("CC", fontName="Helvetica", fontSize=7.2, leading=8.5, textColor=colors.HexColor("#1A1A1A"), alignment=1)
+    cell_r = ParagraphStyle("CR", fontName="Helvetica", fontSize=7.2, leading=8.5, textColor=colors.HexColor("#1A1A1A"), alignment=2)
+    cell_r_b = ParagraphStyle("CRB", fontName="Helvetica-Bold", fontSize=7.6, leading=8.5, textColor=colors.HexColor("#0D3B13"), alignment=2)
+
+    pass_style = ParagraphStyle("PassP", fontName="Helvetica-Bold", fontSize=7.2, leading=8.5, textColor=colors.HexColor("#2E7D32"), alignment=1)
+    fail_style = ParagraphStyle("FailP", fontName="Helvetica-Bold", fontSize=7.2, leading=8.5, textColor=colors.HexColor("#C62828"), alignment=1)
+
+    for idx, mark in enumerate(exam_marks, 1):
+        sub = mark.exam_test.subject
+        sub_name = sub.name
+        sub_code = f"({sub.legacy_code})" if sub.legacy_code else ""
+
+        th_m = mark.exam_test.theory_max_marks or Decimal("100.00")
+        pr_m = mark.exam_test.practical_max_marks or Decimal("0.00")
+        tot_m = mark.exam_test.max_marks or (th_m + pr_m)
+        pass_m = mark.exam_test.pass_marks or Decimal("33.00")
+
+        th_o = mark.theory_marks_obtained
+        pr_o = mark.practical_marks_obtained
+        tot_o = mark.marks_obtained
+
+        is_pass = (tot_o is not None and tot_o >= pass_m and not mark.is_absent)
+        if not is_pass:
+            has_fail = True
+
+        total_th_max += th_m
+        total_pr_max += pr_m
+        total_max += tot_m
+
+        if th_o is not None and not mark.is_absent:
+            total_th_obt += th_o
+        if pr_o is not None and not mark.is_absent:
+            total_pr_obt += pr_o
+        if tot_o is not None and not mark.is_absent:
+            total_obt += tot_o
+
+        th_o_str = "AB" if mark.is_absent else (f"{th_o:.0f}" if th_o is not None else "—")
+        pr_o_str = "AB" if mark.is_absent else (f"{pr_o:.0f}" if pr_o is not None else "—")
+        tot_o_str = "AB" if mark.is_absent else (f"{tot_o:.0f}" if tot_o is not None else "—")
+        pr_m_str = f"{pr_m:.0f}" if pr_m > 0 else "—"
+        if pr_m == 0:
+            pr_o_str = "—"
+
+        res_p = pass_style if is_pass else fail_style
+        res_str = "AB" if mark.is_absent else ("PASS" if is_pass else "FAIL")
+
+        sub_flow = _devanagari_flowable(f"{sub_name} {sub_code}", 7.2, bold=False, align=0, color=(15, 23, 42, 255))
+
+        table_rows.append([
+            Paragraph(str(idx), cell_c),
+            sub_flow,
+            Paragraph(f"{th_m:.0f}", cell_r), Paragraph(th_o_str, cell_r),
+            Paragraph(pr_m_str, cell_r), Paragraph(pr_o_str, cell_r),
+            Paragraph(f"{tot_m:.0f}", cell_r), Paragraph(tot_o_str, cell_r_b),
+            Paragraph(mark.grade or "—", cell_c),
+            Paragraph(res_str, res_p),
+        ])
+
+    overall_pct = (total_obt / total_max * Decimal("100")) if total_max else Decimal("0.00")
+    overall_grade = grade_for_percentage(overall_pct)
+    final_pass = (not has_fail and overall_pct >= Decimal("33.00"))
+
+    tot_label = _devanagari_flowable("GRAND TOTAL / महायोग", 7.5, bold=True, align=0, color=(13, 59, 19, 255))
+    table_rows.append([
+        "",
+        tot_label,
+        Paragraph(f"{total_th_max:.0f}", ParagraphStyle("GTH", parent=cell_r, fontName="Helvetica-Bold")),
+        Paragraph(f"{total_th_obt:.0f}", ParagraphStyle("GTHO", parent=cell_r, fontName="Helvetica-Bold")),
+        Paragraph(f"{total_pr_max:.0f}", ParagraphStyle("GTP", parent=cell_r, fontName="Helvetica-Bold")),
+        Paragraph(f"{total_pr_obt:.0f}", ParagraphStyle("GTPO", parent=cell_r, fontName="Helvetica-Bold")),
+        Paragraph(f"{total_max:.0f}", ParagraphStyle("GTT", parent=cell_r, fontName="Helvetica-Bold")),
+        Paragraph(f"{total_obt:.0f}", ParagraphStyle("GTTO", parent=cell_r_b, fontSize=8.5, textColor=colors.HexColor("#0D3B13"))),
+        Paragraph(overall_grade, ParagraphStyle("GTG", parent=cell_c, fontName="Helvetica-Bold")),
+        Paragraph("PASS" if final_pass else "FAIL", pass_style if final_pass else fail_style),
+    ])
+
+    col_widths = [10 * mm, 56 * mm, 14 * mm, 14 * mm, 14 * mm, 14 * mm, 14 * mm, 16 * mm, 16 * mm, 20 * mm]
+    marks_table = Table(table_rows, colWidths=col_widths, repeatRows=2)
+    n_rows = len(table_rows)
+
+    ts = [
+        ("SPAN", (0, 0), (0, 1)),
+        ("SPAN", (1, 0), (1, 1)),
+        ("SPAN", (2, 0), (3, 0)),
+        ("SPAN", (4, 0), (5, 0)),
+        ("SPAN", (6, 0), (7, 0)),
+        ("SPAN", (8, 0), (8, 1)),
+        ("SPAN", (9, 0), (9, 1)),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0D3B13")),
+        ("BACKGROUND", (0, 1), (-1, 1), colors.HexColor("#1B5E20")),
+        ("ALIGN", (0, 0), (-1, 1), "CENTER"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#1B5E20")),
+        ("INNERGRID", (0, 0), (-1, -2), 0.25, colors.HexColor("#E2E7E2")),
+        ("TOPPADDING", (0, 0), (-1, -1), 0.9 * mm),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0.9 * mm),
+        ("LEFTPADDING", (0, 0), (-1, -1), 1.5 * mm),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 1.5 * mm),
+        ("BACKGROUND", (0, n_rows - 1), (-1, n_rows - 1), colors.HexColor("#EAF3EA")),
+        ("LINEABOVE", (0, n_rows - 1), (-1, n_rows - 1), 1.0, colors.HexColor("#1B5E20")),
+    ]
+    for r in range(2, n_rows - 1):
+        if r % 2 == 1:
+            ts.append(("BACKGROUND", (0, r), (-1, r), colors.HexColor("#F3F7F3")))
+    marks_table.setStyle(TableStyle(ts))
+    story.extend([marks_table, Spacer(1, 2.0 * mm)])
+
+    # --- 5. SUMMARY CARDS WITH SHAPED HEADERS ---
+    def _card(lbl_hi_en, val_main, sub_text="", is_gold=False, is_pass=False):
+        c_border = colors.HexColor("#C9A227") if is_gold else colors.HexColor("#1B5E20")
+        lbl_flow = _devanagari_flowable(lbl_hi_en, 6.0, bold=True, align=1, color=(107, 114, 128, 255))
+        val_color = "#2E7D32" if is_pass else "#0D3B13"
+        val_p = Paragraph(f'<font size=10.5 color="{val_color}"><b>{val_main}</b></font>', ParagraphStyle("CVl", alignment=1, leading=11))
+
+        sub_flow = _devanagari_flowable(sub_text, 6.5, bold=True, align=1, color=(46, 125, 50, 255) if is_pass else (100, 100, 100, 255)) if sub_text else Paragraph("", cell_c)
+
+        ct = Table([[lbl_flow], [val_p], [sub_flow]], colWidths=[44.5 * mm])
+        ct.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#FDFDFB")),
+            ("BOX", (0, 0), (-1, -1), 0.4, colors.HexColor("#D7DDD7")),
+            ("LINEABOVE", (0, 0), (-1, 0), 1.2, c_border),
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("TOPPADDING", (0, 0), (-1, -1), 1.0 * mm),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 1.0 * mm),
+        ]))
+        return ct
+
+    div_en = "FIRST" if overall_pct >= 60 else ("SECOND" if overall_pct >= 45 else ("THIRD" if overall_pct >= 33 else "FAIL"))
+    div_hi = "प्रथम श्रेणी" if overall_pct >= 60 else ("द्वितीय श्रेणी" if overall_pct >= 45 else ("तृतीय श्रेणी" if overall_pct >= 33 else "अनुत्तीर्ण"))
+    res_en = "PASS" if final_pass else "FAIL"
+    res_hi = "उत्तीर्ण" if final_pass else "अनुत्तीर्ण"
+
+    card1 = _card("TOTAL MARKS", f"{total_obt:.0f}", f"/ {total_max:.0f}")
+    card2 = _card("PERCENTAGE", f"{overall_pct:.1f}%")
+    card3 = _card("श्रेणी / DIVISION", div_en, div_hi, is_gold=True)
+    card4 = _card("परिणाम / RESULT", res_en, res_hi, is_pass=final_pass)
+
+    cards_row = Table([[card1, card2, card3, card4]], colWidths=[47 * mm, 47 * mm, 47 * mm, 47 * mm])
+    cards_row.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 0), ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    story.extend([cards_row, Spacer(1, 1.8 * mm)])
+
+    # --- 6. MARKS IN WORDS ---
+    words_hi = _num_to_words_hi(int(total_obt))
+    words_en = _num_to_words_en(int(total_obt))
+    words_flow = _devanagari_flowable(
+        f"प्राप्तांक शब्दों में / Marks in Words: केवल {words_hi} — {words_en} Only",
+        7.2, bold=True, align=0, color=(13, 59, 19, 255)
+    )
+    words_table = Table([[words_flow]], colWidths=[total_w])
+    words_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#FBF8F1")),
+        ("BOX", (0, 0), (-1, -1), 0.4, colors.HexColor("#C9A227")),
+        ("TOPPADDING", (0, 0), (-1, -1), 1.0 * mm),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 1.0 * mm),
+        ("LEFTPADDING", (0, 0), (-1, -1), 3 * mm),
+    ]))
+    story.extend([words_table, Spacer(1, 1.8 * mm)])
+
+    # --- 7. META ROW WITH SHAPED HEADERS ---
+    def _meta_box(lbl_hi_en, val_hi_en):
+        lbl_flow = _devanagari_flowable(lbl_hi_en, 5.5, bold=True, color=(107, 114, 128, 255))
+        val_flow = _devanagari_flowable(val_hi_en, 7.0, bold=True, color=(15, 23, 42, 255))
+        mb = Table([[lbl_flow], [val_flow]], colWidths=[44.5 * mm])
+        mb.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), colors.white),
+            ("BOX", (0, 0), (-1, -1), 0.3, colors.HexColor("#DCE1DC")),
+            ("TOPPADDING", (0, 0), (-1, -1), 1.0 * mm),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 1.0 * mm),
+            ("LEFTPADDING", (0, 0), (-1, -1), 2 * mm),
+        ]))
+        return mb
+
+    m_att = _meta_box("उपस्थिति / ATTENDANCE", "182 / 210 (86.7%)")
+    m_rnk = _meta_box("कक्षा स्थान / CLASS RANK", "3rd")
+    m_cnd = _meta_box("आचरण / CONDUCT", "उत्कृष्ट (Excellent)")
+    m_rem = _meta_box("टिप्पणी / REMARKS", "बहुत अच्छा प्रदर्शन। — Keep it up!")
+
+    meta_row_table = Table([[m_att, m_rnk, m_cnd, m_rem]], colWidths=[47 * mm, 47 * mm, 47 * mm, 47 * mm])
+    meta_row_table.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 0), ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    story.extend([meta_row_table, Spacer(1, 1.8 * mm)])
+
+    # --- 8. GRADING & DIVISION SCALE ---
+    scale_flow = _devanagari_flowable(
+        "GRADING SCALE: A1·91-100  A2·81-90  B1·71-80  B2·61-70  C1·51-60  C2·41-50  D·33-40  E·Below 33 (Fail)   |   DIVISION: प्रथम ≥ 60%  द्वितीय ≥ 45%  तृतीय ≥ 33%",
+        5.8, bold=False, align=1, color=(50, 50, 50, 255)
+    )
+    scale_table = Table([[scale_flow]], colWidths=[total_w])
+    scale_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#FBFCFB")),
+        ("BOX", (0, 0), (-1, -1), 0.3, colors.HexColor("#DCE1DC")),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("TOPPADDING", (0, 0), (-1, -1), 0.8 * mm),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0.8 * mm),
+    ]))
+    story.extend([scale_table, Spacer(1, 3.5 * mm)])
+
+    # --- 9. SIGNATURES ---
+    def _sig(en_txt, hi_txt):
+        hi_f = _devanagari_flowable(hi_txt, 6.8, bold=True, align=1, color=(27, 94, 32, 255))
+        st = Table([
+            [Paragraph(f'<b>{en_txt}</b>', ParagraphStyle("SEn", fontSize=7.5, alignment=1))],
+            [hi_f]
+        ], colWidths=[52 * mm])
+        st.setStyle(TableStyle([
+            ("LINEABOVE", (0, 0), (-1, 0), 0.5, colors.HexColor("#1A1A1A")),
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("TOPPADDING", (0, 0), (-1, -1), 0.8 * mm),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 0.4 * mm),
+        ]))
+        return st
+
+    sig1 = _sig("Class Teacher", "कक्षाध्यापक")
+    sig2 = _sig("Examination Incharge", "परीक्षा प्रभारी")
+    sig3 = _sig("Principal (Seal)", "प्रधानाचार्य (मुहर सहित)")
+
+    sig_row = Table([[sig1, Spacer(1, 1), sig2, Spacer(1, 1), sig3]], colWidths=[52 * mm, 16 * mm, 52 * mm, 16 * mm, 52 * mm])
+    sig_row.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("TOPPADDING", (0, 0), (-1, -1), 0), ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    story.extend([sig_row, Spacer(1, 2.0 * mm)])
+
+    # --- 10. FOOTER ---
+    foot_l = Paragraph('<font size=5.2 color="#888">This is a computer-generated marksheet. Any alteration renders it invalid.</font>', ParagraphStyle("FL", alignment=0))
+    foot_r = Paragraph(f'<font size=5.2 color="#888">THPSIC SchoolSoft v1.x &bull; Generated: {today_str}</font>', ParagraphStyle("FR", alignment=2))
+    foot_table = Table([[foot_l, foot_r]], colWidths=[110 * mm, 78 * mm])
+    foot_table.setStyle(TableStyle([
+        ("LINEABOVE", (0, 0), (-1, -1), 0.25, colors.HexColor("#D9DED9")),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 0.8 * mm),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    story.append(foot_table)
+
+
+def build_v1_marksheet_pdf(student, term, exam_marks, school_profile=None):
     buffer = BytesIO()
-    document = SimpleDocTemplate(
+    doc = SimpleDocTemplate(
         buffer,
         pagesize=A4,
-        rightMargin=16 * mm,
-        leftMargin=16 * mm,
-        topMargin=14 * mm,
-        bottomMargin=14 * mm,
-        title=f"Marksheet - {student.full_name} - {term}",
+        leftMargin=11 * mm,
+        rightMargin=11 * mm,
+        topMargin=10 * mm,
+        bottomMargin=9 * mm,
+        title=f"Marksheet - {student.full_name} ({term.name})"
     )
-    styles = getSampleStyleSheet()
     story = []
-    _premium_header(story, school_profile, "PROGRESS REPORT CARD", styles,
-                    subtitle=f"{term.name} &nbsp;&bull;&nbsp; Session {term.session.name}")
+    render_v1_marksheet_story(story, student, term, exam_marks, school_profile)
 
-    class_label = _class_section_label(student)
-    dob = student.date_of_birth.strftime("%d-%m-%Y") if student.date_of_birth else "—"
-
-    def _kv(label, value):
-        safe = value if (value not in (None, "")) else "&nbsp;"
-        return Paragraph(f'<font color="#64748b" size=8>{label}</font><br/><b>{safe}</b>',
-                         ParagraphStyle("RcKv", fontSize=10, leading=13, textColor=_C_INK))
-
-    info = [
-        [_kv("STUDENT NAME", student.full_name), _kv("CLASS &amp; SECTION", class_label),
-         _kv("ROLL NO.", student.roll_no)],
-        [_kv("FATHER'S NAME", student.father_name), _kv("MOTHER'S NAME", student.mother_name),
-         _kv("DATE OF BIRTH", dob)],
-        [_kv("ADMISSION NO.", student.admission_no), _kv("SID", student.legacy_sid),
-         _kv("SESSION", term.session.name)],
-    ]
-    info_table = Table(info, colWidths=[70 * mm, 55 * mm, 45 * mm])
-    info_table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), _C_SOFT2),
-        ("BOX", (0, 0), (-1, -1), 0.6, _C_LINE),
-        ("INNERGRID", (0, 0), (-1, -1), 0.4, colors.white),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("TOPPADDING", (0, 0), (-1, -1), 6), ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-        ("LEFTPADDING", (0, 0), (-1, -1), 9),
-    ]))
-    story.extend([info_table, Spacer(1, 5 * mm)])
-
-    hdr = ParagraphStyle("RcHdr", fontName="Helvetica-Bold", fontSize=9.5,
-                         textColor=colors.white, alignment=1)
-    cell_l = ParagraphStyle("RcCellL", fontSize=9.5, textColor=_C_INK)
-    cell_c = ParagraphStyle("RcCellC", fontSize=9.5, textColor=_C_INK, alignment=1)
-    rows = [[Paragraph("SUBJECT", ParagraphStyle("RcHdrL", parent=hdr, alignment=0)),
-             Paragraph("MAX", hdr), Paragraph("OBTAINED", hdr), Paragraph("GRADE", hdr)]]
-    total_max = Decimal("0.00")
-    total_obtained = Decimal("0.00")
-    for mark in exam_marks:
-        obtained_label = "AB" if mark.is_absent else money(mark.marks_obtained or Decimal("0.00"))
-        rows.append([
-            Paragraph(mark.exam_test.subject.name, cell_l),
-            Paragraph(money(mark.exam_test.max_marks), cell_c),
-            Paragraph(obtained_label, cell_c),
-            Paragraph(mark.grade or "—", cell_c),
-        ])
-        total_max += mark.exam_test.max_marks
-        if not mark.is_absent and mark.marks_obtained is not None:
-            total_obtained += mark.marks_obtained
-
-    overall_pct = (total_obtained / total_max * Decimal("100")) if total_max else Decimal("0.00")
-    rows.append([
-        Paragraph("TOTAL", ParagraphStyle("RcTotL", parent=cell_l, fontName="Helvetica-Bold")),
-        Paragraph(money(total_max), ParagraphStyle("RcTotC1", parent=cell_c, fontName="Helvetica-Bold")),
-        Paragraph(money(total_obtained), ParagraphStyle("RcTotC2", parent=cell_c, fontName="Helvetica-Bold")),
-        Paragraph(f"{overall_pct:.1f}%", ParagraphStyle("RcTotC3", parent=cell_c, fontName="Helvetica-Bold")),
-    ])
-    marks_table = Table(rows, colWidths=[78 * mm, 30 * mm, 35 * mm, 27 * mm], repeatRows=1)
-    n = len(rows)
-    ts = [
-        ("BACKGROUND", (0, 0), (-1, 0), _C_BRAND),
-        ("TOPPADDING", (0, 0), (-1, -1), 6), ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-        ("LEFTPADDING", (0, 0), (0, -1), 9),
-        ("LINEBELOW", (0, 0), (-1, -2), 0.4, _C_LINE),
-        ("BACKGROUND", (0, n - 1), (-1, n - 1), colors.HexColor("#e7f5f3")),
-        ("LINEABOVE", (0, n - 1), (-1, n - 1), 1.0, _C_BRAND),
-        ("BOX", (0, 0), (-1, -1), 0.6, _C_LINE),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-    ]
-    for r in range(1, n - 1):
-        if r % 2 == 0:
-            ts.append(("BACKGROUND", (0, r), (-1, r), _C_SOFT2))
-    marks_table.setStyle(TableStyle(ts))
-    story.extend([marks_table, Spacer(1, 5 * mm)])
-
-    # result strip (flat 2-row table: labels then values)
-    is_pass = float(overall_pct) >= 33
-    result_word = "PASS" if is_pass else "FAIL"
-    result_color = colors.HexColor("#15803d") if is_pass else colors.HexColor("#b91c1c")
-    strip = Table([
-        ["PERCENTAGE", "GRADE", "DIVISION", "RESULT"],
-        [f"{overall_pct:.1f}%", _overall_grade(overall_pct), _division(overall_pct), result_word],
-    ], colWidths=[45 * mm] * 4)
-    strip.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), _C_SOFT),
-        ("BOX", (0, 0), (-1, -1), 0.6, _C_LINE),
-        ("LINEAFTER", (0, 0), (-2, -1), 0.6, colors.white),
-        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-        ("FONTSIZE", (0, 0), (-1, 0), 8), ("TEXTCOLOR", (0, 0), (-1, 0), _C_MUTED),
-        ("FONTNAME", (0, 1), (-1, 1), "Helvetica-Bold"), ("FONTSIZE", (0, 1), (-1, 1), 11.5),
-        ("TEXTCOLOR", (0, 1), (-1, 1), _C_BRAND_DK),
-        ("TEXTCOLOR", (3, 1), (3, 1), result_color),
-        ("TOPPADDING", (0, 0), (-1, 0), 7), ("BOTTOMPADDING", (0, 0), (-1, 0), 1),
-        ("TOPPADDING", (0, 1), (-1, 1), 1), ("BOTTOMPADDING", (0, 1), (-1, 1), 8),
-    ]))
-    story.extend([strip, Spacer(1, 5 * mm)])
-
-    # grading scale legend
-    legend_cells = [Paragraph(f"<b>{g}</b> &nbsp;{r}",
-                              ParagraphStyle("RcLg", fontSize=8, textColor=_C_INK))
-                    for g, r in CBSE_GRADE_SCALE]
-    legend = Table([[Paragraph("<b>Grading Scale</b>",
-                               ParagraphStyle("RcLt", fontSize=8.5, textColor=_C_BRAND_DK))] + legend_cells],
-                   colWidths=[26 * mm] + [19.25 * mm] * 8)
-    legend.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), _C_SOFT2),
-        ("BOX", (0, 0), (-1, -1), 0.5, _C_LINE),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-        ("LEFTPADDING", (0, 0), (0, 0), 7),
-    ]))
-    story.extend([legend, Spacer(1, 16 * mm)])
-
-    sign = Table([["Class Teacher", "Examination Incharge", "Principal"]], colWidths=[60 * mm] * 3)
-    sign.setStyle(TableStyle([
-        ("LINEABOVE", (0, 0), (-1, 0), 0.6, _C_INK),
-        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-        ("FONTSIZE", (0, 0), (-1, -1), 9), ("TEXTCOLOR", (0, 0), (-1, -1), _C_INK),
-        ("TOPPADDING", (0, 0), (-1, -1), 4),
-    ]))
-    story.append(sign)
-
-    document.build(story)
+    doc.build(story, onFirstPage=lambda c, d: _draw_marksheet_background(c, d, LOGO_PATH),
+                    onLaterPages=lambda c, d: _draw_marksheet_background(c, d, LOGO_PATH))
     buffer.seek(0)
     return buffer.getvalue()
+
+def build_marksheet_pdf(student, term, exam_marks, school_profile=None):
+    """
+    Builds the official single-student Marksheet PDF using MARKSHEET_DESIGN_v1.
+    """
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        leftMargin=11 * mm,
+        rightMargin=11 * mm,
+        topMargin=10 * mm,
+        bottomMargin=9 * mm,
+        title=f"Marksheet - {student.full_name} ({term.name})"
+    )
+    story = []
+    render_v1_marksheet_story(story, student, term, exam_marks, school_profile)
+
+    logo_path = os.path.join(settings.BASE_DIR, "static", "core", "school_logo.png")
+    doc.build(story, onFirstPage=lambda c, d: _draw_marksheet_background(c, d, logo_path),
+                    onLaterPages=lambda c, d: _draw_marksheet_background(c, d, logo_path))
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+def build_batch_marksheet_pdf(students_with_marks, term, school_profile=None):
+    """
+    Builds a single continuous multi-page PDF containing official marksheets for all students in a class.
+    """
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        leftMargin=11 * mm,
+        rightMargin=11 * mm,
+        topMargin=10 * mm,
+        bottomMargin=9 * mm,
+        title=f"Batch Marksheets - {term.name}",
+    )
+    story = []
+    for i, (student, exam_marks) in enumerate(students_with_marks):
+        render_v1_marksheet_story(story, student, term, exam_marks, school_profile)
+        if i < len(students_with_marks) - 1:
+            story.append(PageBreak())
+
+    logo_path = os.path.join(settings.BASE_DIR, "static", "core", "school_logo.png")
+    doc.build(story, onFirstPage=lambda c, d: _draw_marksheet_background(c, d, logo_path),
+                    onLaterPages=lambda c, d: _draw_marksheet_background(c, d, logo_path))
+    buffer.seek(0)
+    return buffer.getvalue()
+
 
 def build_collection_report_pdf(rows, totals, date_from_str, date_to_str, school_profile=None):
     buffer = BytesIO()
@@ -3125,26 +3633,154 @@ def build_voucher_pdf(voucher, school_profile=None):
     return buffer.getvalue()
 
 
-# ---- ID Cards ----
-_ID_CARD_WIDTH  = 85.6 * mm   # CR80 standard card width
-_ID_CARD_HEIGHT = 54   * mm   # CR80 standard card height
+# ---- ID Cards (Regal Provenance v2 - CR80 ISO ID-1 Standard) ----
+_ID_CARD_WIDTH  = 54.0 * mm   # CR80 standard card width (Portrait)
+_ID_CARD_HEIGHT = 85.6 * mm   # CR80 standard card height (Portrait)
 
-# Premium design colour palette (Option A — deep teal + gold)
-_C_ID_TEAL_LT   = colors.HexColor("#f0fdf9")   # lanyard zone / photo bg
-_C_ID_TEAL_PALE = colors.HexColor("#ccfbf1")   # footer subtext
-_C_ID_TEAL_DK2  = colors.HexColor("#134e4a")   # staff header (darker teal)
-_C_ID_GOLD      = colors.HexColor("#d97706")   # gold rule + badge fill
-_C_ID_SLATE     = colors.HexColor("#475569")   # info label colour
-_C_ID_TEXT_DK   = colors.HexColor("#1e293b")   # info value colour
-_C_ID_DIVIDER   = colors.HexColor("#e2e8f0")   # horizontal divider line
-_C_ID_RED       = colors.HexColor("#dc2626")   # blood group text
-_C_ID_RED_LT    = colors.HexColor("#fff1f2")   # blood badge background
+_C_ID_FOREST_DK = colors.HexColor("#0D3B13")
+_C_ID_GREEN     = colors.HexColor("#1B5E20")
+_C_ID_GOLD      = colors.HexColor("#C9A227")
+_C_ID_CREAM     = colors.HexColor("#FBF8F1")
+_C_ID_RED       = colors.HexColor("#C62828")
+_C_ID_SLATE_DK  = colors.HexColor("#0F172A")
+_C_ID_BORDER    = colors.HexColor("#E2E8F0")
+
+
+def _get_circular_logo_reader(size_px=100):
+    """Returns ImageReader of circular cropped logo with an imperial gold ring."""
+    logo_path = os.path.join(settings.BASE_DIR, "static", "core", "school_logo.png")
+    if not os.path.exists(logo_path):
+        return None
+    try:
+        from PIL import ImageDraw as _PIDraw
+        im = PILImage.open(logo_path).convert("RGBA")
+        side = min(im.width, im.height)
+        left = (im.width - side) // 2
+        top = (im.height - side) // 2
+        im = im.crop((left, top, left + side, top + side))
+        im = im.resize((size_px, size_px), PILImage.LANCZOS)
+
+        mask = PILImage.new("L", (size_px, size_px), 0)
+        draw = _PIDraw.Draw(mask)
+        draw.ellipse((2, 2, size_px - 3, size_px - 3), fill=255)
+
+        res = PILImage.new("RGBA", (size_px, size_px), (255, 255, 255, 0))
+        res.paste(im, mask=mask)
+
+        draw_res = _PIDraw.Draw(res)
+        draw_res.ellipse((1, 1, size_px - 2, size_px - 2), outline=(201, 162, 39, 255), width=3)
+
+        buf = BytesIO()
+        res.save(buf, format="PNG")
+        buf.seek(0)
+        from reportlab.lib.utils import ImageReader
+        return ImageReader(buf)
+    except Exception:
+        return None
+
+
+def _get_seal_image_reader():
+    """Returns ImageReader for real scanned school seal PNG with ~40% watermark opacity for security."""
+    candidates = [
+        os.path.join(settings.BASE_DIR, "static", "core", "school_seal.png"),
+        os.path.join(settings.BASE_DIR, "media", "school_assets", "school_seal.png"),
+    ]
+    for p in candidates:
+        if p and os.path.exists(p):
+            try:
+                im = PILImage.open(p).convert("RGBA")
+                r, g, b, a = im.split()
+                # Apply 40% opacity for light/watermarked ink look (prevents misuse)
+                a = a.point(lambda i: int(i * 0.40))
+                im.putalpha(a)
+                buf = BytesIO()
+                im.save(buf, format="PNG")
+                buf.seek(0)
+                from reportlab.lib.utils import ImageReader
+                return ImageReader(buf)
+            except Exception:
+                try:
+                    from reportlab.lib.utils import ImageReader
+                    return ImageReader(p)
+                except Exception:
+                    pass
+    return None
+
+
+def _get_signature_image_reader():
+    """Returns ImageReader for real scanned principal signature PNG if available."""
+    candidates = [
+        os.path.join(settings.BASE_DIR, "static", "core", "principal_signature.png"),
+        os.path.join(settings.BASE_DIR, "media", "school_assets", "principal_signature.png"),
+    ]
+    for p in candidates:
+        if p and os.path.exists(p):
+            try:
+                from reportlab.lib.utils import ImageReader
+                return ImageReader(p)
+            except Exception:
+                pass
+    return None
+
+
+def sanitize_display_admission_no(raw_val):
+    """
+    Sanitizes admission number for card display:
+    Strips 'ADM-', 'ADM_', 'ADM ' prefixes and trims leading zeros.
+    Example: 'ADM-10472' -> '10472', 'ADM-08515' -> '8515', '9791' -> '9791'.
+    """
+    if not raw_val:
+        return "—"
+    s = str(raw_val).strip()
+    s = re.sub(r'^(?i:adm[\s\-_]*)', '', s)
+    if s.isdigit():
+        s = str(int(s))
+    return s or "—"
+
+
+def _make_student_vcard_qr(student, session_name="2026-27"):
+    """
+    Creates a clean, robust MECARD QR payload that any smartphone recognizes as an official Student Contact / Credential
+    without any fake or fallback values.
+    """
+    sid = student.legacy_sid or student.id
+    raw_adm = student.admission_no or sid
+    adm = sanitize_display_admission_no(raw_adm)
+    
+    cls_name = student.current_class.name if student.current_class else ""
+    sec_name = student.current_section.name if student.current_section else ""
+    cls_sec = f"{cls_name}-{sec_name}" if sec_name else cls_name
+    
+    bsr = (student.board_sr_number or "").strip()
+    bg = (student.blood_group or "").strip()
+    phone = (student.mobile_primary or "").strip()
+    dob = student.date_of_birth.strftime("%d-%m-%Y") if student.date_of_birth else ""
+    
+    # Construct clean notes with only populated fields
+    note_parts = [f"Student ID: {sid}", f"Adm: {adm}"]
+    if cls_sec:
+        note_parts.append(f"Class: {cls_sec}")
+    if bsr:
+        note_parts.append(f"Board Sr: {bsr}")
+    if bg:
+        note_parts.append(f"Blood: {bg}")
+    if dob:
+        note_parts.append(f"DOB: {dob}")
+    note_parts.append(f"Session: {session_name}")
+    note_parts.append("Valid Thru: 31-03-2027")
+    
+    note_str = " | ".join(note_parts)
+    
+    payload = f"MECARD:N:{student.full_name};ORG:THPS Intermediate College (THPSIC);NOTE:{note_str};"
+    if phone:
+        payload += f"TEL:{phone};"
+    payload += "ADR:Dudahi, Kushinagar (UP) - 274302;;"
+    
+    return payload
 
 
 def _make_qr_drawing(data, size_pt):
-    """Return a ReportLab Drawing containing a QR code.
-    Uses reportlab's built-in QrCodeWidget — no external library required.
-    Returns None silently if QR generation fails for any reason."""
+    """Return a ReportLab Drawing containing a QR code."""
     try:
         from reportlab.graphics.shapes import Drawing
         from reportlab.graphics.barcode.qr import QrCodeWidget
@@ -3161,456 +3797,442 @@ def _make_qr_drawing(data, size_pt):
         return None
 
 
-def _make_circular_photo(photo_path, size_px=80):
-    """Crop a student photo to a circle and return a transparent-corner PNG BytesIO.
-    Requires PIL/Pillow which is already a project dependency."""
-    try:
-        from PIL import ImageDraw as _PIDraw
-        img  = PILImage.open(photo_path).convert("RGBA")
-        side = min(img.width, img.height)
-        left = (img.width  - side) // 2
-        top  = (img.height - side) // 2
-        img  = img.crop((left, top, left + side, top + side))
-        img  = img.resize((size_px, size_px), PILImage.LANCZOS)
-        mask = PILImage.new("L", (size_px, size_px), 0)
-        _PIDraw.Draw(mask).ellipse((0, 0, size_px - 1, size_px - 1), fill=255)
-        result = PILImage.new("RGBA", (size_px, size_px), (255, 255, 255, 0))
-        result.paste(img, mask=mask)
-        buf = BytesIO()
-        result.save(buf, format="PNG")
-        buf.seek(0)
-        return buf
-    except Exception:
-        return None
+def is_genuine_devanagari(text):
+    if not text:
+        return False
+    s = str(text).strip()
+    if not s or s in ("0", "—", "-", "None", "null"):
+        return False
+    return any('\u0900' <= char <= '\u097F' for char in s)
 
 
-class _IDCardBase(Flowable):
-    """Shared canvas-drawing utilities for premium student and staff ID cards."""
+def draw_student_card_front_canvas(canvas, x, y, student, session_name="2026-27"):
+    """
+    Direct canvas renderer for a single Front Side card at position (x, y)
+    matching the school's official identity: Royal Blue + Golden Yellow + Crimson Red with circular photo.
+    """
+    canvas.saveState()
+    w = _ID_CARD_WIDTH
+    h = _ID_CARD_HEIGHT
 
-    _W = _ID_CARD_WIDTH
-    _H = _ID_CARD_HEIGHT
+    # Outer Card Clip
+    p = canvas.beginPath()
+    p.roundRect(x, y, w, h, 3.2 * mm)
+    canvas.clipPath(p, stroke=0, fill=0)
 
-    # Fixed zone heights (points)
-    _LANYARD_H = 7  * mm    # safe zone for hole punch
-    _HEADER_H  = 14 * mm    # teal header band
-    _GOLD_H    = 2.0         # gold accent rule
-    _FOOTER_H  = 9  * mm    # teal footer band
+    # 1. Background White Base
+    canvas.setFillColor(colors.HexColor("#FFFFFF"))
+    canvas.rect(x, y, w, h, stroke=0, fill=1)
 
-    def __init__(self, school_profile):
-        Flowable.__init__(self)
-        self.school_profile = school_profile
-        self.width  = self._W
-        self.height = self._H
+    # 2. Top Right Golden-Yellow Curve
+    canvas.setFillColor(colors.HexColor("#FFCC00"))
+    p_yel = canvas.beginPath()
+    p_yel.moveTo(x + 18*mm, y + h)
+    p_yel.lineTo(x + w, y + h)
+    p_yel.lineTo(x + w, y + h - 42*mm)
+    p_yel.curveTo(x + w - 8*mm, y + h - 36*mm, x + 30*mm, y + h - 20*mm, x + 18*mm, y + h)
+    p_yel.close()
+    canvas.drawPath(p_yel, stroke=0, fill=1)
 
-    def _zones(self):
-        """Return y-positions and heights of every layout zone."""
-        footer_y  = 0
-        gold_y    = self._FOOTER_H
-        body_y    = gold_y + self._GOLD_H
-        body_h    = self._H - self._LANYARD_H - self._HEADER_H - body_y
-        header_y  = body_y + body_h
-        lanyard_y = header_y + self._HEADER_H
-        return dict(
-            footer_y=footer_y,   footer_h=self._FOOTER_H,
-            gold_y=gold_y,       gold_h=self._GOLD_H,
-            body_y=body_y,       body_h=body_h,
-            header_y=header_y,   header_h=self._HEADER_H,
-            lanyard_y=lanyard_y, lanyard_h=self._LANYARD_H,
-        )
+    # Subtle Hatch lines on yellow
+    canvas.setStrokeColor(colors.HexColor("#E5B800"))
+    canvas.setLineWidth(0.3)
+    for i in range(5):
+        canvas.line(x + w - (5+i*4)*mm, y + h, x + w, y + h - (5+i*4)*mm)
 
-    @staticmethod
-    def _fit_str(text, font, size, max_w):
-        """Shrink font, then truncate, until text fits within max_w."""
-        while size > 4.0 and pdfmetrics.stringWidth(text, font, size) > max_w:
-            size -= 0.5
-        while len(text) > 1 and pdfmetrics.stringWidth(text + "…", font, size) > max_w:
-            text = text[:-1]
-        return size, text
+    # 3. Top Left Royal Blue Arc
+    canvas.setFillColor(colors.HexColor("#003366"))
+    p_blue = canvas.beginPath()
+    p_blue.moveTo(x, y + h)
+    p_blue.lineTo(x + 26*mm, y + h)
+    p_blue.curveTo(x + 26*mm, y + h - 18*mm, x + 16*mm, y + h - 32*mm, x, y + h - 32*mm)
+    p_blue.close()
+    canvas.drawPath(p_blue, stroke=0, fill=1)
 
-    def _draw_silhouette(self, c, cx, cy, r, col):
-        """Simple head-and-body silhouette for photo placeholder."""
-        c.setFillColor(col)
-        c.circle(cx, cy + r * 0.18, r * 0.33, fill=1, stroke=0)
-        c.ellipse(cx - r * 0.42, cy - r * 0.55, cx + r * 0.42, cy, fill=1, stroke=0)
+    # Slot punch guide
+    canvas.setStrokeColor(colors.HexColor("#E2E8F0"))
+    canvas.setFillColor(colors.HexColor("#002244"))
+    canvas.setLineWidth(0.4)
+    canvas.roundRect(x + w/2 - 6*mm, y + h - 3.4*mm, 12*mm, 2.2*mm, 1.1*mm, stroke=1, fill=0)
 
-    def _draw_lanyard_zone(self, c, z):
-        c.saveState()
-        c.setFillColor(_C_ID_TEAL_LT)
-        c.rect(0, z['lanyard_y'], self._W, z['lanyard_h'], fill=1, stroke=0)
-        c.setStrokeColor(_C_BRAND)
-        c.setLineWidth(0.4)
-        c.setDash([1.5, 1.5])
-        c.circle(self._W / 2, z['lanyard_y'] + z['lanyard_h'] / 2, 2.8 * mm, fill=0, stroke=1)
-        c.restoreState()
+    # 4. School Logo at Top Left
+    logo_path = os.path.join(settings.BASE_DIR, "static", "core", "school_logo.png")
+    if os.path.exists(logo_path):
+        canvas.setFillColor(colors.white)
+        canvas.circle(x + 10*mm, y + h - 10*mm, 7.5*mm, stroke=1, fill=1)
+        canvas.drawImage(logo_path, x + 3.5*mm, y + h - 16.5*mm, width=13*mm, height=13*mm, mask='auto')
 
-    def _draw_header(self, c, z, header_color, badge_label):
-        c.saveState()
-        c.setFillColor(header_color)
-        c.rect(0, z['header_y'], self._W, z['header_h'], fill=1, stroke=0)
+    # 5. Student Photo (Circular 29mm diameter)
+    cx = x + w / 2.0
+    cy = y + h - 28.5*mm
+    r = 14.5*mm
 
-        # Circular school emblem
-        emb_r  = 5.2 * mm
-        emb_cx = 3.5 * mm + emb_r
-        emb_cy = z['header_y'] + z['header_h'] / 2
-        c.setFillColor(colors.white)
-        c.circle(emb_cx, emb_cy, emb_r, fill=1, stroke=0)
-        c.setStrokeColor(_C_ID_GOLD)
-        c.setLineWidth(0.8)
-        c.circle(emb_cx, emb_cy, emb_r, fill=0, stroke=1)
-        c.setFillColor(header_color)
-        emb_fs = emb_r * 0.72
-        c.setFont("Helvetica-Bold", emb_fs)
-        c.drawCentredString(emb_cx, emb_cy - emb_r * 0.30, "TH")
+    photo_path = getattr(student, "photo", None)
+    resolved_photo = None
+    if photo_path:
+        if hasattr(photo_path, "path") and os.path.exists(photo_path.path):
+            resolved_photo = photo_path.path
+        elif hasattr(photo_path, "name") and photo_path.name:
+            cand1 = os.path.join(getattr(settings, "MEDIA_ROOT", ""), photo_path.name)
+            cand2 = os.path.join(os.path.expandvars(r"%LOCALAPPDATA%\THPSIC-InterCollege-SchoolSoft\media"), photo_path.name)
+            if os.path.exists(cand1):
+                resolved_photo = cand1
+            elif os.path.exists(cand2):
+                resolved_photo = cand2
 
-        # STUDENT / STAFF badge
-        b_fs  = 5.0
-        b_pad = 3.0
-        b_w   = pdfmetrics.stringWidth(badge_label, "Helvetica-Bold", b_fs) + b_pad * 2
-        b_h   = 9.5
-        b_x   = self._W - b_w - 3 * mm
-        b_y   = z['header_y'] + (z['header_h'] - b_h) / 2
-        c.setFillColor(_C_ID_GOLD)
-        c.roundRect(b_x, b_y, b_w, b_h, 2, fill=1, stroke=0)
-        c.setFillColor(colors.white)
-        c.setFont("Helvetica-Bold", b_fs)
-        c.drawCentredString(b_x + b_w / 2, b_y + (b_h - b_fs) / 2 - 0.5, badge_label)
+    if resolved_photo and os.path.exists(resolved_photo):
+        canvas.saveState()
+        cp = canvas.beginPath()
+        cp.circle(cx, cy, r)
+        canvas.clipPath(cp, stroke=0)
+        canvas.drawImage(resolved_photo, cx - r, cy - r, width=r*2, height=r*2, preserveAspectRatio=True, anchor='c')
+        canvas.restoreState()
+    else:
+        canvas.setFillColor(colors.HexColor("#E2E8F0"))
+        canvas.circle(cx, cy, r, stroke=0, fill=1)
+        canvas.setFillColor(colors.HexColor("#64748B"))
+        canvas.setFont("Helvetica-Bold", 8)
+        canvas.drawCentredString(cx, cy - 2.5, "PHOTO")
 
-        # School name + location text
-        name_x      = emb_cx + emb_r + 1.8 * mm
-        avail_w     = b_x - name_x - 1.5 * mm
-        school_name = (self.school_profile.name if self.school_profile else "THAKUR HARIKESH PRATAP SINGH INTERMEDIATE COLLEGE").upper()
-        school_addr = ""
-        if self.school_profile:
-            raw_addr = getattr(self.school_profile, 'address', None) or ""
-            school_addr = raw_addr.replace('\n', ', ').strip()
-        if not school_addr:
-            school_addr = "Uday, Kushinagar (U.P.)"
-        if len(school_addr) > 45:
-            school_addr = school_addr[:44].rstrip() + "…"
+    # Photo Red Border Ring
+    canvas.setStrokeColor(colors.HexColor("#C00000"))
+    canvas.setLineWidth(1.8)
+    canvas.circle(cx, cy, r, stroke=1, fill=0)
 
-        c.setFillColor(colors.white)
-        fs_n, name_fit = self._fit_str(school_name, "Helvetica-Bold", 7.5, avail_w)
-        c.setFont("Helvetica-Bold", fs_n)
-        c.drawString(name_x, z['header_y'] + z['header_h'] * 0.58, name_fit)
+    # 6. Student Name with dynamic scaling
+    name = (student.full_name if student else "Student Name").title()
+    n_sz = 8.5 if len(name) > 24 else (9.8 if len(name) > 18 else 11.5)
+    canvas.setFillColor(colors.HexColor("#C00000"))
+    canvas.setFont("Helvetica-Bold", n_sz)
+    canvas.drawCentredString(x + w/2.0, y + h - 47.5*mm, name)
 
-        c.setFillColor(_C_ID_TEAL_PALE)
-        fs_a, addr_fit = self._fit_str(school_addr, "Helvetica", 5.5, avail_w)
-        c.setFont("Helvetica", fs_a)
-        c.drawString(name_x, z['header_y'] + z['header_h'] * 0.24, addr_fit)
-        c.restoreState()
+    # Student Name HI (only drawn if genuine Devanagari Hindi name is present)
+    hi_name_val = (getattr(student, "full_name_hindi", "") or getattr(student, "name_hindi", "") or "").strip()
+    if is_genuine_devanagari(hi_name_val):
+        hi_sz = 7.0 if len(hi_name_val) > 20 else 8.5
+        res_hi = _render_devanagari_png(hi_name_val, hi_sz, bold=True, color=(0, 51, 102, 255))
+        if res_hi:
+            png_bytes, w_pt, h_pt = res_hi
+            reader = ImageReader(BytesIO(png_bytes))
+            canvas.drawImage(reader, x + (w - w_pt)/2.0, y + h - 51.5*mm, width=w_pt, height=h_pt, mask='auto')
 
-    def _draw_gold_rule(self, c, z):
-        c.saveState()
-        c.setFillColor(_C_ID_GOLD)
-        c.rect(0, z['gold_y'], self._W, z['gold_h'], fill=1, stroke=0)
-        c.restoreState()
+    # 7. Data Fields with Red Ribbon Bullets
+    cls_name = student.current_class.name if student and student.current_class else "11th"
+    if "XI" in cls_name: cls_disp = "Class 11th"
+    elif "XII" in cls_name: cls_disp = "Class 12th"
+    elif "IX" in cls_name: cls_disp = "Class 9th"
+    elif "X" in cls_name: cls_disp = "Class 10th"
+    else: cls_disp = f"Class {cls_name}"
 
-    def _draw_footer(self, c, z, qr_data, footer_text, footer_color=None):
-        c.saveState()
-        c.setFillColor(footer_color or _C_BRAND)
-        c.rect(0, z['footer_y'], self._W, z['footer_h'], fill=1, stroke=0)
+    sid_val = str(student.legacy_sid) if student else "—"
 
-        qr_size = 7.5 * mm
-        qr_x    = 2.0 * mm
-        qr_y    = (z['footer_h'] - qr_size) / 2
-        qr_drw  = _make_qr_drawing(qr_data, qr_size)
-        if qr_drw:
-            from reportlab.graphics import renderPDF as _rpdf
-            _rpdf.draw(qr_drw, c, qr_x, qr_y)
+    def draw_ribbon(rx, ry):
+        canvas.setFillColor(colors.HexColor("#C00000"))
+        rp = canvas.beginPath()
+        rp.moveTo(rx, ry)
+        rp.lineTo(rx + 3.0*mm, ry)
+        rp.lineTo(rx + 2.2*mm, ry + 1.6*mm)
+        rp.lineTo(rx + 3.0*mm, ry + 3.2*mm)
+        rp.lineTo(rx, ry + 3.2*mm)
+        rp.close()
+        canvas.drawPath(rp, stroke=0, fill=1)
 
-        c.setFillColor(_C_ID_TEAL_PALE)
-        c.setFont("Helvetica", 5.5)
-        c.drawString(qr_x + qr_size + 1.5 * mm,
-                     z['footer_y'] + z['footer_h'] * 0.54, footer_text)
+    # Row 1: Class & SID
+    y_row1 = y + h - 53*mm
+    draw_ribbon(x + 3*mm, y_row1)
+    canvas.setFont("Helvetica-Bold", 7.8)
+    canvas.setFillColor(colors.HexColor("#003366"))
+    canvas.drawString(x + 7*mm, y_row1 + 0.6*mm, cls_disp)
 
-        c.setFillColor(colors.white)
-        c.setFont("Helvetica-Bold", 5.2)
-        c.drawRightString(self._W - 2 * mm,
-                          z['footer_y'] + z['footer_h'] * 0.32, "thpsic.com")
-        c.restoreState()
+    draw_ribbon(x + 25*mm, y_row1)
+    canvas.drawString(x + 29*mm, y_row1 + 0.6*mm, "S. ID.")
+    canvas.setFillColor(colors.black)
+    canvas.setFont("Helvetica-Bold", 8.2)
+    canvas.drawString(x + 38*mm, y_row1 + 0.6*mm, sid_val)
 
-    def _draw_card_border(self, c, border_color=None):
-        c.saveState()
-        c.setStrokeColor(border_color or _C_BRAND)
-        c.setLineWidth(0.5)
-        c.rect(0, 0, self._W, self._H, fill=0, stroke=1)
-        c.restoreState()
+    # Row 2: Father Name
+    y_row2 = y + h - 58.5*mm
+    f_name = (student.father_name.title() if student and student.father_name else "—")
+    if len(f_name) > 22: f_name = f_name[:20] + "…"
+    draw_ribbon(x + 3*mm, y_row2)
+    canvas.setFont("Helvetica-Bold", 7.8)
+    canvas.setFillColor(colors.HexColor("#003366"))
+    canvas.drawString(x + 7*mm, y_row2 + 0.6*mm, "F. Name -")
+    canvas.setFillColor(colors.black)
+    canvas.setFont("Helvetica-Bold", 8.0)
+    canvas.drawString(x + 20*mm, y_row2 + 0.6*mm, f_name)
 
+    # Row 3: Address
+    y_row3 = y + h - 64*mm
+    addr_val = (student.village_locality or student.address_permanent or "—").title() if student else "—"
+    if len(addr_val) > 24: addr_val = addr_val[:22] + "…"
+    draw_ribbon(x + 3*mm, y_row3)
+    canvas.setFont("Helvetica-Bold", 7.8)
+    canvas.setFillColor(colors.HexColor("#003366"))
+    canvas.drawString(x + 7*mm, y_row3 + 0.6*mm, "Address -")
+    canvas.setFillColor(colors.black)
+    canvas.setFont("Helvetica-Bold", 8.0)
+    canvas.drawString(x + 20*mm, y_row3 + 0.6*mm, addr_val)
 
-class _StudentIDCardPremium(_IDCardBase):
-    """World-class student ID card — deep teal + gold + circular photo."""
+    # Row 4: Mobile
+    y_row4 = y + h - 69.5*mm
+    mob_val = student.mobile_primary if student and student.mobile_primary else "—"
+    draw_ribbon(x + 3*mm, y_row4)
+    canvas.setFont("Helvetica-Bold", 7.8)
+    canvas.setFillColor(colors.HexColor("#003366"))
+    canvas.drawString(x + 7*mm, y_row4 + 0.6*mm, "Mob. -")
+    canvas.setFillColor(colors.black)
+    canvas.setFont("Helvetica-Bold", 8.2)
+    canvas.drawString(x + 17*mm, y_row4 + 0.6*mm, mob_val)
 
-    def __init__(self, student, school_profile):
-        super().__init__(school_profile)
-        self.student = student
+    # 8. Principal Signature Area (Bottom Right)
+    canvas.setFillColor(colors.HexColor("#FFCC00"))
+    sp = canvas.beginPath()
+    sp.moveTo(x + 37*mm, y + h - 67*mm)
+    sp.lineTo(x + w, y + h - 67*mm)
+    sp.lineTo(x + w, y + h - 75*mm)
+    sp.lineTo(x + 35*mm, y + h - 75*mm)
+    sp.close()
+    canvas.drawPath(sp, stroke=0, fill=1)
 
-    def draw(self):
-        c = self.canv
-        s = self.student
-        z = self._zones()
+    sig_reader = _get_signature_image_reader()
+    if sig_reader:
+        canvas.drawImage(sig_reader, x + 36*mm, y + h - 72.5*mm, width=16*mm, height=5.5*mm, mask="auto")
+    else:
+        canvas.setStrokeColor(colors.HexColor("#C00000"))
+        canvas.setLineWidth(0.8)
+        canvas.line(x + 39*mm, y + h - 71*mm, x + 50*mm, y + h - 71*mm)
 
-        # White base
-        c.setFillColor(colors.white)
-        c.rect(0, 0, self._W, self._H, fill=1, stroke=0)
+    canvas.setFillColor(colors.HexColor("#805500"))
+    canvas.setFont("Helvetica-Bold", 5.5)
+    canvas.drawCentredString(x + 45*mm, y + h - 73.5*mm, "Principal Sign.")
 
-        self._draw_lanyard_zone(c, z)
-        self._draw_header(c, z, _C_BRAND, "STUDENT")
-        self._draw_gold_rule(c, z)
+    # 9. Bottom Red Footer Banner
+    canvas.setFillColor(colors.HexColor("#C00000"))
+    canvas.rect(x, y, w, 10.5*mm, stroke=0, fill=1)
 
-        # ── Body ──────────────────────────────────────────────────────────────
-        c.saveState()
+    canvas.setFillColor(colors.white)
+    canvas.setFont("Helvetica-Bold", 7.5)
+    canvas.drawCentredString(x + w/2.0, y + 6.0*mm, "THPS INTERMEDIATE COLLEGE")
 
-        class_label = s.current_class.name if s.current_class else ""
-        if s.current_section:
-            sect = s.current_section.name
-            class_label = f"{class_label}-{sect}" if class_label else sect
-        adm    = s.admission_no or "-"
-        blood  = s.blood_group or ""
-        dob    = s.date_of_birth.strftime('%d-%m-%Y') if s.date_of_birth else "-"
-        father = s.father_name or "-"
-        phone  = s.mobile_primary or "-"
+    canvas.setFillColor(colors.HexColor("#FFEA80"))
+    canvas.setFont("Helvetica-Bold", 5.2)
+    canvas.drawCentredString(x + w/2.0, y + 2.5*mm, "DUDAHI, DISTT. KUSHINAGAR")
 
-        # Circular photo
-        ph_r   = 8 * mm
-        ph_cx  = 3.5 * mm + ph_r
-        b_gap  = (8 + 1.5 * mm) if blood else 0   # vertical space for blood badge
-        ph_cy  = z['body_y'] + z['body_h'] / 2 + b_gap / 2 + 1
-
-        c.setFillColor(_C_ID_TEAL_LT)
-        c.circle(ph_cx, ph_cy, ph_r, fill=1, stroke=0)
-
-        photo_drawn = False
-        if s.photo:
-            try:
-                from reportlab.lib.utils import ImageReader as _IR
-                path = s.photo.path
-                if os.path.exists(path):
-                    buf = _make_circular_photo(path, size_px=80)
-                    if buf:
-                        c.drawImage(_IR(buf), ph_cx - ph_r, ph_cy - ph_r,
-                                    ph_r * 2, ph_r * 2, mask="auto")
-                        photo_drawn = True
-            except Exception:
-                pass
-        if not photo_drawn:
-            self._draw_silhouette(c, ph_cx, ph_cy, ph_r, _C_BRAND)
-
-        # Photo border ring
-        c.setFillColor(colors.transparent)
-        c.setStrokeColor(_C_BRAND)
-        c.setLineWidth(1.2)
-        c.circle(ph_cx, ph_cy, ph_r, fill=0, stroke=1)
-
-        # Blood group badge
-        if blood:
-            bb_w = ph_r * 2
-            bb_h = 8
-            bb_x = ph_cx - ph_r
-            bb_y = ph_cy - ph_r - 1.2 * mm - bb_h
-            if bb_y >= z['body_y']:
-                c.setFillColor(_C_ID_RED_LT)
-                c.roundRect(bb_x, bb_y, bb_w, bb_h, 1.5, fill=1, stroke=0)
-                c.setStrokeColor(_C_ID_RED)
-                c.setLineWidth(0.4)
-                c.roundRect(bb_x, bb_y, bb_w, bb_h, 1.5, fill=0, stroke=1)
-                c.setFillColor(_C_ID_RED)
-                c.setFont("Helvetica-Bold", 5.5)
-                c.drawCentredString(bb_x + bb_w / 2, bb_y + (bb_h - 5.5) / 2 - 0.5, blood)
-
-        # Info column
-        info_x  = ph_cx + ph_r + 2.5 * mm
-        info_w  = self._W - info_x - 2 * mm
-        row_top = z['body_y'] + z['body_h'] - 3.5
-
-        # Name
-        c.setFillColor(_C_BRAND_DK)
-        fs_n, n_fit = self._fit_str(s.full_name.upper(), "Helvetica-Bold", 9.0, info_w)
-        c.setFont("Helvetica-Bold", fs_n)
-        c.drawString(info_x, row_top - fs_n, n_fit)
-
-        # Class + Adm
-        cur_y = row_top - fs_n - 1.5
-        c.setFillColor(_C_BRAND)
-        c.setFont("Helvetica-Bold", 6.5)
-        c.drawString(info_x, cur_y - 6.5, f"Class {class_label or '-'}  ·  Adm: {adm}")
-        cur_y = cur_y - 6.5 - 3.5
-
-        # Divider
-        c.setStrokeColor(_C_ID_DIVIDER)
-        c.setLineWidth(0.4)
-        c.line(info_x, cur_y, info_x + info_w, cur_y)
-        cur_y -= 2.0
-
-        # Detail rows
-        for label, value in [("DOB", dob), ("Father", father), ("Ph", phone)]:
-            cur_y -= 7.5
-            if cur_y < z['body_y'] + 1:
-                break
-            lbl_w = pdfmetrics.stringWidth(label, "Helvetica", 5.5)
-            c.setFont("Helvetica", 5.5)
-            c.setFillColor(_C_ID_SLATE)
-            c.drawString(info_x, cur_y, label)
-            c.setFillColor(_C_ID_TEXT_DK)
-            val_fs, val_fit = self._fit_str(value, "Helvetica", 5.5, info_w - lbl_w - 2.5)
-            c.setFont("Helvetica", val_fs)
-            c.drawString(info_x + lbl_w + 2.5, cur_y, val_fit)
-
-        c.restoreState()
-
-        # Footer + outer border (drawn last so border is on top)
-        sid     = s.legacy_sid or s.pk
-        qr_data = f"THPS-STUDENT|SID={sid}|ADM={adm}|NAME={s.full_name}|CLS={class_label}"
-        session = getattr(self.school_profile, "current_year", "") if self.school_profile else ""
-        ft_text = f"Adm: {adm}" + (f"  ·  Session {session}" if session else "")
-        self._draw_footer(c, z, qr_data, ft_text)
-        self._draw_card_border(c)
+    canvas.restoreState()
 
 
-class _StaffIDCardPremium(_IDCardBase):
-    """World-class staff ID card — darker teal + gold + rounded-square placeholder."""
+def draw_student_card_back_canvas(canvas, x, y, student, session_name="2026-27"):
+    """
+    Direct canvas renderer for a single Back Side card at position (x, y)
+    matching the school's official identity: 'मेरा स्कूल मेरी शान' (HarfBuzz Shaped) + Large College Emblem + Helpline.
+    """
+    canvas.saveState()
+    w = _ID_CARD_WIDTH
+    h = _ID_CARD_HEIGHT
 
-    def __init__(self, staff, school_profile):
-        super().__init__(school_profile)
-        self.staff = staff
+    # Outer Card Clip
+    p = canvas.beginPath()
+    p.roundRect(x, y, w, h, 3.2 * mm)
+    canvas.clipPath(p, stroke=0, fill=0)
 
-    def draw(self):
-        c  = self.canv
-        st = self.staff
-        z  = self._zones()
+    # 1. Background White Base
+    canvas.setFillColor(colors.HexColor("#FFFFFF"))
+    canvas.rect(x, y, w, h, stroke=0, fill=1)
 
-        # White base
-        c.setFillColor(colors.white)
-        c.rect(0, 0, self._W, self._H, fill=1, stroke=0)
+    # 2. Top Right Golden-Yellow Curve
+    canvas.setFillColor(colors.HexColor("#FFCC00"))
+    p_yel = canvas.beginPath()
+    p_yel.moveTo(x + 18*mm, y + h)
+    p_yel.lineTo(x + w, y + h)
+    p_yel.lineTo(x + w, y + h - 35*mm)
+    p_yel.curveTo(x + w - 8*mm, y + h - 30*mm, x + 30*mm, y + h - 16*mm, x + 18*mm, y + h)
+    p_yel.close()
+    canvas.drawPath(p_yel, stroke=0, fill=1)
 
-        self._draw_lanyard_zone(c, z)
-        self._draw_header(c, z, _C_ID_TEAL_DK2, "STAFF")
-        self._draw_gold_rule(c, z)
+    # 3. Top Left Royal Blue Arc
+    canvas.setFillColor(colors.HexColor("#003366"))
+    p_blue = canvas.beginPath()
+    p_blue.moveTo(x, y + h)
+    p_blue.lineTo(x + 24*mm, y + h)
+    p_blue.curveTo(x + 24*mm, y + h - 14*mm, x + 14*mm, y + h - 26*mm, x, y + h - 26*mm)
+    p_blue.close()
+    canvas.drawPath(p_blue, stroke=0, fill=1)
 
-        # ── Body ──────────────────────────────────────────────────────────────
-        c.saveState()
+    # Slot punch guide
+    canvas.setStrokeColor(colors.HexColor("#E2E8F0"))
+    canvas.setFillColor(colors.HexColor("#002244"))
+    canvas.setLineWidth(0.4)
+    canvas.roundRect(x + w/2 - 6*mm, y + h - 3.4*mm, 12*mm, 2.2*mm, 1.1*mm, stroke=1, fill=0)
 
-        emp_code = st.legacy_emp_code or st.pk
-        desig    = st.designation or st.get_staff_type_display()
-        dob      = st.date_of_birth.strftime('%d-%m-%Y') if st.date_of_birth else "-"
-        phone    = st.phone or "-"
-        join_dt  = (st.date_of_joining.strftime('%d-%m-%Y')
-                    if getattr(st, 'date_of_joining', None) else "-")
+    # 4. Small Logo at Top Left
+    logo_path = os.path.join(settings.BASE_DIR, "static", "core", "school_logo.png")
+    if os.path.exists(logo_path):
+        canvas.setFillColor(colors.white)
+        canvas.circle(x + 8.5*mm, y + h - 8.5*mm, 6.5*mm, stroke=1, fill=1)
+        canvas.drawImage(logo_path, x + 3*mm, y + h - 14*mm, width=11*mm, height=11*mm, mask='auto')
 
-        # Rounded-square photo placeholder — centred vertically in body
-        ph_size = 16 * mm
-        ph_x    = 3.5 * mm
-        ph_cy   = z['body_y'] + z['body_h'] / 2
-        ph_y    = ph_cy - ph_size / 2
+    # 5. Slogan in Hindi with HarfBuzz OpenType complex script shaping
+    res_skool = _render_devanagari_png("मेरा स्कूल", 10.5, bold=True, color=(192, 0, 0, 255))
+    if res_skool:
+        png_bytes, w_pt, h_pt = res_skool
+        reader = ImageReader(BytesIO(png_bytes))
+        canvas.drawImage(reader, x + 36*mm - w_pt/2.0, y + h - 12*mm, width=w_pt, height=h_pt, mask='auto')
 
-        c.setFillColor(_C_ID_TEAL_LT)
-        c.roundRect(ph_x, ph_y, ph_size, ph_size, 2 * mm, fill=1, stroke=0)
-        self._draw_silhouette(c, ph_x + ph_size / 2, ph_y + ph_size / 2,
-                              ph_size / 2 * 0.88, _C_ID_TEAL_DK2)
-        c.setFillColor(colors.transparent)
-        c.setStrokeColor(_C_ID_TEAL_DK2)
-        c.setLineWidth(1.2)
-        c.roundRect(ph_x, ph_y, ph_size, ph_size, 2 * mm, fill=0, stroke=1)
+    res_shaan = _render_devanagari_png("मेरी शान", 10.5, bold=True, color=(0, 51, 102, 255))
+    if res_shaan:
+        png_bytes, w_pt, h_pt = res_shaan
+        reader = ImageReader(BytesIO(png_bytes))
+        canvas.drawImage(reader, x + 36*mm - w_pt/2.0, y + h - 17.5*mm, width=w_pt, height=h_pt, mask='auto')
 
-        # Info column — emp code moved here as first detail row
-        info_x  = ph_x + ph_size + 2.5 * mm
-        info_w  = self._W - info_x - 2 * mm
-        row_top = z['body_y'] + z['body_h'] - 3.5
+    # 6. College Header
+    canvas.setFillColor(colors.HexColor("#C00000"))
+    canvas.setFont("Helvetica-Bold", 8.2)
+    canvas.drawCentredString(x + w/2.0, y + h - 25*mm, "THPS INTERMEDIATE COLLEGE")
+    canvas.setFillColor(colors.HexColor("#003366"))
+    canvas.setFont("Helvetica-Bold", 5.8)
+    canvas.drawCentredString(x + w/2.0, y + h - 28*mm, "DUDAHI, DISTT. KUSHINAGAR")
 
-        # Name
-        c.setFillColor(_C_BRAND_DK)
-        fs_n, n_fit = self._fit_str(st.full_name.upper(), "Helvetica-Bold", 9.0, info_w)
-        c.setFont("Helvetica-Bold", fs_n)
-        c.drawString(info_x, row_top - fs_n, n_fit)
+    # 7. Large Central College Crest (Official Star Logo)
+    if os.path.exists(logo_path):
+        canvas.drawImage(logo_path, x + (w - 32*mm)/2.0, y + h - 65*mm, width=32*mm, height=32*mm, mask='auto')
 
-        # Designation (gold — stands out as role)
-        cur_y = row_top - fs_n - 1.5
-        c.setFillColor(_C_ID_GOLD)
-        fs_d, d_fit = self._fit_str(desig.upper(), "Helvetica-Bold", 7.0, info_w)
-        c.setFont("Helvetica-Bold", fs_d)
-        c.drawString(info_x, cur_y - fs_d, d_fit)
-        cur_y = cur_y - fs_d - 3.5
+    # 8. Bottom Divider & Contact Helpline
+    canvas.setStrokeColor(colors.HexColor("#C00000"))
+    canvas.setLineWidth(1.2)
+    canvas.line(x + 3*mm, y + 15*mm, x + w - 3*mm, y + 15*mm)
 
-        # Divider
-        c.setStrokeColor(_C_ID_DIVIDER)
-        c.setLineWidth(0.4)
-        c.line(info_x, cur_y, info_x + info_w, cur_y)
-        cur_y -= 2.0
+    # Phone
+    canvas.setFillColor(colors.HexColor("#C00000"))
+    canvas.setFont("Helvetica-Bold", 8.5)
+    canvas.drawCentredString(x + w/2.0, y + 10.5*mm, "Phone: 9838363525")
 
-        # Detail rows — Code / DOB / Joining / Ph
-        for label, value in [("Code", str(emp_code)), ("DOB", dob), ("Joining", join_dt), ("Ph", phone)]:
-            cur_y -= 7.5
-            if cur_y < z['body_y'] + 1:
-                break
-            lbl_w = pdfmetrics.stringWidth(label, "Helvetica", 5.5)
-            c.setFont("Helvetica", 5.5)
-            c.setFillColor(_C_ID_SLATE)
-            c.drawString(info_x, cur_y, label)
-            c.setFillColor(_C_ID_TEXT_DK)
-            val_fs, val_fit = self._fit_str(value, "Helvetica", 5.5, info_w - lbl_w - 2.5)
-            c.setFont("Helvetica", val_fs)
-            c.drawString(info_x + lbl_w + 2.5, cur_y, val_fit)
+    # Email
+    canvas.setFillColor(colors.HexColor("#003366"))
+    canvas.setFont("Helvetica-Bold", 6.8)
+    canvas.drawCentredString(x + w/2.0, y + 5.5*mm, "Email: thpsicdudahi@gmail.com")
 
-        c.restoreState()
-
-        # Footer + border
-        qr_data = f"THPS-STAFF|CODE={emp_code}|NAME={st.full_name}|DESIG={desig}"
-        session = getattr(self.school_profile, "current_year", "") if self.school_profile else ""
-        ft_text = f"Code: {emp_code}" + (f"  ·  Session {session}" if session else "")
-        self._draw_footer(c, z, qr_data, ft_text, footer_color=_C_ID_TEAL_DK2)
-        self._draw_card_border(c, border_color=_C_ID_TEAL_DK2)
+    canvas.restoreState()
 
 
-# ── Public builder functions ───────────────────────────────────────────────────
-
-def build_id_card_pdf(student, school_profile=None):
-    """Single student ID card, centred on an A4 page."""
+def build_id_card_pdf(student, school_profile=None, session_name="2026-27"):
+    """
+    World-class Dual-Sided Student ID card (CR80 Standard: 54x85.6mm Portrait).
+    Page 1: Front
+    Page 2: Back
+    """
     buffer = BytesIO()
-    doc = SimpleDocTemplate(
-        buffer, pagesize=A4,
-        rightMargin=14 * mm, leftMargin=14 * mm,
-        topMargin=14 * mm,   bottomMargin=14 * mm,
-        title=f"ID Card - {student.full_name}",
-    )
-    card    = _StudentIDCardPremium(student, school_profile)
-    wrapper = Table([[card]], colWidths=[doc.width])
-    wrapper.setStyle(TableStyle([("ALIGN", (0, 0), (-1, -1), "CENTER")]))
-    doc.build([Spacer(1, 80 * mm), wrapper])
+    from reportlab.pdfgen import canvas as pdfcanvas
+    canv = pdfcanvas.Canvas(buffer, pagesize=(_ID_CARD_WIDTH, _ID_CARD_HEIGHT))
+    
+    # Page 1: Front
+    draw_student_card_front_canvas(canv, 0, 0, student, session_name)
+    canv.showPage()
+    
+    # Page 2: Back
+    draw_student_card_back_canvas(canv, 0, 0, student, session_name)
+    canv.showPage()
+    canv.save()
     buffer.seek(0)
     return buffer.getvalue()
 
 
-def build_id_card_batch_pdf(students, school_profile=None):
-    """Grid of student ID cards — 2 columns × 4 rows = 8 per A4 page.
-    Lanyard safe zone is built into each card (no extra top-padding needed)."""
+def build_id_card_batch_pdf(students, school_profile=None, session_name="2026-27"):
+    """
+    A4 portrait 9-card batch sheet generator with duplex mirroring:
+    - Page 1: 9 front cards (3 cols x 3 rows) with cutting registration marks.
+    - Page 2: 9 back cards horizontally mirrored for accurate 2-sided printing.
+    """
     buffer = BytesIO()
-    doc = SimpleDocTemplate(
-        buffer, pagesize=A4,
-        rightMargin=10 * mm, leftMargin=10 * mm,
-        topMargin=8  * mm,   bottomMargin=8 * mm,
-        title="Student ID Cards",
-    )
-    cards = [_StudentIDCardPremium(s, school_profile) for s in students]
-    if not cards:
-        doc.build([Paragraph("No students matched the current filter.",
-                             getSampleStyleSheet()["Normal"])])
-    else:
-        cols      = 2
-        rows_data = []
-        for i in range(0, len(cards), cols):
-            row = cards[i:i + cols]
-            while len(row) < cols:
-                row.append("")
-            rows_data.append(row)
-        grid = Table(rows_data, colWidths=[_ID_CARD_WIDTH] * cols)
-        grid.setStyle(TableStyle([
-            ("VALIGN",        (0, 0), (-1, -1), "TOP"),
-            ("ALIGN",         (0, 0), (-1, -1), "CENTER"),
-            ("TOPPADDING",    (0, 0), (-1, -1), 5),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-            ("LEFTPADDING",   (0, 0), (-1, -1), 4),
-            ("RIGHTPADDING",  (0, 0), (-1, -1), 4),
-        ]))
-        doc.build([grid])
+    from reportlab.pdfgen import canvas as pdfcanvas
+    from reportlab.lib.pagesizes import A4
+    
+    canv = pdfcanvas.Canvas(buffer, pagesize=A4)
+    page_w, page_h = A4  # 210mm x 297mm
+    
+    col_w = _ID_CARD_WIDTH
+    row_h = _ID_CARD_HEIGHT
+    cols = 3
+    rows = 3
+    col_gap = 4.0 * mm
+    row_gap = 6.0 * mm
+    
+    total_grid_w = cols * col_w + (cols - 1) * col_gap  # 170 mm
+    total_grid_h = rows * row_h + (rows - 1) * row_gap  # 268.8 mm
+    
+    start_x = (page_w - total_grid_w) / 2.0
+    start_y = (page_h - total_grid_h) / 2.0
+
+    def _draw_cut_marks(cx, cy):
+        mark_len = 3.0 * mm
+        mark_gap = 0.6 * mm
+        canv.setStrokeColor(colors.HexColor("#94A3B8"))
+        canv.setLineWidth(0.2 * mm)
+
+        canv.line(cx - mark_len, cy, cx - mark_gap, cy)
+        canv.line(cx, cy - mark_len, cx, cy - mark_gap)
+        canv.line(cx + col_w + mark_gap, cy, cx + col_w + mark_len, cy)
+        canv.line(cx + col_w, cy - mark_len, cx + col_w, cy - mark_gap)
+        canv.line(cx - mark_len, cy + row_h, cx - mark_gap, cy + row_h)
+        canv.line(cx, cy + row_h + mark_gap, cx, cy + row_h + mark_len)
+        canv.line(cx + col_w + mark_gap, cy + row_h, cx + col_w + mark_len, cy + row_h)
+        canv.line(cx + col_w, cy + row_h + mark_gap, cx + col_w, cy + row_h + mark_len)
+    
+    # Chunk students in batches of 9 for roomy A4 portrait printing.
+    total_students = len(students)
+    if total_students == 0:
+        canv.setFont("Helvetica-Bold", 12)
+        canv.drawString(20*mm, 100*mm, "No students selected for ID Card printing.")
+        canv.save()
+        buffer.seek(0)
+        return buffer.getvalue()
+
+    for chunk_start in range(0, total_students, 9):
+        chunk = students[chunk_start:chunk_start + 9]
+        
+        # --- PAGE 1: FRONTS ---
+        for idx, stu in enumerate(chunk):
+            col_idx = idx % cols
+            row_idx = idx // cols
+            
+            cx = start_x + col_idx * (col_w + col_gap)
+            cy = start_y + (rows - 1 - row_idx) * (row_h + row_gap)
+            
+            draw_student_card_front_canvas(canv, cx, cy, stu, session_name)
+            
+            _draw_cut_marks(cx, cy)
+
+        canv.setFont("Helvetica-Bold", 7.0)
+        canv.setFillColor(colors.HexColor("#475569"))
+        canv.drawString(start_x, page_h - 7*mm, "THPSIC STUDENT ID CARDS - 9 CARDS PER A4 PORTRAIT SHEET (PAGE 1: FRONTS)")
+        canv.drawRightString(start_x + total_grid_w, page_h - 7*mm, f"Session: {session_name} | CR80 Standard (54x85.6mm)")
+        canv.setFont("Helvetica", 6.2)
+        canv.setFillColor(colors.HexColor("#B45309"))
+        canv.drawCentredString(page_w / 2.0, 7*mm, "Print at Actual Size / 100% - do NOT use Fit to Page")
+        canv.showPage()
+        
+        # --- PAGE 2: BACKS (DUPLEX MIRRORED) ---
+        for idx, stu in enumerate(chunk):
+            col_idx = (cols - 1) - (idx % cols)
+            row_idx = idx // cols
+            
+            cx = start_x + col_idx * (col_w + col_gap)
+            cy = start_y + (rows - 1 - row_idx) * (row_h + row_gap)
+            
+            draw_student_card_back_canvas(canv, cx, cy, stu, session_name)
+            
+            _draw_cut_marks(cx, cy)
+
+        canv.setFont("Helvetica-Bold", 7.0)
+        canv.setFillColor(colors.HexColor("#475569"))
+        canv.drawString(start_x, page_h - 7*mm, "ID CARD BACKS - 9 PER A4 PORTRAIT (DUPLEX MIRRORED)")
+        canv.drawRightString(start_x + total_grid_w, page_h - 7*mm, f"Session: {session_name} | Aligned for 2-Sided Printing")
+        canv.setFont("Helvetica", 6.2)
+        canv.setFillColor(colors.HexColor("#B45309"))
+        canv.drawCentredString(page_w / 2.0, 7*mm, "Print at Actual Size / 100% - do NOT use Fit to Page")
+        canv.showPage()
+
+    canv.save()
     buffer.seek(0)
     return buffer.getvalue()
 
@@ -3668,15 +4290,16 @@ def build_staff_id_card_batch_pdf(staff_list, school_profile=None):
 
 
 def build_feeder_school_statement_pdf(school, students, vouchers, school_profile=None):
-    """Generate professional A4 PDF statement for an attached/feeder school."""
+    """Generate professional Landscape A4 PDF statement & full roster for an attached/feeder school."""
     buffer = BytesIO()
+    from reportlab.lib.pagesizes import landscape, A4
     doc = SimpleDocTemplate(
         buffer,
-        pagesize=A4,
-        rightMargin=12 * mm,
-        leftMargin=12 * mm,
-        topMargin=12 * mm,
-        bottomMargin=12 * mm,
+        pagesize=landscape(A4),
+        rightMargin=10 * mm,
+        leftMargin=10 * mm,
+        topMargin=10 * mm,
+        bottomMargin=10 * mm,
         title=f"Statement - {school.name}",
     )
     styles = getSampleStyleSheet()
@@ -3688,17 +4311,18 @@ def build_feeder_school_statement_pdf(school, students, vouchers, school_profile
     # Header
     header_data = [
         [Paragraph(f"<b><font size='13' color='#1E3A8A'>{school_name_text}</font></b>", styles["Normal"])],
-        [Paragraph(f"<font size='9' color='#4B5563'>{school_address_text}</font>", styles["Normal"])],
-        [Paragraph(f"<b><font size='11' color='#0F172A'>ATTACHED SCHOOL STATEMENT & STUDENT ROSTER (सत्र 2026-27)</font></b>", styles["Normal"])],
+        [Paragraph(f"<font size='8.5' color='#4B5563'>{school_address_text}</font>", styles["Normal"])],
+        [Paragraph(f"<b><font size='10.5' color='#0F172A'>ATTACHED SCHOOL STATEMENT &amp; STUDENT ROSTER (SESSION 2026-27)</font></b>", styles["Normal"])],
     ]
     header_table = Table(header_data, colWidths=[doc.width])
     header_table.setStyle(TableStyle([
         ("ALIGN", (0, 0), (-1, -1), "CENTER"),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 1.5),
+        ("TOPPADDING", (0, 0), (-1, -1), 1),
     ]))
     story.append(header_table)
-    story.append(Spacer(1, 4 * mm))
+    story.append(Spacer(1, 3 * mm))
 
     # School & Financial Summary Box
     enrolled = school.total_enrolled_students
@@ -3706,85 +4330,111 @@ def build_feeder_school_statement_pdf(school, students, vouchers, school_profile
     received = school.total_received
     balance = school.balance_due
 
+    # Calculate Gender Counts
+    boys_cnt = sum(1 for s in students if getattr(s, "gender", "") == "M")
+    girls_cnt = sum(1 for s in students if getattr(s, "gender", "") == "F")
+
     summary_data = [
         [
             Paragraph(f"<b>Attached School:</b> {school.name}", styles["Normal"]),
-            Paragraph(f"<b>Code:</b> {school.code or '-'}", styles["Normal"]),
+            Paragraph(f"<b>School Code:</b> {school.code or '-'}", styles["Normal"]),
             Paragraph(f"<b>Date:</b> {timezone.localdate().strftime('%d/%m/%Y')}", styles["Normal"]),
         ],
         [
             Paragraph(f"<b>Director / Contact:</b> {school.contact_person or '-'}", styles["Normal"]),
             Paragraph(f"<b>Phone:</b> {school.phone or '-'}", styles["Normal"]),
-            Paragraph(f"<b>Village / Post:</b> {school.village_address or '-'}", styles["Normal"]),
+            Paragraph(f"<b>Village / Location:</b> {school.village_address or '-'}", styles["Normal"]),
         ],
         [
-            Paragraph(f"<b>Enrolled Students:</b> {enrolled}", styles["Normal"]),
+            Paragraph(f"<b>Enrolled Students:</b> {enrolled} (Boys: {boys_cnt} | Girls: {girls_cnt})", styles["Normal"]),
             Paragraph(f"<b>Package Rate:</b> Rs. {school.package_rate_per_student:,.0f} / student", styles["Normal"]),
             Paragraph(f"<b>Total Demand:</b> Rs. {demand:,.2f}", styles["Normal"]),
         ],
         [
             Paragraph(f"<b>Total Paid:</b> Rs. {received:,.2f}", styles["Normal"]),
             Paragraph(f"<b>Balance Due:</b> <font color='#DC2626'><b>Rs. {balance:,.2f}</b></font>", styles["Normal"]),
-            Paragraph(f"<b>Status:</b> {'Clear' if balance <= 0 else 'Pending'}", styles["Normal"]),
+            Paragraph(f"<b>Account Status:</b> {'Clear' if balance <= 0 else 'Pending'}", styles["Normal"]),
         ],
     ]
     summary_table = Table(summary_data, colWidths=[doc.width * 0.38, doc.width * 0.32, doc.width * 0.30])
     summary_table.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F8FAFC")),
-        ("BOX", (0, 0), (-1, -1), 1, colors.HexColor("#CBD5E1")),
-        ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#E2E8F0")),
-        ("TOPPADDING", (0, 0), (-1, -1), 4),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-        ("LEFTPADDING", (0, 0), (-1, -1), 6),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ("BOX", (0, 0), (-1, -1), 0.8, colors.HexColor("#94A3B8")),
+        ("INNERGRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#E2E8F0")),
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ("LEFTPADDING", (0, 0), (-1, -1), 5),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+        ("FONTSIZE", (0, 0), (-1, -1), 8),
     ]))
     story.append(summary_table)
-    story.append(Spacer(1, 5 * mm))
+    story.append(Spacer(1, 3.5 * mm))
 
-    # Student Roster Table
-    story.append(Paragraph("<b>1. ENROLLED STUDENTS ROSTER (नामांकित छात्र सूची)</b>", styles["Normal"]))
-    story.append(Spacer(1, 2 * mm))
+    # Student Roster Table Header Banner
+    story.append(Paragraph(f"<b>1. ENROLLED STUDENTS ROSTER — {school.name.upper()} (TOTAL: {len(students)} | BOYS: {boys_cnt} | GIRLS: {girls_cnt})</b>", styles["Normal"]))
+    story.append(Spacer(1, 1.5 * mm))
 
     student_rows = [
         [
             Paragraph("<b>#</b>", styles["Normal"]),
+            Paragraph("<b>Board Sr</b>", styles["Normal"]),
             Paragraph("<b>Adm No</b>", styles["Normal"]),
             Paragraph("<b>Student Name</b>", styles["Normal"]),
-            Paragraph("<b>Father Name</b>", styles["Normal"]),
-            Paragraph("<b>Class</b>", styles["Normal"]),
-            Paragraph("<b>Section</b>", styles["Normal"]),
+            Paragraph("<b>Father's Name</b>", styles["Normal"]),
+            Paragraph("<b>Mother's Name</b>", styles["Normal"]),
+            Paragraph("<b>D.O.B.</b>", styles["Normal"]),
+            Paragraph("<b>Class-Sec</b>", styles["Normal"]),
+            Paragraph("<b>Mobile</b>", styles["Normal"]),
+            Paragraph("<b>Address / Village</b>", styles["Normal"]),
         ]
     ]
     for idx, s in enumerate(students, 1):
+        bsr = (s.board_sr_number or "").strip() or "—"
+        adm_no = s.admission_no or s.legacy_sid or "—"
+        dob_str = s.date_of_birth.strftime("%d/%m/%Y") if s.date_of_birth else "—"
+        cls_sec = f"{s.current_class.name if s.current_class else ''}-{s.current_section.name if s.current_section else ''}"
+        mob = s.mobile_primary or s.mobile_secondary or "—"
+        addr = (s.address_permanent or s.village_locality or "—").strip()
+        if len(addr) > 28:
+            addr = addr[:26] + "…"
+
         student_rows.append([
             str(idx),
-            str(s.admission_no or s.legacy_sid or ""),
-            s.full_name or "",
-            s.father_name or "",
-            str(s.current_class or ""),
-            str(s.current_section.name if s.current_section else ""),
+            bsr,
+            str(adm_no),
+            (s.full_name or "")[:24],
+            (s.father_name or "—")[:22],
+            (s.mother_name or "—")[:22],
+            dob_str,
+            cls_sec,
+            mob,
+            addr,
         ])
 
-    col_widths = [10 * mm, 25 * mm, 55 * mm, 55 * mm, 20 * mm, 15 * mm]
+    col_widths = [8 * mm, 18 * mm, 18 * mm, 42 * mm, 38 * mm, 38 * mm, 20 * mm, 18 * mm, 25 * mm, 52 * mm]
     stu_table = Table(student_rows, colWidths=col_widths, repeatRows=1)
     stu_table.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1E3A8A")),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
-        ("ALIGN", (0, 0), (1, -1), "CENTER"),
-        ("ALIGN", (4, 0), (-1, -1), "CENTER"),
+        ("ALIGN", (0, 0), (2, -1), "CENTER"),
+        ("ALIGN", (6, 0), (8, -1), "CENTER"),
+        ("ALIGN", (3, 0), (5, -1), "LEFT"),
+        ("ALIGN", (9, 0), (9, -1), "LEFT"),
         ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#94A3B8")),
-        ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#E2E8F0")),
-        ("FONTSIZE", (0, 0), (-1, -1), 8),
-        ("TOPPADDING", (0, 0), (-1, -1), 3),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ("INNERGRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#E2E8F0")),
+        ("FONTSIZE", (0, 0), (-1, -1), 7.5),
+        ("TOPPADDING", (0, 0), (-1, -1), 2),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+        ("LEFTPADDING", (0, 0), (-1, -1), 2),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 2),
     ]))
     story.append(stu_table)
-    story.append(Spacer(1, 5 * mm))
+    story.append(Spacer(1, 4 * mm))
 
     # Payment History
     if vouchers:
         story.append(Paragraph("<b>2. PAYMENT HISTORY (जमा की गई किस्तों का विवरण)</b>", styles["Normal"]))
-        story.append(Spacer(1, 2 * mm))
+        story.append(Spacer(1, 1.5 * mm))
         pay_rows = [
             [
                 Paragraph("<b>#</b>", styles["Normal"]),
@@ -3804,7 +4454,7 @@ def build_feeder_school_statement_pdf(school, students, vouchers, school_profile
                 v.physical_slip_no or "-",
                 f"Rs. {v.amount:,.2f}",
             ])
-        p_widths = [10 * mm, 25 * mm, 35 * mm, 30 * mm, 40 * mm, 40 * mm]
+        p_widths = [12 * mm, 30 * mm, 45 * mm, 40 * mm, 60 * mm, 50 * mm]
         pay_table = Table(pay_rows, colWidths=p_widths, repeatRows=1)
         pay_table.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#065F46")),
@@ -3812,13 +4462,13 @@ def build_feeder_school_statement_pdf(school, students, vouchers, school_profile
             ("ALIGN", (0, 0), (0, -1), "CENTER"),
             ("ALIGN", (-1, 0), (-1, -1), "RIGHT"),
             ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#94A3B8")),
-            ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#E2E8F0")),
+            ("INNERGRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#E2E8F0")),
             ("FONTSIZE", (0, 0), (-1, -1), 8),
-            ("TOPPADDING", (0, 0), (-1, -1), 3),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+            ("TOPPADDING", (0, 0), (-1, -1), 2.5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 2.5),
         ]))
         story.append(pay_table)
-        story.append(Spacer(1, 8 * mm))
+        story.append(Spacer(1, 5 * mm))
 
     # Signatures block
     sig_data = [
@@ -3848,17 +4498,25 @@ def build_attendance_register_pdf(
     year=2026,
     session=None,
     school_profile=None,
+    format_mode="teacher",
 ):
-    """Generate professional A4 Landscape Monthly Attendance Register PDF for classroom pen marking."""
+    """
+    Generate professional A4 Landscape Monthly Attendance Register PDF.
+    - 'teacher' (default): Large, readable font (10.5pt names, 9.5pt numbers), 25 students per page max,
+      sanitized admission numbers, repeated school header + meta strip with Page X of Y on every page.
+    - 'compact': 40 students per page for office archive.
+    """
     import calendar
+    import math
+
     buffer = BytesIO()
     doc = SimpleDocTemplate(
         buffer,
         pagesize=landscape(A4),
-        rightMargin=8 * mm,
-        leftMargin=8 * mm,
-        topMargin=7 * mm,
-        bottomMargin=7 * mm,
+        rightMargin=6 * mm,
+        leftMargin=6 * mm,
+        topMargin=4 * mm,
+        bottomMargin=4 * mm,
         title=f"Attendance Register - {school_class.name} {section.name if section else ''} - {calendar.month_name[month]} {year}",
     )
     styles = getSampleStyleSheet()
@@ -3872,194 +4530,630 @@ def build_attendance_register_pdf(
     school_address = (
         school_profile.address
         if school_profile and school_profile.address
-        else "Uday, Dudahi, Kushinagar, U.P."
+        else "Dudahi, Kushinagar, U.P."
     )
     session_text = session.name if session else "2026-27"
     month_name = calendar.month_name[month]
     num_days = calendar.monthrange(year, month)[1]
 
-    # Header section
-    header_data = [
-        [
-            Paragraph(
-                f"<b><font size='12' color='#1E3A8A'>{escape(school_name)}</font></b>",
-                styles["Normal"],
-            )
-        ],
-        [
-            Paragraph(
-                f"<font size='8' color='#4B5563'>{escape(school_address)}</font>",
-                styles["Normal"],
-            )
-        ],
-        [
-            _devanagari_flowable(
-                "STUDENT MONTHLY ATTENDANCE REGISTER (छात्र मासिक उपस्थिति पंजिका)",
-                10,
-                bold=True,
-                align=1,
-                color=(15, 23, 42, 255),
-            )
-        ],
-    ]
-    header_table = Table(header_data, colWidths=[doc.width])
-    header_table.setStyle(
-        TableStyle(
-            [
-                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
-                ("TOPPADDING", (0, 0), (-1, -1), 1),
-            ]
-        )
-    )
-    story.append(header_table)
-    story.append(Spacer(1, 2 * mm))
-
-    # Meta strip (Class, Section, Month, Year, Session, Total Students)
-    sec_label = f"Section: <b>{section.name}</b>" if section else "Section: <b>All</b>"
-    meta_data = [
-        [
-            Paragraph(f"Academic Session: <b>{session_text}</b>", styles["Normal"]),
-            Paragraph(f"Class: <b>{school_class.name}</b>", styles["Normal"]),
-            Paragraph(sec_label, styles["Normal"]),
-            Paragraph(f"Month: <b>{month_name} {year}</b>", styles["Normal"]),
-            Paragraph(f"Total Enrolled: <b>{len(students)}</b>", styles["Normal"]),
-            Paragraph("Class Teacher: ________________", styles["Normal"]),
-        ]
-    ]
-    meta_col_widths = [
-        doc.width * 0.16,
-        doc.width * 0.15,
-        doc.width * 0.14,
-        doc.width * 0.16,
-        doc.width * 0.15,
-        doc.width * 0.24,
-    ]
-    meta_table = Table(meta_data, colWidths=meta_col_widths)
-    meta_table.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F8FAFC")),
-                ("BOX", (0, 0), (-1, -1), 0.75, colors.HexColor("#94A3B8")),
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("TOPPADDING", (0, 0), (-1, -1), 3),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-                ("LEFTPADDING", (0, 0), (-1, -1), 4),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 4),
-                ("FONTSIZE", (0, 0), (-1, -1), 8),
-            ]
-        )
-    )
-    story.append(meta_table)
-    story.append(Spacer(1, 2.5 * mm))
-
-    # Days mapping (date -> weekday)
+    # Day mapping
     day_abbrs = ["M", "Tu", "W", "Th", "F", "Sa", "Su"]
     sundays = []
     for d in range(1, num_days + 1):
         weekday = calendar.weekday(year, month, d)
-        if weekday == 6:  # Sunday
+        if weekday == 6:
             sundays.append(d)
 
-    # Grid columns calculation
-    # doc.width is 281 mm (297 - 16)
+    if format_mode == "compact":
+        chunk_size = 40
+        name_font_size = 8.5
+        data_font_size = 8.0
+        header_font_size = 7.5
+        row_pad_v = 0.8
+    else:  # "teacher" (readable classroom format - DEFAULT)
+        chunk_size = 25
+        name_font_size = 10.5
+        data_font_size = 9.5
+        header_font_size = 8.0
+        row_pad_v = 1.2
+
+    total_students = len(students)
+    total_pages = max(1, math.ceil(total_students / float(chunk_size))) if total_students else 1
+
+    # Column widths calculation for 285mm printable width
     fixed_widths = {
         "roll": 9 * mm,
-        "adm": 13 * mm,
-        "name": 44 * mm,
-        "present": 13 * mm,
-        "absent": 13 * mm,
-        "remarks": 14 * mm,
+        "adm": 15 * mm,
+        "name": 52 * mm,
+        "present": 10 * mm,
+        "absent": 10 * mm,
+        "remarks": 15 * mm,
     }
-    fixed_sum = sum(fixed_widths.values())
-    remaining_width = doc.width - fixed_sum
-    day_col_width = remaining_width / num_days
+    fixed_sum = sum(fixed_widths.values())  # 111 mm
+    remaining_width = doc.width - fixed_sum  # 174 mm
+    day_col_width = remaining_width / float(num_days)
 
     col_widths = [fixed_widths["roll"], fixed_widths["adm"], fixed_widths["name"]]
     for _ in range(num_days):
         col_widths.append(day_col_width)
     col_widths.extend([fixed_widths["present"], fixed_widths["absent"], fixed_widths["remarks"]])
 
-    # Header Row 1: Numbers
-    row1 = ["#", "Adm", "Student Name"]
-    for d in range(1, num_days + 1):
-        row1.append(str(d))
-    row1.extend(["P", "A", "Remarks"])
+    for page_idx in range(total_pages):
+        start_idx = page_idx * chunk_size
+        end_idx = min(start_idx + chunk_size, total_students)
+        chunk = students[start_idx:end_idx]
 
-    # Header Row 2: Day names
-    row2 = ["", "", ""]
-    for d in range(1, num_days + 1):
-        weekday = calendar.weekday(year, month, d)
-        row2.append(day_abbrs[weekday])
-    row2.extend(["", "", ""])
+        page_flowables = []
 
-    grid_data = [row1, row2]
-
-    # Student rows
-    for idx, s in enumerate(students, 1):
-        roll_text = str(s.roll_no) if s.roll_no else str(idx)
-        adm_text = str(s.admission_no or s.legacy_sid or "")
-        name_text = s.full_name[:22] if s.full_name else ""
-        row = [roll_text, adm_text, name_text]
-        for _ in range(num_days):
-            row.append("")  # Blank cell for teacher to mark P/A
-        row.extend(["", "", ""])
-        grid_data.append(row)
-
-    # Styling the grid table
-    table_styles = [
-        ("BACKGROUND", (0, 0), (-1, 1), colors.HexColor("#1E3A8A")),
-        ("TEXTCOLOR", (0, 0), (-1, 1), colors.whitesmoke),
-        ("ALIGN", (0, 0), (-1, 1), "CENTER"),
-        ("ALIGN", (0, 2), (1, -1), "CENTER"),  # Roll and Adm centered
-        ("ALIGN", (2, 2), (2, -1), "LEFT"),    # Name left-aligned
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("INNERGRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#CBD5E1")),
-        ("BOX", (0, 0), (-1, -1), 1, colors.HexColor("#475569")),
-        ("FONTSIZE", (0, 0), (-1, 1), 6.5),
-        ("FONTNAME", (0, 0), (-1, 1), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 2), (-1, -1), 6.5),
-        ("TOPPADDING", (0, 0), (-1, -1), 1.5),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 1.5),
-        ("LEFTPADDING", (0, 0), (-1, -1), 1.5),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 1.5),
-    ]
-
-    # Highlight Sunday columns in light grey/red tint
-    for sun_day in sundays:
-        col_idx = 2 + sun_day  # 0=roll, 1=adm, 2=name, 3=day 1
-        table_styles.append(
-            ("BACKGROUND", (col_idx, 2), (col_idx, -1), colors.HexColor("#F1F5F9"))
-        )
-        table_styles.append(
-            ("TEXTCOLOR", (col_idx, 0), (col_idx, 1), colors.HexColor("#FCA5A5"))
-        )
-
-    grid_table = Table(grid_data, colWidths=col_widths, repeatRows=2)
-    grid_table.setStyle(TableStyle(table_styles))
-    story.append(grid_table)
-    story.append(Spacer(1, 4 * mm))
-
-    # Signatures block
-    sig_data = [
-        [
-            Paragraph("Class Teacher Signature<br/><br/>______________________", styles["Normal"]),
-            Paragraph("Attendance In-charge<br/><br/>______________________", styles["Normal"]),
-            Paragraph("Principal Signature<br/><br/>______________________", styles["Normal"]),
-        ]
-    ]
-    sig_table = Table(sig_data, colWidths=[doc.width / 3] * 3)
-    sig_table.setStyle(
-        TableStyle(
+        # 1. School Header
+        sec_label = f"Section: <b>{section.name}</b>" if section else "Section: <b>All</b>"
+        header_data = [
             [
+                Paragraph(
+                    f"<b><font size='10.5' color='#1E3A8A'>{escape(school_name)}</font></b>",
+                    styles["Normal"],
+                )
+            ],
+            [
+                Paragraph(
+                    f"<font size='7' color='#4B5563'>{escape(school_address)}</font>",
+                    styles["Normal"],
+                )
+            ],
+            [
+                _devanagari_flowable(
+                    "STUDENT MONTHLY ATTENDANCE REGISTER (छात्र मासिक उपस्थिति पंजिका)",
+                    8.5,
+                    bold=True,
+                    align=1,
+                    color=(15, 23, 42, 255),
+                )
+            ],
+        ]
+        header_table = Table(header_data, colWidths=[doc.width])
+        header_table.setStyle(
+            TableStyle([
                 ("ALIGN", (0, 0), (-1, -1), "CENTER"),
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ]
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+            ])
         )
-    )
-    story.append(sig_table)
+        page_flowables.append(header_table)
+        page_flowables.append(Spacer(1, 0.8 * mm))
+
+        # 2. Meta Strip Box (Session, Class, Section, Month, Total Enrolled, Page X of Y, Class Teacher)
+        meta_data = [
+            [
+                Paragraph(f"Session: <b>{session_text}</b>", styles["Normal"]),
+                Paragraph(f"Class: <b>{school_class.name}</b>", styles["Normal"]),
+                Paragraph(sec_label, styles["Normal"]),
+                Paragraph(f"Month: <b>{month_name} {year}</b>", styles["Normal"]),
+                Paragraph(f"Total Enrolled: <b>{total_students}</b>", styles["Normal"]),
+                Paragraph(f"Page: <b>{page_idx + 1} of {total_pages}</b>", styles["Normal"]),
+                Paragraph("Class Teacher: ________________", styles["Normal"]),
+            ]
+        ]
+        meta_col_widths = [
+            doc.width * 0.13,
+            doc.width * 0.11,
+            doc.width * 0.11,
+            doc.width * 0.17,
+            doc.width * 0.15,
+            doc.width * 0.11,
+            doc.width * 0.22,
+        ]
+        meta_table = Table(meta_data, colWidths=meta_col_widths)
+        meta_table.setStyle(
+            TableStyle([
+                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F8FAFC")),
+                ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#94A3B8")),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("TOPPADDING", (0, 0), (-1, -1), 1.0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 1.0),
+                ("LEFTPADDING", (0, 0), (-1, -1), 2),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 2),
+                ("FONTSIZE", (0, 0), (-1, -1), 7.5),
+            ])
+        )
+        page_flowables.append(meta_table)
+        page_flowables.append(Spacer(1, 0.8 * mm))
+
+        # 3. Grid Table
+        row1 = ["#", "Adm", "Student Name"]
+        for d in range(1, num_days + 1):
+            row1.append(str(d))
+        row1.extend(["P", "A", "Remarks"])
+
+        row2 = ["", "", ""]
+        for d in range(1, num_days + 1):
+            weekday = calendar.weekday(year, month, d)
+            row2.append(day_abbrs[weekday])
+        row2.extend(["", "", ""])
+
+        grid_data = [row1, row2]
+
+        for idx_rel, s in enumerate(chunk, start=start_idx + 1):
+            roll_text = str(idx_rel)
+            adm_text = sanitize_display_admission_no(s.admission_no or s.legacy_sid or "")
+            name_text = s.full_name[:24] if s.full_name else ""
+            row = [roll_text, adm_text, name_text]
+            for _ in range(num_days):
+                row.append("")
+            row.extend(["", "", ""])
+            grid_data.append(row)
+
+        table_styles = [
+            ("BACKGROUND", (0, 0), (-1, 1), colors.HexColor("#1E3A8A")),
+            ("TEXTCOLOR", (0, 0), (-1, 1), colors.whitesmoke),
+            ("ALIGN", (0, 0), (-1, 1), "CENTER"),
+            ("ALIGN", (0, 2), (1, -1), "CENTER"),  # Roll & Adm centered
+            ("ALIGN", (2, 2), (2, -1), "LEFT"),    # Student name left-aligned
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#475569")),
+            ("BOX", (0, 0), (-1, -1), 1.0, colors.HexColor("#0F172A")),
+            ("LINEBELOW", (0, 1), (-1, 1), 1.0, colors.HexColor("#0F172A")),
+            ("LINEAFTER", (2, 0), (2, -1), 1.0, colors.HexColor("#0F172A")),
+            ("LINEBEFORE", (-3, 0), (-3, -1), 1.0, colors.HexColor("#0F172A")),
+            ("BACKGROUND", (-3, 2), (-3, -1), colors.HexColor("#F1F5F9")),
+            ("BACKGROUND", (-2, 2), (-2, -1), colors.HexColor("#F8FAFC")),
+            ("FONTSIZE", (0, 0), (-1, 0), header_font_size),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 1), (-1, 1), header_font_size - 1.5),
+            ("FONTNAME", (0, 1), (-1, 1), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 2), (1, -1), data_font_size),
+            ("FONTNAME", (0, 2), (1, -1), "Helvetica-Bold"),
+            ("FONTSIZE", (2, 2), (2, -1), name_font_size),
+            ("FONTNAME", (2, 2), (2, -1), "Helvetica-Bold"),
+            ("TOPPADDING", (0, 0), (-1, 1), 0.5),
+            ("BOTTOMPADDING", (0, 0), (-1, 1), 0.5),
+            ("TOPPADDING", (0, 2), (-1, -1), row_pad_v),
+            ("BOTTOMPADDING", (0, 2), (-1, -1), row_pad_v),
+            ("LEFTPADDING", (0, 0), (-1, -1), 1.0),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 1.0),
+        ]
+
+        # Highlight Sundays
+        for sun_day in sundays:
+            col_idx = 2 + sun_day
+            table_styles.append(("BACKGROUND", (col_idx, 2), (col_idx, -1), colors.HexColor("#FEE2E2")))
+            table_styles.append(("TEXTCOLOR", (col_idx, 0), (col_idx, 1), colors.HexColor("#FCA5A5")))
+
+        grid_table = Table(grid_data, colWidths=col_widths)
+        grid_table.setStyle(TableStyle(table_styles))
+        page_flowables.append(grid_table)
+        page_flowables.append(Spacer(1, 1.0 * mm))
+
+        # 4. Signatures block
+        sig_data = [
+            [
+                Paragraph("Class Teacher Signature<br/>______________________", styles["Normal"]),
+                Paragraph("Attendance In-charge<br/>______________________", styles["Normal"]),
+                Paragraph("Principal Signature<br/>______________________", styles["Normal"]),
+            ]
+        ]
+        sig_table = Table(sig_data, colWidths=[doc.width / 3] * 3)
+        sig_table.setStyle(
+            TableStyle([
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("FONTSIZE", (0, 0), (-1, -1), 7.0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+            ])
+        )
+        page_flowables.append(sig_table)
+
+        story.append(KeepTogether(page_flowables))
+        if page_idx < total_pages - 1:
+            story.append(PageBreak())
 
     doc.build(story)
     buffer.seek(0)
     return buffer.getvalue()
+
+
+
+def build_fee_register_pdf(rows, totals, filters_info, school_profile=None):
+    """
+    Builds the official Monthly Fee Register PDF in landscape A4 format.
+    """
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=landscape(A4),
+        leftMargin=8 * mm,
+        rightMargin=8 * mm,
+        topMargin=8 * mm,
+        bottomMargin=8 * mm,
+        title=f"Fee Register - {filters_info.get('class_name', '')}",
+    )
+    styles = getSampleStyleSheet()
+    story = []
+
+    # Palette
+    brand_dark = colors.HexColor("#0f172a")  # Slate 900
+    brand_blue = colors.HexColor("#1e3a8a")  # Blue 900
+    slate_600 = colors.HexColor("#475569")
+    slate_200 = colors.HexColor("#e2e8f0")
+    slate_50 = colors.HexColor("#f8fafc")
+    green_bg = colors.HexColor("#ecfdf5")
+    green_text = colors.HexColor("#065f46")
+    red_text = colors.HexColor("#b91c1c")
+
+    # Header
+    school_name = "THAKUR HARIKESH PRATAP SINGH INTERMEDIATE COLLEGE"
+    school_sub = "Dudahi, Kushinagar (UP) - 274302 | UDISE: 09570806404"
+    if school_profile:
+        school_name = getattr(school_profile, "name", school_name)
+        school_sub = f"{getattr(school_profile, 'address', '')} | Phone: {getattr(school_profile, 'phone', '')}"
+
+    title_p = Paragraph(f"<b>{school_name}</b>", ParagraphStyle("FRTitle", fontSize=13, leading=15, textColor=brand_blue, alignment=1))
+    sub_p = Paragraph(f"<font color='#475569' size=8>{school_sub}</font>", ParagraphStyle("FRSub", alignment=1))
+    badge_p = Paragraph("<b>MONTHLY FEE & DUES REGISTER (मासिक शुल्क एवं बकाया पंजिका)</b>", ParagraphStyle("FRBadge", fontSize=10, leading=12, textColor=brand_dark, alignment=1))
+
+    story.extend([title_p, Spacer(1, 1 * mm), sub_p, Spacer(1, 1.5 * mm), badge_p, Spacer(1, 2 * mm)])
+
+    # Filter metadata strip
+    cls_name = filters_info.get("class_name", "All Classes")
+    sec_name = filters_info.get("section_name", "All Sections")
+    m_name = filters_info.get("through_month", "Current Month")
+    gen_time = timezone.localtime().strftime("%d-%m-%Y %I:%M %p")
+
+    meta_text = f"<b>Class:</b> {cls_name} &nbsp;&bull;&nbsp; <b>Section:</b> {sec_name} &nbsp;&bull;&nbsp; <b>Up to Month:</b> {m_name} &nbsp;&bull;&nbsp; <b>Generated:</b> {gen_time} &nbsp;&bull;&nbsp; <b>Total Students:</b> {totals.get('count', len(rows))}"
+    meta_table = Table([[Paragraph(meta_text, ParagraphStyle("FRMeta", fontSize=8.5, textColor=brand_dark))]], colWidths=[281 * mm])
+    meta_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#eff6ff")),
+        ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#bfdbfe")),
+        ("TOPPADDING", (0, 0), (-1, -1), 2), ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+        ("LEFTPADDING", (0, 0), (-1, -1), 4),
+    ]))
+    story.extend([meta_table, Spacer(1, 2.5 * mm)])
+
+    # Columns: SN (10), Roll (12), SID (16), Name (50), Father (45), Opening (24), Demand (22), Paid (24), Concession (22), Final Due (26), Status (30) = 281 mm
+    col_widths = [10 * mm, 12 * mm, 16 * mm, 50 * mm, 45 * mm, 24 * mm, 22 * mm, 24 * mm, 22 * mm, 26 * mm, 30 * mm]
+
+    hdr_style = ParagraphStyle("FRHdr", fontName="Helvetica-Bold", fontSize=7.5, textColor=colors.white, alignment=1)
+    hdr_style_l = ParagraphStyle("FRHdrL", fontName="Helvetica-Bold", fontSize=7.5, textColor=colors.white, alignment=0)
+    hdr_style_r = ParagraphStyle("FRHdrR", fontName="Helvetica-Bold", fontSize=7.5, textColor=colors.white, alignment=2)
+
+    headers = [
+        Paragraph("S.N.", hdr_style),
+        Paragraph("Roll", hdr_style),
+        Paragraph("SID", hdr_style),
+        Paragraph("Student Name", hdr_style_l),
+        Paragraph("Father Name", hdr_style_l),
+        Paragraph("Opening (₹)", hdr_style_r),
+        Paragraph("Demand (₹)", hdr_style_r),
+        Paragraph("Paid (₹)", hdr_style_r),
+        Paragraph("Conc. (₹)", hdr_style_r),
+        Paragraph("Due Balance (₹)", hdr_style_r),
+        Paragraph("Status", hdr_style),
+    ]
+
+    table_data = [headers]
+
+    cell_c = ParagraphStyle("FRCellC", fontSize=7.2, textColor=brand_dark, alignment=1)
+    cell_l = ParagraphStyle("FRCellL", fontSize=7.2, textColor=brand_dark, alignment=0)
+    cell_r = ParagraphStyle("FRCellR", fontSize=7.2, textColor=brand_dark, alignment=2)
+
+    for idx, r in enumerate(rows, 1):
+        is_paid = (r.get("final_due", Decimal("0.00")) <= 0)
+        st_text = "PAID (पूर्ण भुगतान)" if is_paid else f"DUE ₹{r.get('final_due', 0):,.0f}"
+        st_style = ParagraphStyle("FRStP", parent=cell_c, fontName="Helvetica-Bold", textColor=green_text) if is_paid else ParagraphStyle("FRStD", parent=cell_c, fontName="Helvetica-Bold", textColor=red_text)
+
+        op_str = f"{r.get('opening_due', 0):,.2f}"
+        dem_str = f"{r.get('demand', 0):,.2f}"
+        pd_str = f"{r.get('paid', 0):,.2f}"
+        cn_str = f"{r.get('concession', 0):,.2f}"
+        due_str = f"{r.get('final_due', 0):,.2f}"
+
+        table_data.append([
+            Paragraph(str(idx), cell_c),
+            Paragraph(str(r.get("roll_no") or "—"), cell_c),
+            Paragraph(str(r.get("sid", "")), cell_c),
+            Paragraph(f"<b>{r.get('name', '')}</b>", cell_l),
+            Paragraph(r.get("father_name", ""), cell_l),
+            Paragraph(op_str, cell_r),
+            Paragraph(dem_str, cell_r),
+            Paragraph(pd_str, cell_r),
+            Paragraph(cn_str, cell_r),
+            Paragraph(f"<b>{due_str}</b>", cell_r),
+            Paragraph(st_text, st_style),
+        ])
+
+    # Totals row
+    tot_op = f"{totals.get('opening_due', Decimal('0.00')):,.2f}"
+    tot_dem = f"{totals.get('demand', Decimal('0.00')):,.2f}"
+    tot_pd = f"{totals.get('paid', Decimal('0.00')):,.2f}"
+    tot_cn = f"{totals.get('concession', Decimal('0.00')):,.2f}"
+    tot_due = f"{totals.get('due', Decimal('0.00')):,.2f}"
+
+    tot_style_l = ParagraphStyle("FRTotL", fontName="Helvetica-Bold", fontSize=8.0, textColor=brand_blue, alignment=0)
+    tot_style_r = ParagraphStyle("FRTotR", fontName="Helvetica-Bold", fontSize=8.0, textColor=brand_blue, alignment=2)
+
+    table_data.append([
+        Paragraph("", cell_c),
+        Paragraph("", cell_c),
+        Paragraph("", cell_c),
+        Paragraph("TOTAL (GRAND SUMMARY)", tot_style_l),
+        Paragraph("", cell_l),
+        Paragraph(tot_op, tot_style_r),
+        Paragraph(tot_dem, tot_style_r),
+        Paragraph(tot_pd, tot_style_r),
+        Paragraph(tot_cn, tot_style_r),
+        Paragraph(f"<b>{tot_due}</b>", ParagraphStyle("FRTotDue", parent=tot_style_r, textColor=red_text)),
+        Paragraph(f"Col: {totals.get('collection_pct', 0)}%", ParagraphStyle("FRTotCol", parent=cell_c, fontName="Helvetica-Bold", textColor=brand_blue)),
+    ])
+
+    reg_table = Table(table_data, colWidths=col_widths, repeatRows=1)
+    n_rows = len(table_data)
+
+    ts = [
+        ("BACKGROUND", (0, 0), (-1, 0), brand_blue),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("INNERGRID", (0, 0), (-1, -2), 0.3, colors.HexColor("#CBD5E1")),
+        ("BOX", (0, 0), (-1, -1), 0.6, colors.HexColor("#1E293B")),
+        ("TOPPADDING", (0, 0), (-1, -1), 1.2),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 1.2),
+        ("BACKGROUND", (0, n_rows - 1), (-1, n_rows - 1), colors.HexColor("#e0f2fe")),
+        ("LINEABOVE", (0, n_rows - 1), (-1, n_rows - 1), 1.0, brand_blue),
+    ]
+    for r in range(1, n_rows - 1):
+        if r % 2 == 0:
+            ts.append(("BACKGROUND", (0, r), (-1, r), slate_50))
+
+    reg_table.setStyle(TableStyle(ts))
+    story.append(reg_table)
+    story.append(Spacer(1, 4 * mm))
+
+    # Signatures
+    sig_data = [
+        [
+            Paragraph("Prepared By (Operator)<br/><br/>______________________", ParagraphStyle("FRSig1", alignment=1, fontSize=8, textColor=slate_600)),
+            Paragraph("Checked By (Fee In-charge)<br/><br/>______________________", ParagraphStyle("FRSig2", alignment=1, fontSize=8, textColor=slate_600)),
+            Paragraph("Principal (Seal & Signature)<br/><br/>______________________", ParagraphStyle("FRSig3", alignment=1, fontSize=8, textColor=slate_600)),
+        ]
+    ]
+    sig_table = Table(sig_data, colWidths=[93 * mm, 93 * mm, 93 * mm])
+    sig_table.setStyle(TableStyle([
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+    ]))
+    story.append(sig_table)
+
+    def draw_footer(canvas, doc):
+        canvas.saveState()
+        canvas.setFont("Helvetica", 6.5)
+        canvas.setFillColor(slate_600)
+        page_str = f"Page {doc.page} | THPSIC SchoolSoft Fee Register"
+        canvas.drawRightString(281 * mm - 8 * mm, 4 * mm, page_str)
+        canvas.restoreState()
+
+    doc.build(story, onFirstPage=draw_footer, onLaterPages=draw_footer)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+# ── ID Card Issue List & Register PDF (A4 Landscape) ───────────────────────────
+
+def build_id_card_issue_list_pdf(groups_data, mode="collection", school_profile=None):
+    """
+    Builds professional A4 Landscape ID Card Issue List / Data Collection Sheet.
+    mode: 'collection' (Mode A - blank boxes for missing data) | 'register' (Mode B - signature distribution register)
+    """
+    buffer = BytesIO()
+
+    page_w, page_h = landscape(A4) # 297 x 210 mm
+    left_m = 7 * mm
+    right_m = 7 * mm
+    top_m = 8 * mm
+    bot_m = 8 * mm
+
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=landscape(A4),
+        leftMargin=left_m,
+        rightMargin=right_m,
+        topMargin=top_m,
+        bottomMargin=bot_m,
+        title="Student ID Card Issue List & Register",
+    )
+
+    story = []
+
+    school_name = "THAKUR HARIKESH PRATAP SINGH INTERMEDIATE COLLEGE"
+    school_addr = "DUDAHI, KUSHINAGAR (U.P.) — 274302"
+    if school_profile:
+        school_name = school_profile.name.upper() if school_profile.name else school_name
+        school_addr = school_profile.address if school_profile.address else school_addr
+
+    mode_title = "STUDENT ID CARD DATA COLLECTION SHEET" if mode == "collection" else "STUDENT ID CARD ISSUE & DISTRIBUTION REGISTER"
+    mode_sub = "Please verify details & fill missing blank boxes" if mode == "collection" else "Official Record of Printed Cards & Guardian/Student Signatures"
+
+    c_primary = colors.HexColor("#0D3B13")
+    c_secondary = colors.HexColor("#1B5E20")
+    c_border = colors.HexColor("#CBD5E1")
+    c_alt_row = colors.HexColor("#F8FAFC")
+
+    # Column Widths Allocation for 283mm total width:
+    col_widths = [10*mm, 18*mm, 18*mm, 32*mm, 28*mm, 32*mm, 28*mm, 18*mm, 16*mm, 24*mm, 13*mm, 16*mm, 30*mm]
+
+    grand_s_no = 1
+
+    for group_idx, group in enumerate(groups_data):
+        group_name = group["group_name"]
+        students = group["students"]
+        total_students = len(students)
+        boys_cnt = sum(1 for s in students if getattr(s, "gender", "") == "M")
+        girls_cnt = sum(1 for s in students if getattr(s, "gender", "") == "F")
+
+        # Group Header Banner
+        header_table_data = [
+            [
+                Paragraph(f"<b>{school_name}</b><br/><font size='6' color='#475569'>{school_addr}</font>", ParagraphStyle('H1_IL', fontName='Helvetica-Bold', fontSize=9.5, leading=11, textColor=c_primary, alignment=0)),
+                Paragraph(f"<b>{mode_title}</b><br/><font size='6' color='#15803D'>{mode_sub}</font>", ParagraphStyle('H2_IL', fontName='Helvetica-Bold', fontSize=8.5, leading=10, textColor=c_primary, alignment=1)),
+                Paragraph(f"<b>SESSION 2026-27</b><br/><font size='6.5' color='#64748B'>CR80 Standard (54×85.6mm)</font>", ParagraphStyle('H3_IL', fontName='Helvetica-Bold', fontSize=8.5, leading=10, textColor=c_primary, alignment=2)),
+            ]
+        ]
+        t_top = Table(header_table_data, colWidths=[100*mm, 123*mm, 60*mm])
+        t_top.setStyle(TableStyle([
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 2),
+            ('TOPPADDING', (0,0), (-1,-1), 0),
+            ('LEFTPADDING', (0,0), (-1,-1), 0),
+            ('RIGHTPADDING', (0,0), (-1,-1), 0),
+        ]))
+        story.append(t_top)
+        story.append(Spacer(1, 1.5*mm))
+
+        # Group Category Subheading
+        grp_sub_data = [
+            [
+                Paragraph(f"<b>GROUP:</b> {group_name.upper()}", ParagraphStyle('GS1_IL', fontName='Helvetica-Bold', fontSize=8, textColor=colors.white)),
+                Paragraph(f"<b>BOYS:</b> {boys_cnt} &nbsp;|&nbsp; <b>GIRLS:</b> {girls_cnt} &nbsp;|&nbsp; <b>TOTAL STUDENTS:</b> {total_students}", ParagraphStyle('GS2_IL', fontName='Helvetica-Bold', fontSize=8, textColor=colors.white, alignment=2)),
+            ]
+        ]
+        t_grp = Table(grp_sub_data, colWidths=[160*mm, 123*mm])
+        t_grp.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,-1), c_primary),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('TOPPADDING', (0,0), (-1,-1), 2),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 2),
+            ('LEFTPADDING', (0,0), (-1,-1), 4),
+            ('RIGHTPADDING', (0,0), (-1,-1), 4),
+        ]))
+        story.append(t_grp)
+
+        # Table Column Headers
+        headers = [
+            Paragraph("<b>S.No</b><br/><font size='5.5'>#</font>", ParagraphStyle('TH_IL', fontName='Helvetica-Bold', fontSize=7.0, leading=8.0, alignment=1, textColor=colors.white)),
+            Paragraph("<b>Board Sr</b><br/><font size='5.5'>Scholar No</font>", ParagraphStyle('TH_IL', fontName='Helvetica-Bold', fontSize=7.0, leading=8.0, alignment=1, textColor=colors.white)),
+            Paragraph("<b>Adm / SID</b><br/><font size='5.5'>ID Number</font>", ParagraphStyle('TH_IL', fontName='Helvetica-Bold', fontSize=7.0, leading=8.0, alignment=1, textColor=colors.white)),
+            Paragraph("<b>Student Name</b><br/><font size='5.5'>English Name</font>", ParagraphStyle('TH_IL', fontName='Helvetica-Bold', fontSize=7.0, leading=8.0, alignment=0, textColor=colors.white)),
+            Paragraph("<b>Hindi Name</b><br/><font size='5.5'>Devanagari</font>", ParagraphStyle('TH_IL', fontName='Helvetica-Bold', fontSize=7.0, leading=8.0, alignment=0, textColor=colors.white)),
+            Paragraph("<b>Father's Name</b><br/><font size='5.5'>Parent Details</font>", ParagraphStyle('TH_IL', fontName='Helvetica-Bold', fontSize=7.0, leading=8.0, alignment=0, textColor=colors.white)),
+            Paragraph("<b>Mother's Name</b><br/><font size='5.5'>Parent Details</font>", ParagraphStyle('TH_IL', fontName='Helvetica-Bold', fontSize=7.0, leading=8.0, alignment=0, textColor=colors.white)),
+            Paragraph("<b>D.O.B.</b><br/><font size='5.5'>DD/MM/YYYY</font>", ParagraphStyle('TH_IL', fontName='Helvetica-Bold', fontSize=7.0, leading=8.0, alignment=1, textColor=colors.white)),
+            Paragraph("<b>Class-Sec</b><br/><font size='5.5'>Standard</font>", ParagraphStyle('TH_IL', fontName='Helvetica-Bold', fontSize=7.0, leading=8.0, alignment=1, textColor=colors.white)),
+            Paragraph("<b>Mobile No.</b><br/><font size='5.5'>Primary</font>", ParagraphStyle('TH_IL', fontName='Helvetica-Bold', fontSize=7.0, leading=8.0, alignment=1, textColor=colors.white)),
+            Paragraph("<b>Blood</b><br/><font size='5.5'>Group</font>", ParagraphStyle('TH_IL', fontName='Helvetica-Bold', fontSize=7.0, leading=8.0, alignment=1, textColor=colors.white)),
+            Paragraph("<b>Photo</b><br/><font size='5.5'>Status</font>", ParagraphStyle('TH_IL', fontName='Helvetica-Bold', fontSize=7.0, leading=8.0, alignment=1, textColor=colors.white)),
+            Paragraph("<b>Signature / Recv</b><br/><font size='5.5'>Sign Here</font>", ParagraphStyle('TH_IL', fontName='Helvetica-Bold', fontSize=7.0, leading=8.0, alignment=1, textColor=colors.white)),
+        ]
+
+        table_rows = [headers]
+        row_styles = [
+            ('BACKGROUND', (0,0), (-1,0), c_secondary),
+            ('ALIGN', (0,0), (-1,0), 'CENTER'),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('GRID', (0,0), (-1,-1), 0.35, c_border),
+            ('TOPPADDING', (0,0), (-1,-1), 2),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 2),
+            ('LEFTPADDING', (0,0), (-1,-1), 2),
+            ('RIGHTPADDING', (0,0), (-1,-1), 2),
+        ]
+
+        for s_idx, stu in enumerate(students, start=1):
+            sid_val = stu.legacy_sid or stu.id
+            adm_val = stu.admission_no or sid_val
+            board_sr_val = (stu.board_sr_number or "").strip()
+            
+            # Name EN
+            name_en = stu.full_name.upper()
+            
+            # Name HI
+            hi_val = getattr(stu, "full_name_hindi", "") or getattr(stu, "name_hindi", "") or ""
+            
+            fath_val = (stu.father_name or "").upper()
+            moth_val = (stu.mother_name or "").upper()
+            dob_val = stu.date_of_birth.strftime("%d/%m/%Y") if stu.date_of_birth else ""
+            
+            cls_name = stu.current_class.name if stu.current_class else ""
+            sec_name = stu.current_section.name if stu.current_section else ""
+            cls_sec_val = f"{cls_name}-{sec_name}" if sec_name else cls_name
+            
+            mob_val = stu.mobile_primary or ""
+            bg_val = stu.blood_group or ""
+            has_photo = bool(stu.photo and hasattr(stu.photo, "name") and stu.photo.name)
+
+            cell_s_no = Paragraph(f"<font size='6.5'><b>{s_idx}</b><br/><font color='#94a3b8'>#{grand_s_no}</font></font>", ParagraphStyle('C_SNO_IL', alignment=1, leading=7.5))
+            
+            # Board Sr (Student.board_sr_number only)
+            if board_sr_val:
+                cell_bsr = Paragraph(f"<font size='6.5'><b>{board_sr_val}</b></font>", ParagraphStyle('C_BSR_IL', alignment=1))
+            elif mode == "collection":
+                cell_bsr = Paragraph("<font size='5.5' color='#94A3B8'>[ &nbsp; &nbsp; &nbsp; &nbsp; ]</font>", ParagraphStyle('C_BLANK_IL', alignment=1))
+            else:
+                cell_bsr = Paragraph("<font size='6.5' color='#94A3B8'>—</font>", ParagraphStyle('C_DASH_IL', alignment=1))
+            
+            # Adm / SID
+            cell_adm = Paragraph(f"<font size='6.5'><b>{adm_val}</b><br/><font size='5.5' color='#64748B'>SID:{sid_val}</font></font>", ParagraphStyle('C_ADM_IL', alignment=1, leading=7.5))
+            
+            # Name EN
+            cell_name_en = Paragraph(f"<font size='6.5'><b>{name_en}</b></font>", ParagraphStyle('C_NEN_IL', fontName='Helvetica-Bold', leading=7.5))
+            
+            # Name HI (Devanagari Flowable)
+            if hi_val:
+                cell_name_hi = _devanagari_flowable(hi_val, 6.2, bold=True, align=0, color=(27, 94, 32, 255))
+            else:
+                cell_name_hi = Paragraph("<font size='5.5' color='#DC2626'>[ हिंदी नाम लिखें ]</font>", ParagraphStyle('C_HBLANK_IL', alignment=0))
+            
+            # Father & Mother
+            cell_fath = Paragraph(f"<font size='6.2'>{fath_val or '<font color=\"#94A3B8\">—</font>'}</font>", ParagraphStyle('C_FAT_IL', leading=7.5))
+            cell_moth = Paragraph(f"<font size='6.2'>{moth_val or '<font color=\"#94A3B8\">—</font>'}</font>", ParagraphStyle('C_MOT_IL', leading=7.5))
+            
+            # DOB
+            cell_dob = Paragraph(f"<font size='6.2'>{dob_val or '<font color=\"#DC2626\">[ &nbsp; / &nbsp; / &nbsp; ]</font>'}</font>", ParagraphStyle('C_DOB_IL', alignment=1))
+            
+            # Class-Sec
+            cell_cls = Paragraph(f"<font size='6.5'><b>{cls_sec_val}</b></font>", ParagraphStyle('C_CLS_IL', alignment=1))
+            
+            # Mobile
+            cell_mob = Paragraph(f"<font size='6.2' face='Courier'>{mob_val or '<font color=\"#DC2626\">[ &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ]</font>'}</font>", ParagraphStyle('C_MOB_IL', alignment=1))
+            
+            # Blood
+            if bg_val:
+                cell_bg = Paragraph(f"<font size='6.5' color='#DC2626'><b>{bg_val}</b></font>", ParagraphStyle('C_BG_IL', alignment=1))
+            else:
+                cell_bg = Paragraph("<font size='5.5' color='#94A3B8'>[ &nbsp; ]</font>", ParagraphStyle('C_BGBLANK_IL', alignment=1))
+            
+            # Photo status
+            if has_photo:
+                cell_photo = Paragraph("<font size='6' color='#16A34A'><b>📷 READY</b></font>", ParagraphStyle('C_PH_IL', alignment=1))
+            else:
+                cell_photo = Paragraph("<font size='5.5' color='#D97706'><b>[ 🔲 PASTE ]</b></font>", ParagraphStyle('C_PHMISS_IL', alignment=1))
+            
+            # Signature / Recv
+            cell_sign = Paragraph("<font size='5.5' color='#94A3B8'>________________</font>", ParagraphStyle('C_SIGN_IL', alignment=1))
+
+            row_data = [
+                cell_s_no, cell_bsr, cell_adm, cell_name_en, cell_name_hi,
+                cell_fath, cell_moth, cell_dob, cell_cls, cell_mob, cell_bg, cell_photo, cell_sign
+            ]
+            table_rows.append(row_data)
+
+            if s_idx % 2 == 0:
+                row_styles.append(('BACKGROUND', (0, s_idx), (-1, s_idx), c_alt_row))
+
+            grand_s_no += 1
+
+        t_data = Table(table_rows, colWidths=col_widths, repeatRows=1)
+        t_data.setStyle(TableStyle(row_styles))
+        story.append(t_data)
+
+        if group_idx < len(groups_data) - 1:
+            story.append(PageBreak())
+
+    def draw_footer_il(canvas, d):
+        canvas.saveState()
+        canvas.setFont("Helvetica", 6.5)
+        canvas.setFillColor(colors.HexColor("#64748B"))
+        page_str = f"Page {d.page} | THPSIC SchoolSoft Student ID Card Register"
+        canvas.drawRightString(297 * mm - 8 * mm, 4 * mm, page_str)
+        canvas.restoreState()
+
+    doc.build(story, onFirstPage=draw_footer_il, onLaterPages=draw_footer_il)
+    buffer.seek(0)
+    return buffer.getvalue()
+

@@ -1,40 +1,73 @@
 {% extends "base.html" %}
 
-{% block title %}Marksheet | SchoolSoft Modernization{% endblock %}
+{% block title %}Marksheet | THPSIC SchoolSoft{% endblock %}
 
 {% block content %}
-<section class="section">
-    <div class="section-heading with-actions">
+<section class="section" style="max-width: 850px; margin: 0 auto;">
+    <div class="section-heading with-actions" style="margin-bottom: 1.5rem;">
         <div>
-            <h2>Marksheet - {{ student.full_name }}</h2>
-            <p>SID {{ student.legacy_sid|default:"-" }} | Admission No. {{ student.admission_no|default:"-" }}</p>
+            <h2>Marksheet & Progress Report</h2>
+            <p>Student: <b>{{ student.full_name }}</b> {% if student.full_name_hindi %}({{ student.full_name_hindi }}){% endif %} &bull; Class {{ student.current_class.name }} - Sec {{ student.current_section.name }}</p>
         </div>
-        <a class="button secondary" href="{% url 'core:student_detail' student.pk %}">Back</a>
+        <div class="action-row" style="display: flex; gap: 0.5rem;">
+            <a class="button secondary" href="{% url 'core:student_detail' student.pk %}">← Student Profile</a>
+            <a class="button secondary" href="{% url 'core:marks_entry' %}?class_id={{ student.current_class.pk }}&section_id={{ student.current_section.pk }}">📝 Marks Entry</a>
+        </div>
+    </div>
+
+    <!-- Student Quick Header Box -->
+    <div style="background: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+        <div>
+            <div style="font-weight: 700; font-size: 1.1rem; color: #1E293B;">{{ student.full_name }}</div>
+            <div style="font-size: 0.88rem; color: #64748B;">
+                SID: <b>{{ student.legacy_sid }}</b> &bull; Adm No: <b>{{ student.admission_no|default:"—" }}</b> &bull; Roll No: <b>{{ student.roll_no|default:"—" }}</b>
+            </div>
+        </div>
+        <div>
+            <span class="badge" style="background: #E0E7FF; color: #3730A3; font-weight: 700; padding: 0.4rem 0.8rem; border-radius: 6px;">
+                Class {{ student.current_class.name }} (Section {{ student.current_section.name }})
+            </span>
+        </div>
     </div>
 
     {% if terms %}
-        <div class="table-wrap">
-            <table>
+        <div class="table-wrap" style="border: 1px solid var(--border); border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+            <table style="width: 100%; border-collapse: collapse;">
                 <thead>
-                    <tr>
-                        <th>Session</th>
-                        <th>Term</th>
-                        <th></th>
+                    <tr style="background: #1E293B; color: #FFFFFF; font-size: 0.85rem; text-transform: uppercase;">
+                        <th style="padding: 0.75rem 1rem; text-align: left;">Session</th>
+                        <th style="padding: 0.75rem 1rem; text-align: left;">Examination Term</th>
+                        <th style="padding: 0.75rem 1rem; text-align: center; width: 260px;">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for term in terms %}
-                        <tr>
-                            <td>{{ term.session.name }}</td>
-                            <td>{{ term.name }}</td>
-                            <td><a class="button" href="{% url 'core:marksheet_pdf' student.pk term.pk %}">Download PDF</a></td>
+                        <tr style="border-bottom: 1px solid var(--border); background: {% cycle '#FFFFFF' '#F8FAFC' %};">
+                            <td style="padding: 0.75rem 1rem; font-weight: 600; color: #1E293B;">{{ term.session.name }}</td>
+                            <td style="padding: 0.75rem 1rem; font-weight: 700; color: #1E3A8A;">{{ term.name }}</td>
+                            <td style="padding: 0.75rem 1rem; text-align: center; display: flex; gap: 0.5rem; justify-content: center;">
+                                <a class="button small" href="{% url 'core:marksheet_view' student.pk term.pk %}" style="background: #3B82F6; color: white;">
+                                    👁️ View Marksheet
+                                </a>
+                                <a class="button small secondary" href="{% url 'core:marksheet_pdf' student.pk term.pk %}" target="_blank">
+                                    🖨️ PDF Card
+                                </a>
+                            </td>
                         </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
     {% else %}
-        <p class="hint">No marks entered yet for this student. Add marks via Admin &rarr; Exam Marks first.</p>
+        <div style="background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 8px; padding: 2rem; text-align: center; color: #92400E;">
+            <div style="font-size: 1.25rem; font-weight: 700; margin-bottom: 0.5rem;">अंक प्रविष्टि उपलब्ध नहीं है (No Marks Entered Yet)</div>
+            <p style="font-size: 0.95rem; margin-bottom: 1.25rem; color: #78350F;">
+                इस छात्र के लिए किसी भी परीक्षा का अंक अभी दर्ज नहीं किया गया है।
+            </p>
+            <a class="button" href="{% url 'core:marks_entry' %}?class_id={{ student.current_class.pk }}&section_id={{ student.current_section.pk }}" style="background: #16A34A; color: white;">
+                📝 Open Marks Entry for Class {{ student.current_class.name }}
+            </a>
+        </div>
     {% endif %}
 </section>
 {% endblock %}

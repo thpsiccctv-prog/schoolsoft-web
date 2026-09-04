@@ -114,7 +114,7 @@
                             {{ receipt.display_student_name }}
                         </td>
                         <td data-label="Class" {% if receipt.is_cancelled %}style="text-decoration: line-through;"{% endif %}>{{ receipt.display_class_section }}</td>
-                        <td data-label="Month" {% if receipt.is_cancelled %}style="text-decoration: line-through;"{% endif %}>{{ receipt.from_month }}{% if receipt.to_month and receipt.to_month != receipt.from_month %} to {{ receipt.to_month }}{% endif %}</td>
+                        <td data-label="Month" {% if receipt.is_cancelled %}style="text-decoration: line-through;"{% endif %}>{{ receipt.display_month_range }}</td>
                         <td data-label="Paid" class="amount font-medium" {% if receipt.is_cancelled %}style="text-decoration: line-through;"{% endif %}>{{ receipt.received_amount|indian_number }}</td>
                         <td data-label="Due" class="amount{% if receipt.legacy_due_amount > 0 %} due-amount{% endif %}" {% if receipt.is_cancelled %}style="text-decoration: line-through;"{% endif %}>{{ receipt.legacy_due_amount|indian_number }}</td>
                         <td data-label="Action" class="text-right compact-actions" onclick="event.stopPropagation();">

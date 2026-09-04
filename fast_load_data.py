@@ -21,9 +21,37 @@ BATCH_PAUSE_SECONDS = float(os.environ.get("SCHOOLSOFT_SYNC_BATCH_PAUSE_SECONDS"
 # Keep parent rows before child rows when committing in small batches.  The
 # fixture is dumped app-by-app, so auth rows naturally appear after core rows,
 # but FeeReceipt rows can reference auth.User through edit/cancel audit fields.
+# Keep parent rows before child rows when committing in small batches.
+# Essential for PostgreSQL which enforces FK constraints at commit time.
 MODEL_LOAD_PRIORITY = {
     "auth.group": 10,
     "auth.user": 20,
+    "core.feederschool": 25,
+    "core.house": 25,
+    "core.academicsession": 25,
+    "core.schoolclass": 26,
+    "core.section": 27,
+    "core.schoolprofile": 28,
+    "core.feehead": 29,
+    "core.accountgroup": 30,
+    "core.ledgeraccount": 31,
+    "core.staff": 32,
+    "core.subject": 33,
+    "core.examterm": 34,
+    "core.examtest": 35,
+    "core.student": 40,
+    "core.feestructure": 45,
+    "core.studentopeningbalance": 50,
+    "core.studentfeewaiver": 50,
+    "core.studentconcession": 50,
+    "core.feereceipt": 60,
+    "core.feereceiptline": 70,
+    "core.salarypayment": 80,
+    "core.salarypaymentauditlog": 85,
+    "core.vouchercounter": 90,
+    "core.voucher": 92,
+    "core.exammark": 95,
+    "core.legacyimportbatch": 100,
 }
 
 
@@ -167,30 +195,49 @@ def bulk_insert(deserialized):
             m2m_rows.append(item)
 
     inserted = 0
+    # Dynamic topological sort based on FK dependencies to guarantee parent before child on PostgreSQL
+    from collections import deque
+    present_models = list(grouped.keys())
+    adj = {m: set() for m in present_models}
+    in_degree = {m: 0 for m in present_models}
+    for m in present_models:
+        for f in m._meta.fields:
+            if f.is_relation and f.related_model in present_models and f.related_model != m:
+                if m not in adj[f.related_model]:
+                    adj[f.related_model].add(m)
+                    in_degree[m] += 1
+
+    queue = deque([m for m in present_models if in_degree[m] == 0])
+    ordered_models = []
+    while queue:
+        curr = queue.popleft()
+        ordered_models.append(curr)
+        for neighbor in adj[curr]:
+            in_degree[neighbor] -= 1
+            if in_degree[neighbor] == 0:
+                queue.append(neighbor)
+
+    for m in present_models:
+        if m not in ordered_models:
+            ordered_models.append(m)
+
+    ordered_groups = [(m, grouped[m]) for m in ordered_models]
+
     loaded_models = []
-    with connection.constraint_checks_disabled():
-        ordered_groups = [
-            item
-            for item in sorted(
-                grouped.items(),
-                key=lambda item: MODEL_LOAD_PRIORITY.get(item[0]._meta.label_lower, 100),
-            )
-        ]
+    for model, objects in ordered_groups:
+        loaded_models.append(model)
+        model_name = model._meta.label
+        for batch in batched(objects, BATCH_SIZE):
+            bulk_create_batch(model, batch, model_name)
+            inserted += len(batch)
+            print(f"    {model_name}: {inserted} total objects inserted")
 
-        for model, objects in ordered_groups:
-            loaded_models.append(model)
-            model_name = model._meta.label
-            for batch in batched(objects, BATCH_SIZE):
-                bulk_create_batch(model, batch, model_name)
-                inserted += len(batch)
-                print(f"    {model_name}: {inserted} total objects inserted")
-
-        # Most SchoolSoft fixture models have no M2M data, but auth.User can.
-        for item in m2m_rows:
-            obj = item.object
-            for field_name, values in item.m2m_data.items():
-                with transaction.atomic():
-                    getattr(obj, field_name).set(values)
+    # Most SchoolSoft fixture models have no M2M data, but auth.User can.
+    for item in m2m_rows:
+        obj = item.object
+        for field_name, values in item.m2m_data.items():
+            with transaction.atomic():
+                getattr(obj, field_name).set(values)
 
     print("[4/5] Constraints check ho raha hai...")
     connection.check_constraints()

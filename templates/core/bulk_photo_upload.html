@@ -1,0 +1,801 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Bulk Student Photo Upload & Matching | SchoolSoft{% endblock %}
+
+{% block extra_head %}
+<style>
+  .photo-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+  .photo-kpi-card {
+    background: #ffffff;
+    padding: 1.1rem;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+  .photo-kpi-label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .photo-kpi-val {
+    font-size: 1.7rem;
+    font-weight: 700;
+    margin-top: 0.2rem;
+    color: #0f172a;
+  }
+  .photo-kpi-sub {
+    font-size: 0.72rem;
+    color: #64748b;
+    margin-top: 0.2rem;
+  }
+  .drop-zone {
+    border: 2px dashed #0d3b13;
+    background: #f8fafc;
+    border-radius: 12px;
+    padding: 2.2rem 1.5rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .drop-zone:hover, .drop-zone.dragover {
+    background: #f0fdf4;
+    border-color: #15803d;
+  }
+  .badge-status {
+    padding: 0.25rem 0.6rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    border-radius: 12px;
+    display: inline-block;
+  }
+  .badge-matched-new { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+  .badge-matched-replace { background: #ffedd5; color: #9a3412; border: 1px solid #fed7aa; }
+  .badge-ambiguous { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+  .badge-no-match { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+  .badge-invalid { background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
+
+  .thumb-preview {
+    width: 44px;
+    height: 55px;
+    object-fit: cover;
+    border-radius: 4px;
+    border: 1px solid #cbd5e1;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+    background: #e2e8f0;
+    display: block;
+    margin: 0 auto;
+  }
+  .table-responsive-box {
+    max-height: 520px;
+    overflow-y: auto;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    background: #ffffff;
+  }
+  .native-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+  }
+  .native-table th {
+    position: sticky;
+    top: 0;
+    background: #0d3b13;
+    color: #ffffff;
+    padding: 0.65rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    z-index: 10;
+  }
+  .native-table td {
+    padding: 0.55rem 0.75rem;
+    border-bottom: 1px solid #f1f5f9;
+    vertical-align: middle;
+  }
+  .native-table tr:hover {
+    background: #f8fafc;
+  }
+  .btn-native-green {
+    background: #0d3b13;
+    color: #ffffff !important;
+    font-weight: 700;
+    padding: 0.65rem 1.4rem;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    text-decoration: none;
+  }
+  .btn-native-green:hover {
+    background: #14532d;
+  }
+  .btn-native-outline {
+    background: #ffffff;
+    color: #1e293b;
+    font-weight: 600;
+    padding: 0.4rem 0.85rem;
+    border-radius: 6px;
+    border: 1px solid #cbd5e1;
+    cursor: pointer;
+    font-size: 0.82rem;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+  .btn-native-outline:hover {
+    background: #f1f5f9;
+  }
+  .btn-native-outline.active {
+    background: #0d3b13;
+    color: #ffffff;
+    border-color: #0d3b13;
+  }
+
+  /* Sticky Bottom Action Bar */
+  .sticky-bottom-bar {
+    position: sticky;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: #ffffff;
+    padding: 0.85rem 1.5rem;
+    border-top: 2px solid #0d3b13;
+    box-shadow: 0 -4px 15px rgba(0,0,0,0.12);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+    z-index: 90;
+    margin-top: 1rem;
+    border-radius: 0 0 8px 8px;
+  }
+
+  /* Native Custom Modal */
+  .native-modal-backdrop {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(15, 23, 42, 0.65);
+    z-index: 99999;
+    align-items: center;
+    justify-content: center;
+  }
+  .native-modal-dialog {
+    background: #ffffff;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 580px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+    overflow: hidden;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-3 px-md-4 py-3">
+
+  <!-- Header Breadcrumb & Actions -->
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
+    <div>
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb mb-1 fs-7">
+          <li class="breadcrumb-item"><a href="{% url 'core:dashboard' %}">Dashboard</a></li>
+          <li class="breadcrumb-item"><a href="{% url 'core:student_list' %}">Students</a></li>
+          <li class="breadcrumb-item active">Bulk Photo Upload</li>
+        </ol>
+      </nav>
+      <h3 class="fw-bold mb-0 text-dark">
+        📸 Student Bulk Photo Upload & Matching Suite <span class="fs-6 text-muted fw-normal">(छात्र फ़ोटो बल्क अपलोड एवं मैपिंग)</span>
+      </h3>
+    </div>
+    <div class="d-flex gap-2 mt-2 mt-md-0">
+      <a href="{% url 'core:id_cards_dashboard' %}" class="btn btn-outline-success btn-sm fw-semibold">
+        🪪 ID Cards Dashboard
+      </a>
+      <a href="{% url 'core:id_card_issue_list_view' %}" class="btn btn-outline-secondary btn-sm fw-semibold">
+        📋 Issue Register
+      </a>
+      <a href="{% url 'core:bulk_photo_export_csv' %}" class="btn btn-outline-dark btn-sm fw-semibold">
+        📥 Export Photo Status CSV
+      </a>
+    </div>
+  </div>
+
+  <!-- KPI Summary Cards -->
+  <div class="photo-kpi-grid">
+    <div class="photo-kpi-card">
+      <div class="photo-kpi-label">Active Students</div>
+      <div class="photo-kpi-val">{{ total_active }}</div>
+      <div class="photo-kpi-sub">कुल सक्रिय छात्र</div>
+    </div>
+    <div class="photo-kpi-card">
+      <div class="photo-kpi-label">With Photos</div>
+      <div class="photo-kpi-val text-success">{{ with_photo }}</div>
+      <div class="photo-kpi-sub">{{ photo_coverage_pct }}% फ़ोटो उपलब्ध</div>
+    </div>
+    <div class="photo-kpi-card">
+      <div class="photo-kpi-label">Missing Photos</div>
+      <div class="photo-kpi-val text-danger">{{ missing_photo }}</div>
+      <div class="photo-kpi-sub">फ़ोटो शेष (ID कार्ड हेतु आवश्यक)</div>
+    </div>
+    <div class="photo-kpi-card">
+      <div class="photo-kpi-label">Supported Schema</div>
+      <div class="photo-kpi-val text-primary fs-5 mt-1">CCSSSS & Adm No</div>
+      <div class="photo-kpi-sub">090054.jpg, 9791.jpg, Excel</div>
+    </div>
+  </div>
+
+  <!-- Upload & Configuration Card -->
+  <div class="card shadow-sm border-0 mb-4">
+    <div class="card-header bg-white py-3 border-bottom">
+      <h5 class="mb-0 fw-bold text-dark">
+        <i class="bi bi-cloud-arrow-up-fill text-success me-2"></i> 1. Select Photo Archive & Settings
+      </h5>
+    </div>
+    <div class="card-body p-4">
+      <form id="photoUploadForm" enctype="multipart/form-data">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="dry_run">
+
+        <div class="row g-4">
+          <!-- Left: Drop Zone -->
+          <div class="col-lg-6">
+            <label class="form-label fw-bold">Photo Archive (.ZIP File) <span class="text-danger">*</span></label>
+            <div class="drop-zone" id="dropZone">
+              <i class="bi bi-file-earmark-zip-fill text-success fs-1 mb-2"></i>
+              <h6 class="fw-bold mb-1" id="fileLabel">Drag & Drop ZIP file here or click to browse</h6>
+              <p class="text-muted small mb-0">Contains JPG/PNG photos (e.g. <code>090001.jpg</code>, <code>090054.jpg</code>, <code>9791.jpg</code>)</p>
+              <input type="file" name="zip_file" id="zipFileInput" accept=".zip" class="d-none" required>
+            </div>
+            <div id="fileInfo" class="mt-2 small text-success fw-bold d-none"></div>
+          </div>
+
+          <!-- Right: Matching Options -->
+          <div class="col-lg-6">
+            <div class="row g-3">
+              <div class="col-12">
+                <label class="form-label fw-bold">Class Hint / Filter (Optional)</label>
+                <select name="class_id" class="form-select">
+                  <option value="">-- All Classes (Auto-detect from prefix e.g. 09=Class IX) --</option>
+                  {% for c in classes %}
+                  <option value="{{ c.pk }}">Class {{ c.name }}</option>
+                  {% endfor %}
+                </select>
+                <div class="form-text">यदि फ़ोटो केवल किसी एक कक्षा की हैं (जैसे सिर्फ Class IX), तो यहाँ चुनें।</div>
+              </div>
+
+              <div class="col-12">
+                <label class="form-label fw-bold">Smart Cropping Mode</label>
+                <select name="crop_mode" class="form-select">
+                  <option value="smart_portrait" selected>Smart Portrait 4:5 (Recommended — Shaves bottom signature box & centers face)</option>
+                  <option value="full">Full Original Ratio (Preserve full image including signature)</option>
+                </select>
+                <div class="form-text">फ़ोटोग्राफ़र शीट के निचले हिस्से में लिखे नाम/हस्ताक्षर को हटाकर चेहरा ID कार्ड में सही बैठाएगा।</div>
+              </div>
+
+              <div class="col-12">
+                <label class="form-label fw-bold">Custom Mapping Excel (Optional)</label>
+                <input type="file" name="mapping_file" accept=".xlsx,.xls,.csv" class="form-control form-control-sm">
+                <div class="form-text">अगर फ़ोटो के नाम <code>IMG_001.jpg</code> जैसे हैं, तो Excel मैपिंग फ़ाइल जोड़ें।</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <hr class="my-4">
+
+        <div class="d-flex justify-content-between align-items-center">
+          <div class="text-muted small">
+            <i class="bi bi-shield-check text-success"></i> <strong>सुरक्षित 2-चरणीय प्रक्रिया:</strong> पहले केवल ड्राई-रन विश्लेषण दिखेगा। बिना पुष्टि के डेटाबेस में कोई बदलाव नहीं होगा।
+          </div>
+          <button type="submit" id="btnDryRun" class="btn btn-success fw-bold px-4 py-2">
+            <i class="bi bi-search me-1"></i> Run Dry-Run Analysis (ड्राई-रन जांच करें)
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Loading State -->
+  <div id="loadingBox" class="card shadow-sm border-0 mb-4 d-none">
+    <div class="card-body text-center py-5">
+      <div class="spinner-border text-success mb-3" style="width: 3rem; height: 3rem;" role="status"></div>
+      <h5 class="fw-bold mb-1">Scanning & Analyzing Photos...</h5>
+      <p class="text-muted mb-0">Safe ZIP extraction, EXIF auto-rotation, smart cropping, and student matching in progress.</p>
+    </div>
+  </div>
+
+  <!-- Dry-Run Results Section -->
+  <div id="resultsSection" class="card shadow-sm border-0 mb-4 d-none" style="background: #ffffff; border: 1px solid #cbd5e1; border-radius: 10px; padding: 1.5rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.2rem; padding-bottom: 0.8rem; border-bottom: 1px solid #e2e8f0;">
+      <div>
+        <h4 style="font-size: 1.15rem; font-weight: 700; color: #0d3b13; margin: 0 0 0.2rem 0;">
+          📋 2. Dry-Run Analysis & Match Preview (ड्राई-रन मिलान परिणाम)
+        </h4>
+        <div style="font-size: 0.82rem; color: #64748b;">
+          Selected for Apply: <strong style="color: #0d3b13; font-size: 0.95rem;" id="selectedCountTop">0</strong> photos
+        </div>
+      </div>
+      <div style="display: flex; gap: 0.6rem;">
+        <button type="button" class="btn-native-green btn-trigger-apply">
+          🚀 Apply & Save Photos (फ़ोटो सुरक्षित करें)
+        </button>
+      </div>
+    </div>
+
+    <div>
+      <!-- Dry Run Counters -->
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.8rem; margin-bottom: 1.2rem;">
+        <div style="padding: 0.6rem; border: 1px solid #cbd5e1; border-radius: 6px; text-align: center; background: #f8fafc;">
+          <div style="font-size: 0.7rem; font-weight: 700; color: #64748b;">TOTAL SCANNED</div>
+          <div style="font-size: 1.4rem; font-weight: 700;" id="cntTotal">0</div>
+        </div>
+        <div style="padding: 0.6rem; border: 1px solid #bbf7d0; border-radius: 6px; text-align: center; background: #f0fdf4;">
+          <div style="font-size: 0.7rem; font-weight: 700; color: #166534;">MATCHED (NEW)</div>
+          <div style="font-size: 1.4rem; font-weight: 700; color: #166534;" id="cntMatchedNew">0</div>
+        </div>
+        <div style="padding: 0.6rem; border: 1px solid #fed7aa; border-radius: 6px; text-align: center; background: #fff7ed;">
+          <div style="font-size: 0.7rem; font-weight: 700; color: #9a3412;">REPLACE EXISTING</div>
+          <div style="font-size: 1.4rem; font-weight: 700; color: #9a3412;" id="cntMatchedReplace">0</div>
+        </div>
+        <div style="padding: 0.6rem; border: 1px solid #fecaca; border-radius: 6px; text-align: center; background: #fef2f2;">
+          <div style="font-size: 0.7rem; font-weight: 700; color: #991b1b;">NO MATCH</div>
+          <div style="font-size: 1.4rem; font-weight: 700; color: #991b1b;" id="cntNoMatch">0</div>
+        </div>
+        <div style="padding: 0.6rem; border: 1px solid #e2e8f0; border-radius: 6px; text-align: center; background: #f1f5f9;">
+          <div style="font-size: 0.7rem; font-weight: 700; color: #475569;">AMBIGUOUS / ERRORS</div>
+          <div style="font-size: 1.4rem; font-weight: 700; color: #475569;" id="cntAmbiguous">0</div>
+        </div>
+      </div>
+
+      <!-- Quick Selection Helpers & Filter Controls -->
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.8rem; margin-bottom: 1rem;">
+        <div style="display: flex; gap: 0.4rem; flex-wrap: wrap;" id="filterTabs">
+          <button type="button" class="btn-native-outline active" data-filter="ALL">All (<span id="tabCntAll">0</span>)</button>
+          <button type="button" class="btn-native-outline" data-filter="READY">Ready (<span id="tabCntReady">0</span>)</button>
+          <button type="button" class="btn-native-outline" data-filter="REPLACE">Replace (<span id="tabCntReplace">0</span>)</button>
+          <button type="button" class="btn-native-outline" data-filter="NOMATCH">No Match (<span id="tabCntNoMatch">0</span>)</button>
+          <button type="button" class="btn-native-outline" id="btnSelectNew" style="background: #eff6ff; color: #1e40af; border-color: #bfdbfe;">✓ Select All New</button>
+          <button type="button" class="btn-native-outline" id="btnSelectAll">✓ Select All</button>
+          <button type="button" class="btn-native-outline" id="btnDeselectAll">✗ Deselect All</button>
+        </div>
+        <div style="width: 240px;">
+          <input type="text" id="tableSearch" placeholder="🔍 Search student, adm, file..." style="width: 100%; padding: 0.4rem 0.6rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem;">
+        </div>
+      </div>
+
+      <!-- Preview Table -->
+      <div class="table-responsive-box">
+        <table class="native-table" id="previewTable">
+          <thead>
+            <tr>
+              <th style="width: 40px; text-align: center;">
+                <input type="checkbox" id="masterCheckbox">
+              </th>
+              <th style="width: 55px; text-align: center;">Preview</th>
+              <th>Filename</th>
+              <th>Status</th>
+              <th>Board Sr</th>
+              <th>Adm No</th>
+              <th>Matched Student</th>
+              <th>Class-Sec</th>
+              <th>Existing Photo</th>
+              <th>Match Details</th>
+            </tr>
+          </thead>
+          <tbody id="previewTbody">
+            <!-- Rendered by JS -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Prominent Sticky Bottom Action Bar -->
+      <div class="sticky-bottom-bar">
+        <div>
+          <div style="font-size: 0.9rem; font-weight: 700; color: #0d3b13;">
+            चयनित फ़ोटो संख्या (Selected to Apply): <span id="selectedCountBottom" style="font-size: 1.15rem; color: #15803d;">0</span>
+          </div>
+          <div style="font-size: 0.75rem; color: #64748b;">
+            अप्लाई करने पर डेटाबेस का स्नैपशॉट बैकअप स्वतः <code>04-backups/daily_backups/</code> में सुरक्षित हो जाएगा।
+          </div>
+        </div>
+        <div>
+          <button type="button" class="btn-native-green btn-trigger-apply" style="padding: 0.75rem 2rem; font-size: 0.98rem;">
+            🚀 Apply &amp; Save Photos (फ़ोटो सुरक्षित करें)
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<!-- Custom Native Success Modal Overlay -->
+<div class="native-modal-backdrop" id="successModal">
+  <div class="native-modal-dialog">
+    <div style="background: #0d3b13; color: #ffffff; padding: 1rem 1.3rem; display: flex; justify-content: space-between; align-items: center;">
+      <h4 style="margin: 0; font-size: 1.1rem; font-weight: 700;">✅ Photos Applied Successfully!</h4>
+      <button type="button" id="btnModalCloseHeader" style="background: none; border: none; color: #ffffff; font-size: 1.4rem; cursor: pointer; line-height: 1;">&times;</button>
+    </div>
+    <div style="padding: 1.5rem; font-size: 0.9rem;">
+      <div style="text-align: center; margin-bottom: 1.2rem;">
+        <div style="font-size: 2.5rem; margin-bottom: 0.4rem;">🎉</div>
+        <h4 style="margin: 0; font-weight: 700; color: #166534; font-size: 1.15rem;">छात्र फ़ोटो सफलतापूर्वक सुरक्षित हो गईं!</h4>
+      </div>
+
+      <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1rem; margin-bottom: 1.2rem; font-size: 0.85rem;">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 0.4rem;">
+          <span>New Photos Applied:</span>
+          <strong style="color: #166534;" id="resApplied">0</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 0.4rem;">
+          <span>Existing Photos Replaced:</span>
+          <strong style="color: #9a3412;" id="resReplaced">0</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 0.4rem;">
+          <span>Skipped / Errors:</span>
+          <strong style="color: #991b1b;" id="resErrors">0</strong>
+        </div>
+        <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 0.6rem 0;">
+        <div style="margin-bottom: 0.4rem; font-size: 0.78rem;">
+          <span style="color: #64748b;">DB Snapshot Backup:</span><br>
+          <code id="resBackup" style="color: #0f172a; word-break: break-all;"></code>
+        </div>
+        <div style="font-size: 0.78rem;">
+          <span style="color: #64748b;">Audit CSV Report:</span><br>
+          <code id="resReport" style="color: #1e40af; word-break: break-all;"></code>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 0.6rem;">
+        <a href="{% url 'core:id_cards_dashboard' %}" class="btn-native-green" style="text-align: center; justify-content: center;">
+          🪪 Open ID Cards Dashboard (प्रिंट आई-कार्ड)
+        </a>
+        <button type="button" id="btnModalCloseFooter" class="btn-native-outline" style="text-align: center; justify-content: center; padding: 0.6rem;">
+          Close (बंद करें)
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  const dropZone = document.getElementById("dropZone");
+  const zipInput = document.getElementById("zipFileInput");
+  const fileInfo = document.getElementById("fileInfo");
+  const fileLabel = document.getElementById("fileLabel");
+  const form = document.getElementById("photoUploadForm");
+  const loadingBox = document.getElementById("loadingBox");
+  const resultsSection = document.getElementById("resultsSection");
+  const previewTbody = document.getElementById("previewTbody");
+  const tableSearch = document.getElementById("tableSearch");
+  const masterCheckbox = document.getElementById("masterCheckbox");
+  const selectedCountTop = document.getElementById("selectedCountTop");
+  const selectedCountBottom = document.getElementById("selectedCountBottom");
+  const successModal = document.getElementById("successModal");
+
+  let currentDryRunData = null;
+  let activeFilter = "ALL";
+  let selectedFileMap = {};
+
+  // Drag & drop handlers
+  dropZone.addEventListener("click", () => zipInput.click());
+  dropZone.addEventListener("dragover", (e) => { e.preventDefault(); dropZone.classList.add("dragover"); });
+  dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragover"));
+  dropZone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    dropZone.classList.remove("dragover");
+    if (e.dataTransfer.files.length) {
+      zipInput.files = e.dataTransfer.files;
+      handleFileSelected();
+    }
+  });
+  zipInput.addEventListener("change", handleFileSelected);
+
+  function handleFileSelected() {
+    if (zipInput.files.length) {
+      const f = zipInput.files[0];
+      fileLabel.innerText = f.name;
+      fileInfo.innerText = `Selected: ${f.name} (${(f.size / (1024*1024)).toFixed(2)} MB)`;
+      fileInfo.style.display = "block";
+    }
+  }
+
+  // Form Submit (Dry Run)
+  form.addEventListener("submit", function(e) {
+    e.preventDefault();
+    if (!zipInput.files.length) {
+      alert("कृपया .zip फ़ाइल चुनें।");
+      return;
+    }
+
+    loadingBox.style.display = "block";
+    resultsSection.style.display = "none";
+
+    const formData = new FormData(form);
+
+    fetch(window.location.pathname, {
+      method: "POST",
+      body: formData,
+      headers: { "X-Requested-With": "XMLHttpRequest" }
+    })
+    .then(async r => {
+      const isJson = r.headers.get("content-type")?.includes("application/json");
+      const data = isJson ? await r.json() : null;
+      if (!r.ok || !data) {
+        throw new Error((data && data.message) ? data.message : `Server Error (HTTP ${r.status})`);
+      }
+      return data;
+    })
+    .then(data => {
+      loadingBox.style.display = "none";
+      if (data.status === "success") {
+        currentDryRunData = data.data;
+        initSelection(data.data);
+        renderDryRunResults(data.data);
+        resultsSection.style.display = "block";
+        resultsSection.scrollIntoView({ behavior: "smooth" });
+      } else {
+        alert("त्रुटि: " + (data.message || "प्रोसेसिंग विफल रही।"));
+      }
+    })
+    .catch(err => {
+      loadingBox.style.display = "none";
+      alert("नेटवर्क त्रुटि: " + err.message);
+    });
+  });
+
+  function initSelection(data) {
+    selectedFileMap = {};
+    data.items.forEach(item => {
+      if (item.status === "MATCHED_NEW") {
+        selectedFileMap[item.filename] = true;
+      } else {
+        selectedFileMap[item.filename] = false;
+      }
+    });
+    updateSelectedCount();
+  }
+
+  function updateSelectedCount() {
+    let count = 0;
+    for (let f in selectedFileMap) {
+      if (selectedFileMap[f]) count++;
+    }
+    if (selectedCountTop) selectedCountTop.innerText = count;
+    if (selectedCountBottom) selectedCountBottom.innerText = count;
+  }
+
+  function renderDryRunResults(data) {
+    const s = data.summary;
+    document.getElementById("cntTotal").innerText = s.total_files;
+    document.getElementById("cntMatchedNew").innerText = s.matched_new;
+    document.getElementById("cntMatchedReplace").innerText = s.matched_replace;
+    document.getElementById("cntNoMatch").innerText = s.no_match;
+    document.getElementById("cntAmbiguous").innerText = s.ambiguous + s.invalid_files + (s.skipped_unsafe || 0);
+
+    document.getElementById("tabCntAll").innerText = s.total_files;
+    document.getElementById("tabCntReady").innerText = s.matched_new + s.matched_replace;
+    document.getElementById("tabCntReplace").innerText = s.matched_replace;
+    document.getElementById("tabCntNoMatch").innerText = s.no_match;
+
+    renderTableRows();
+  }
+
+  function renderTableRows() {
+    if (!currentDryRunData) return;
+    const query = tableSearch.value.trim().toLowerCase();
+    const rows = [];
+
+    currentDryRunData.items.forEach(item => {
+      if (activeFilter === "READY" && !["MATCHED_NEW", "MATCHED_REPLACE"].includes(item.status)) return;
+      if (activeFilter === "REPLACE" && item.status !== "MATCHED_REPLACE") return;
+      if (activeFilter === "NOMATCH" && item.status !== "NO_MATCH") return;
+
+      if (query) {
+        const text = `${item.filename} ${item.student_name} ${item.adm_no} ${item.board_sr} ${item.class_sec}`.toLowerCase();
+        if (!text.includes(query)) return;
+      }
+
+      let badgeHtml = "";
+      let checkboxHtml = "";
+
+      if (item.status === "MATCHED_NEW") {
+        badgeHtml = '<span class="badge-status badge-matched-new">MATCHED (NEW)</span>';
+        const isChecked = selectedFileMap[item.filename] ? "checked" : "";
+        checkboxHtml = `<input type="checkbox" class="row-chk" data-fname="${item.filename}" ${isChecked}>`;
+      } else if (item.status === "MATCHED_REPLACE") {
+        badgeHtml = '<span class="badge-status badge-matched-replace">REPLACE EXISTING</span>';
+        const isChecked = selectedFileMap[item.filename] ? "checked" : "";
+        checkboxHtml = `<input type="checkbox" class="row-chk" data-fname="${item.filename}" ${isChecked}>`;
+      } else if (item.status === "AMBIGUOUS") {
+        badgeHtml = '<span class="badge-status badge-ambiguous">AMBIGUOUS</span>';
+        checkboxHtml = `<input type="checkbox" disabled>`;
+      } else if (item.status === "NO_MATCH") {
+        badgeHtml = '<span class="badge-status badge-no-match">NO MATCH</span>';
+        checkboxHtml = `<input type="checkbox" disabled>`;
+      } else {
+        badgeHtml = '<span class="badge-status badge-invalid">INVALID</span>';
+        checkboxHtml = `<input type="checkbox" disabled>`;
+      }
+
+      const imgHtml = item.thumbnail_b64 ? `<img src="${item.thumbnail_b64}" class="thumb-preview" alt="Thumb">` : `<div class="thumb-preview" style="display:flex;align-items:center;justify-content:center;color:#64748b;">📷</div>`;
+      const existingHtml = item.has_existing_photo ? '<span style="color:#c2410c;font-weight:700;">Yes (Will Backup)</span>' : '<span style="color:#64748b;">No</span>';
+
+      rows.push(`
+        <tr>
+          <td style="text-align:center;">${checkboxHtml}</td>
+          <td style="text-align:center;">${imgHtml}</td>
+          <td><code>${item.filename}</code></td>
+          <td>${badgeHtml}</td>
+          <td style="font-weight:700;">${item.board_sr || "—"}</td>
+          <td style="font-weight:700;">${item.adm_no || "—"}</td>
+          <td style="font-weight:700;color:#0f172a;">${item.student_name}</td>
+          <td>${item.class_sec}</td>
+          <td>${existingHtml}</td>
+          <td style="color:#64748b;font-size:0.75rem;">${item.message}</td>
+        </tr>
+      `);
+    });
+
+    previewTbody.innerHTML = rows.length ? rows.join("") : '<tr><td colspan="10" style="text-align:center;padding:2rem;color:#64748b;">कोई रिकॉर्ड नहीं मिला।</td></tr>';
+
+    // Bind row checkbox events
+    document.querySelectorAll(".row-chk").forEach(chk => {
+      chk.addEventListener("change", function() {
+        selectedFileMap[this.dataset.fname] = this.checked;
+        updateSelectedCount();
+      });
+    });
+  }
+
+  // Selection Helpers
+  document.getElementById("btnSelectNew").addEventListener("click", () => {
+    currentDryRunData.items.forEach(item => {
+      selectedFileMap[item.filename] = (item.status === "MATCHED_NEW");
+    });
+    renderTableRows();
+    updateSelectedCount();
+  });
+
+  document.getElementById("btnSelectAll").addEventListener("click", () => {
+    currentDryRunData.items.forEach(item => {
+      selectedFileMap[item.filename] = (item.status === "MATCHED_NEW" || item.status === "MATCHED_REPLACE");
+    });
+    renderTableRows();
+    updateSelectedCount();
+  });
+
+  document.getElementById("btnDeselectAll").addEventListener("click", () => {
+    for (let f in selectedFileMap) selectedFileMap[f] = false;
+    renderTableRows();
+    updateSelectedCount();
+  });
+
+  masterCheckbox.addEventListener("change", function() {
+    const isChecked = this.checked;
+    document.querySelectorAll(".row-chk").forEach(chk => {
+      chk.checked = isChecked;
+      selectedFileMap[chk.dataset.fname] = isChecked;
+    });
+    updateSelectedCount();
+  });
+
+  // Filter tabs
+  document.querySelectorAll("#filterTabs .btn-native-outline").forEach(btn => {
+    if (btn.dataset.filter) {
+      btn.addEventListener("click", function() {
+        document.querySelectorAll("#filterTabs .btn-native-outline[data-filter]").forEach(b => b.classList.remove("active"));
+        this.classList.add("active");
+        activeFilter = this.dataset.filter;
+        renderTableRows();
+      });
+    }
+  });
+
+  tableSearch.addEventListener("input", renderTableRows);
+
+  // Apply Action (both top & bottom buttons trigger this)
+  document.querySelectorAll(".btn-trigger-apply").forEach(btn => {
+    btn.addEventListener("click", handleApplyPhotos);
+  });
+
+  function handleApplyPhotos() {
+    if (!currentDryRunData || !currentDryRunData.session_token) return;
+
+    const selectedFiles = [];
+    for (let f in selectedFileMap) {
+      if (selectedFileMap[f]) selectedFiles.push(f);
+    }
+
+    if (selectedFiles.length === 0) {
+      alert("कृपया सुरक्षित करने के लिए कम से कम एक फ़ोटो का चयन (चेकबॉक्स) करें।");
+      return;
+    }
+
+    if (!confirm(`क्या आप ${selectedFiles.length} चयनित छात्रों की फ़ोटो सुरक्षित (Apply) करना चाहते हैं?\n\n(डेटाबेस का स्नैपशॉट बैकअप स्वतः बना लिया जाएगा)`)) {
+      return;
+    }
+
+    document.querySelectorAll(".btn-trigger-apply").forEach(b => {
+      b.disabled = true;
+      b.innerText = "⏳ Applying & Backing Up...";
+    });
+
+    const formData = new FormData();
+    formData.append("csrfmiddlewaretoken", document.querySelector("[name=csrfmiddlewaretoken]").value);
+    formData.append("action", "apply");
+    formData.append("session_token", currentDryRunData.session_token);
+    formData.append("selected_filenames", JSON.stringify(selectedFiles));
+
+    fetch(window.location.pathname, {
+      method: "POST",
+      body: formData,
+      headers: { "X-Requested-With": "XMLHttpRequest" }
+    })
+    .then(async r => {
+      const isJson = r.headers.get("content-type")?.includes("application/json");
+      const data = isJson ? await r.json() : null;
+      if (!r.ok || !data) {
+        throw new Error((data && data.message) ? data.message : `Server Error (HTTP ${r.status})`);
+      }
+      return data;
+    })
+    .then(data => {
+      document.querySelectorAll(".btn-trigger-apply").forEach(b => {
+        b.disabled = false;
+        b.innerText = "🚀 Apply & Save Photos (फ़ोटो सुरक्षित करें)";
+      });
+
+      if (data.status === "success") {
+        document.getElementById("resApplied").innerText = data.data.applied_count;
+        document.getElementById("resReplaced").innerText = data.data.replaced_count;
+        document.getElementById("resErrors").innerText = data.data.error_count + data.data.skipped_count;
+        document.getElementById("resBackup").innerText = data.data.db_backup_path;
+        document.getElementById("resReport").innerText = data.data.report_csv_path;
+        
+        // Show native modal overlay
+        successModal.style.display = "flex";
+      } else {
+        alert("त्रुटि: " + (data.message || "फ़ोटो सुरक्षित करने में समस्या आई।"));
+      }
+    })
+    .catch(err => {
+      document.querySelectorAll(".btn-trigger-apply").forEach(b => {
+        b.disabled = false;
+        b.innerText = "🚀 Apply & Save Photos";
+      });
+      alert("नेटवर्क त्रुटि: " + err.message);
+    });
+  }
+
+  // Modal close handlers
+  document.getElementById("btnModalCloseHeader").addEventListener("click", () => successModal.style.display = "none");
+  document.getElementById("btnModalCloseFooter").addEventListener("click", () => successModal.style.display = "none");
+  successModal.addEventListener("click", function(e) {
+    if (e.target === successModal) successModal.style.display = "none";
+  });
+
+});
+</script>
+{% endblock %}

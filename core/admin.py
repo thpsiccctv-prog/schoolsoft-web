@@ -344,3 +344,45 @@ class StudentConcessionAdmin(admin.ModelAdmin):
         if not change:  # New object
             obj.created_by = request.user
         super().save_model(request, obj, form, change)
+
+
+from .models import AccountGroup, Person, LedgerAccount, FeederSchool, Voucher, VoucherCounter
+
+
+@admin.register(AccountGroup)
+class AccountGroupAdmin(admin.ModelAdmin):
+    list_display = ("name", "group_type", "display_order")
+    list_filter = ("group_type",)
+    search_fields = ("name",)
+
+
+@admin.register(Person)
+class PersonAdmin(admin.ModelAdmin):
+    list_display = ("name", "person_type", "is_active")
+    list_filter = ("person_type", "is_active")
+    search_fields = ("name", "contact_info")
+
+
+@admin.register(LedgerAccount)
+class LedgerAccountAdmin(admin.ModelAdmin):
+    list_display = ("name", "group", "opening_balance", "opening_balance_date", "is_cash_or_bank", "is_active", "display_order")
+    list_filter = ("group", "is_cash_or_bank", "is_active")
+    search_fields = ("name", "group__name")
+    autocomplete_fields = ("group", "person")
+
+
+@admin.register(FeederSchool)
+class FeederSchoolAdmin(admin.ModelAdmin):
+    list_display = ("name", "code", "contact_person", "phone", "package_rate_per_student", "ledger_account", "is_active")
+    list_filter = ("is_active",)
+    search_fields = ("name", "code", "contact_person", "phone")
+    autocomplete_fields = ("ledger_account",)
+
+
+@admin.register(Voucher)
+class VoucherAdmin(admin.ModelAdmin):
+    list_display = ("voucher_no", "voucher_type", "voucher_date", "debit_account", "credit_account", "amount", "paid_to_or_received_from", "payment_mode")
+    list_filter = ("voucher_type", "payment_mode", "session")
+    search_fields = ("voucher_no", "paid_to_or_received_from", "narration", "debit_account__name", "credit_account__name")
+    autocomplete_fields = ("debit_account", "credit_account", "session")
+

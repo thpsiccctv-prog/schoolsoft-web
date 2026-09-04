@@ -4,7 +4,7 @@ from django import forms
 from django.db.models import Count, Max
 from django.utils import timezone
 
-from .models import AcademicSession, AccountGroup, DisciplineRecord, Family, FeederSchool, FeeHead, FeeReceipt, House, InventoryIssue, InventoryItem, SalaryPayment, Section, Staff, Student, TransferCertificate, LedgerAccount, Voucher, TransportRoute, StudentTransport
+from .models import ACADEMIC_MONTHS, BALANCE_FEE_MONTH_CODE, AcademicSession, AccountGroup, DisciplineRecord, Family, FeederSchool, FeeHead, FeeReceipt, House, InventoryIssue, InventoryItem, SalaryPayment, Section, Staff, Student, TransferCertificate, LedgerAccount, Voucher, TransportRoute, StudentTransport
 
 class SectionSelect(forms.Select):
     """Renders each <option> with a data-class attribute so student_form.html can
@@ -316,9 +316,9 @@ class StudentForm(forms.ModelForm):
         if not self.instance.pk:
             if "admission_date" not in self.initial:
                 self.initial["admission_date"] = timezone.localdate()
-            self.fields["board_candidate_type_1_code"].initial = Student.BoardCandidateType1.REGULAR
-            self.fields["board_candidate_type_2_code"].initial = Student.BoardCandidateType2.NONE
-            self.fields["exam_medium"].initial = Student.ExamMedium.HINDI
+            self.fields["board_candidate_type_1_code"].initial = "1"
+            self.fields["board_candidate_type_2_code"].initial = "0"
+            self.fields["exam_medium"].initial = "H"
             self.fields["nationality"].initial = "Indian"
             self.fields["state"].initial = "Uttar Pradesh"
             if "legacy_sid" not in self.initial:
@@ -373,6 +373,16 @@ class StudentForm(forms.ModelForm):
 
 class FeeReceiptEntryForm(forms.ModelForm):
     student = StudentChoiceField(queryset=Student.objects.none())
+    MONTH_ALIASES = {
+        "APRIL": "APR",
+        "JUNE": "JUN",
+        "JULY": "JUL",
+        "SEPT": "SEP",
+        "SEPTEMBER": "SEP",
+        "MARCH": "MAR",
+        "BALANCE": BALANCE_FEE_MONTH_CODE,
+        "BALANCE FEE": BALANCE_FEE_MONTH_CODE,
+    }
 
     class Meta:
         model = FeeReceipt
@@ -406,6 +416,34 @@ class FeeReceiptEntryForm(forms.ModelForm):
         self.fields["receipt_date"].initial = timezone.localdate()
         self.fields["student"].empty_label = "Select active student"
         self.fields["session"].empty_label = "Select session"
+
+    def _clean_month(self, value, *, allow_balance_fee=False):
+        value = str(value or "").strip().upper()
+        if not value:
+            return ""
+        value = self.MONTH_ALIASES.get(value, value[:3])
+        if value == BALANCE_FEE_MONTH_CODE and allow_balance_fee:
+            return value
+        if value in ACADEMIC_MONTHS:
+            return value
+        raise forms.ValidationError(f"Invalid month: {value}.")
+
+    def clean_from_month(self):
+        return self._clean_month(self.cleaned_data.get("from_month"), allow_balance_fee=False)
+
+    def clean_to_month(self):
+        return self._clean_month(self.cleaned_data.get("to_month"), allow_balance_fee=True)
+
+    def clean(self):
+        cleaned_data = super().clean()
+        from_month = cleaned_data.get("from_month")
+        to_month = cleaned_data.get("to_month")
+
+        if from_month and to_month and to_month != BALANCE_FEE_MONTH_CODE:
+            if ACADEMIC_MONTHS.index(from_month) > ACADEMIC_MONTHS.index(to_month):
+                self.add_error("to_month", f"To Month ({to_month}) must be on or after From Month ({from_month}).")
+
+        return cleaned_data
 
 class FeeReceiptEditForm(FeeReceiptEntryForm):
     edit_reason = forms.CharField(

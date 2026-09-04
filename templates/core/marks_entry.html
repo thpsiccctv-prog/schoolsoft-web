@@ -1,0 +1,418 @@
+{% extends "base.html" %}
+
+{% block title %}Marks Entry (अंक प्रविष्टि) | THPSIC SchoolSoft{% endblock %}
+
+{% block content %}
+<section class="section">
+    <div class="section-heading with-actions" style="margin-bottom: 1.25rem;">
+        <div>
+            <h2>Marks Entry (अंक प्रविष्टि)</h2>
+            <p>कक्षा, सेक्शन एवं विषय चुनकर सीधे ग्रिड में अंक दर्ज करें या एक्सेल शीट डाउनलोड/अपलोड करें।</p>
+        </div>
+        <div class="action-row" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            {% if selected_test %}
+            <a class="button secondary" href="{% url 'core:marks_entry_export_excel' %}?test_id={{ selected_test.pk }}&section_id={{ selected_section.pk|default:'' }}" title="Download blank Excel for offline entry">
+                📥 Export Blank Excel
+            </a>
+            <button type="button" class="button secondary" onclick="document.getElementById('excelUploadModal').style.display='flex'">
+                📤 Import Filled Excel
+            </button>
+            <a class="button secondary" href="{% url 'core:marks_report' %}?term={{ selected_term.pk }}&class={{ selected_class.pk }}">
+                📊 Marks Report
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Filter Bar -->
+    <form class="filterbar" method="get" style="display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; background: var(--surface); padding: 1rem; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 1.25rem;">
+        <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+            <label style="font-size: 0.75rem; font-weight: 600; color: var(--text-muted);">परीक्षा सत्र (Exam Term) *</label>
+            <select name="term_id" style="min-width: 180px; padding: 0.45rem 0.6rem; border-radius: 4px; border: 1px solid var(--border);" onchange="this.form.submit()">
+                {% for t in terms %}
+                <option value="{{ t.pk }}" {% if selected_term.pk == t.pk %}selected{% endif %}>{{ t.name }} ({{ t.session.name }})</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+            <label style="font-size: 0.75rem; font-weight: 600; color: var(--text-muted);">कक्षा (Class) *</label>
+            <select name="class_id" style="min-width: 140px; padding: 0.45rem 0.6rem; border-radius: 4px; border: 1px solid var(--border);" onchange="this.form.submit()">
+                {% for c in classes %}
+                <option value="{{ c.pk }}" {% if selected_class.pk == c.pk %}selected{% endif %}>{{ c.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+            <label style="font-size: 0.75rem; font-weight: 600; color: var(--text-muted);">सेक्शन (Section)</label>
+            <select name="section_id" style="min-width: 120px; padding: 0.45rem 0.6rem; border-radius: 4px; border: 1px solid var(--border);" onchange="this.form.submit()">
+                <option value="">All Sections</option>
+                {% for sec in sections %}
+                <option value="{{ sec.pk }}" {% if selected_section.pk == sec.pk %}selected{% endif %}>Section {{ sec.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+            <label style="font-size: 0.75rem; font-weight: 600; color: var(--text-muted);">विषय (Subject Test) *</label>
+            <select name="test_id" style="min-width: 220px; padding: 0.45rem 0.6rem; border-radius: 4px; border: 1px solid var(--border);" onchange="this.form.submit()">
+                {% for t in class_tests %}
+                <option value="{{ t.pk }}" {% if selected_test.pk == t.pk %}selected{% endif %}>
+                    {{ t.subject.name }} (Max: {{ t.max_marks|floatformat:0 }} = Th {{ t.theory_max_marks|floatformat:0 }}{% if t.practical_max_marks %} + Pr {{ t.practical_max_marks|floatformat:0 }}{% endif %})
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div style="display: flex; gap: 0.5rem; align-self: flex-end;">
+            <button type="submit" class="button small">Load Sheet</button>
+            <a href="{% url 'core:marks_entry' %}" class="button small secondary">Reset</a>
+        </div>
+    </form>
+
+    {% if selected_test %}
+    <!-- Subject Header Info & Quick Actions -->
+    <form method="post" id="marksEntryForm">
+        {% csrf_token %}
+        <input type="hidden" name="term_id" value="{{ selected_term.pk }}">
+        <input type="hidden" name="class_id" value="{{ selected_class.pk }}">
+        <input type="hidden" name="section_id" value="{{ selected_section.pk|default:'' }}">
+        <input type="hidden" name="test_id" value="{{ selected_test.pk }}">
+
+        <div style="background: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 1.25rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+            <div>
+                <div style="font-size: 1.15rem; font-weight: 700; color: #1E3A8A;">
+                    {{ selected_test.subject.name }}
+                </div>
+                <div style="color: #64748B; font-size: 0.88rem; margin-top: 0.2rem;">
+                    Class: <b>{{ selected_class.name }}</b> {% if selected_section %}(Section {{ selected_section.name }}){% endif %}
+                    &bull; Total Students: <b>{{ students|length }}</b>
+                    &bull; Max Marks: <b>{{ selected_test.max_marks|floatformat:0 }}</b> (Theory: <b>{{ selected_test.theory_max_marks|floatformat:0 }}</b>{% if selected_test.practical_max_marks %}, Practical/Project: <b>{{ selected_test.practical_max_marks|floatformat:0 }}</b>{% endif %})
+                    &bull; Pass Marks: <b>{{ selected_test.pass_marks|floatformat:0 }}</b>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap;">
+                {% if selected_test.practical_max_marks > 0 %}
+                <button type="button" class="button small secondary" onclick="fillDefaultPractical()">
+                    ⚡ Auto-Fill Practical ({{ selected_test.practical_max_marks|floatformat:0 }})
+                </button>
+                {% endif %}
+                <button type="submit" class="button" style="background: #16A34A; color: white; font-weight: 700; padding: 0.55rem 1.25rem; font-size: 0.95rem;">
+                    💾 Save All Marks (सुरक्षित करें)
+                </button>
+            </div>
+        </div>
+
+        <!-- Marks Entry Table -->
+        <div class="table-wrap" style="border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-bottom: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+            <table id="marksGridTable" style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="background: #1E293B; color: #FFFFFF; font-size: 0.85rem; text-transform: uppercase;">
+                        <th style="width: 45px; text-align: center; padding: 0.75rem 0.5rem;">#</th>
+                        <th style="width: 70px; text-align: center;">Roll</th>
+                        <th style="width: 80px; text-align: center;">Adm / SID</th>
+                        <th style="min-width: 180px;">Student Name</th>
+                        <th style="min-width: 160px;">Father's Name</th>
+                        <th style="width: 110px; text-align: center; background: #0F172A;">
+                            Theory<br><span style="font-size: 0.75rem; color: #94A3B8;">(Max {{ selected_test.theory_max_marks|floatformat:0 }})</span>
+                        </th>
+                        {% if selected_test.practical_max_marks > 0 %}
+                        <th style="width: 110px; text-align: center; background: #0F172A;">
+                            Practical<br><span style="font-size: 0.75rem; color: #94A3B8;">(Max {{ selected_test.practical_max_marks|floatformat:0 }})</span>
+                        </th>
+                        {% endif %}
+                        <th style="width: 90px; text-align: center;">
+                            Total<br><span style="font-size: 0.75rem; color: #94A3B8;">(100)</span>
+                        </th>
+                        <th style="width: 75px; text-align: center;">Grade</th>
+                        <th style="width: 80px; text-align: center;">Status</th>
+                        <th style="width: 70px; text-align: center;">Absent</th>
+                        <th style="min-width: 120px;">Remarks</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in student_rows %}
+                    <tr id="row-{{ row.student.id }}" style="border-bottom: 1px solid var(--border); background: {% cycle '#FFFFFF' '#F8FAFC' %};">
+                        <td style="text-align: center; font-size: 0.85rem; color: #64748B;">{{ forloop.counter }}</td>
+                        <td style="text-align: center; font-weight: 700; color: #1E293B;">{{ row.student.roll_no|default:"—" }}</td>
+                        <td style="text-align: center; font-size: 0.85rem; color: #475569;">{{ row.student.admission_no|default:row.student.legacy_sid }}</td>
+                        <td>
+                            <div style="font-weight: 600; color: #0F172A; display: flex; align-items: center; gap: 6px;">
+                                <span>{{ row.student.full_name }}</span>
+                                {% if row.student.current_section %}
+                                <span style="background: #E2E8F0; color: #1E293B; font-size: 0.72rem; font-weight: 700; padding: 1px 6px; border-radius: 4px;">{{ row.student.current_section.name }}</span>
+                                {% endif %}
+                            </div>
+                            {% if row.student.full_name_hindi %}
+                            <div style="font-size: 0.8rem; color: #16A34A; font-weight: 600;">{{ row.student.full_name_hindi }}</div>
+                            {% endif %}
+                        </td>
+                        <td style="font-size: 0.85rem; color: #475569;">{{ row.student.father_name }}</td>
+
+                        <!-- Theory Marks -->
+                        <td style="text-align: center;">
+                            <input type="number" step="0.5" min="0" max="{{ selected_test.theory_max_marks }}"
+                                   name="theory_{{ row.student.id }}"
+                                   id="th-{{ row.student.id }}"
+                                   class="marks-input theory-input"
+                                   data-sid="{{ row.student.id }}"
+                                   data-max="{{ selected_test.theory_max_marks }}"
+                                   value="{% if row.mark and not row.mark.is_absent and row.mark.theory_marks_obtained is not None %}{{ row.mark.theory_marks_obtained|floatformat:'-2' }}{% elif row.mark and not row.mark.is_absent and row.mark.marks_obtained is not None and not selected_test.practical_max_marks %}{{ row.mark.marks_obtained|floatformat:'-2' }}{% endif %}"
+                                   {% if row.mark.is_absent %}disabled{% endif %}
+                                   style="width: 75px; text-align: center; font-size: 0.95rem; font-weight: 700; padding: 0.35rem; border: 1px solid #94A3B8; border-radius: 4px;"
+                                   oninput="calculateRow('{{ row.student.id }}')"
+                                   onkeydown="handleKeyNavigation(event, this)">
+                        </td>
+
+                        <!-- Practical Marks -->
+                        {% if selected_test.practical_max_marks > 0 %}
+                        <td style="text-align: center;">
+                            <input type="number" step="0.5" min="0" max="{{ selected_test.practical_max_marks }}"
+                                   name="practical_{{ row.student.id }}"
+                                   id="pr-{{ row.student.id }}"
+                                   class="marks-input practical-input"
+                                   data-sid="{{ row.student.id }}"
+                                   data-max="{{ selected_test.practical_max_marks }}"
+                                   value="{% if row.mark and not row.mark.is_absent and row.mark.practical_marks_obtained is not None %}{{ row.mark.practical_marks_obtained|floatformat:'-2' }}{% endif %}"
+                                   {% if row.mark.is_absent %}disabled{% endif %}
+                                   style="width: 75px; text-align: center; font-size: 0.95rem; font-weight: 700; padding: 0.35rem; border: 1px solid #94A3B8; border-radius: 4px;"
+                                   oninput="calculateRow('{{ row.student.id }}')"
+                                   onkeydown="handleKeyNavigation(event, this)">
+                        </td>
+                        {% endif %}
+
+                        <!-- Total Computed -->
+                        <td style="text-align: center;">
+                            <span id="tot-{{ row.student.id }}" style="font-weight: 700; font-size: 1rem; color: #1E293B;">
+                                {% if row.mark.is_absent %}
+                                    <span style="color: #EF4444;">AB</span>
+                                {% elif row.mark and row.mark.marks_obtained is not None %}
+                                    {{ row.mark.marks_obtained|floatformat:'-2' }}
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </span>
+                        </td>
+
+                        <!-- Grade -->
+                        <td style="text-align: center;">
+                            <span id="grd-{{ row.student.id }}" style="font-weight: 700; font-size: 0.9rem; color: #475569;">
+                                {{ row.mark.grade|default:"—" }}
+                            </span>
+                        </td>
+
+                        <!-- Result Status -->
+                        <td style="text-align: center;">
+                            <span id="res-{{ row.student.id }}" class="badge" style="font-size: 0.75rem; font-weight: 700;">
+                                {% if row.mark.is_absent %}
+                                    <span style="color: #EF4444;">ABSENT</span>
+                                {% elif row.mark and row.mark.marks_obtained is not None %}
+                                    {% if row.mark.marks_obtained >= selected_test.pass_marks %}
+                                        <span style="color: #16A34A;">PASS</span>
+                                    {% else %}
+                                        <span style="color: #DC2626;">FAIL</span>
+                                    {% endif %}
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </span>
+                        </td>
+
+                        <!-- Absent Checkbox -->
+                        <td style="text-align: center;">
+                            <input type="checkbox" name="absent_{{ row.student.id }}" id="ab-{{ row.student.id }}"
+                                   {% if row.mark.is_absent %}checked{% endif %}
+                                   onchange="toggleAbsent('{{ row.student.id }}')"
+                                   title="Mark Absent">
+                        </td>
+
+                        <!-- Remarks -->
+                        <td>
+                            <input type="text" name="remarks_{{ row.student.id }}" id="rem-{{ row.student.id }}"
+                                   value="{{ row.mark.remarks|default:'' }}"
+                                   placeholder="Remarks..."
+                                   style="width: 100%; font-size: 0.85rem; padding: 0.3rem 0.5rem; border: 1px solid #CBD5E1; border-radius: 4px;">
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="12" style="text-align: center; padding: 2rem; color: #64748B;">
+                            इस कक्षा/सेक्शन में कोई सक्रिय छात्र नहीं मिला।
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 1rem; margin-bottom: 2rem;">
+            <button type="submit" class="button" style="background: #16A34A; color: white; font-weight: 700; padding: 0.65rem 1.75rem; font-size: 1rem;">
+                💾 Save All Marks (सुरक्षित करें)
+            </button>
+        </div>
+    </form>
+    {% else %}
+    <div style="background: #F1F5F9; border: 1px dashed #94A3B8; border-radius: 8px; padding: 3rem; text-align: center; color: #475569;">
+        <h3>कृपया कक्षा एवं विषय चुनें (Please select Class & Subject)</h3>
+        <p style="margin-top: 0.5rem;">अंक प्रविष्टि के लिए ऊपर दिए गए फ़िल्टर से परीक्षा, कक्षा एवं विषय का चयन करें।</p>
+    </div>
+    {% endif %}
+</section>
+
+<!-- Excel Upload Modal -->
+<div id="excelUploadModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; justify-content: center; align-items: center;">
+    <div style="background: #FFFFFF; border-radius: 8px; width: 480px; max-width: 90%; padding: 1.5rem; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
+        <h3 style="margin-top: 0; color: #1E293B;">📤 Upload Marks Excel Sheet</h3>
+        <p style="font-size: 0.88rem; color: #64748B;">
+            भरी हुई एक्सेल शीट (.xlsx) चुनें जिसे आपने डाउनलोड किया था।
+        </p>
+
+        <form method="post" action="{% url 'core:marks_entry_import_excel' %}" enctype="multipart/form-data" style="margin-top: 1rem;">
+            {% csrf_token %}
+            <input type="hidden" name="term_id" value="{{ selected_term.pk }}">
+            <input type="hidden" name="class_id" value="{{ selected_class.pk }}">
+            <input type="hidden" name="section_id" value="{{ selected_section.pk|default:'' }}">
+            <input type="hidden" name="test_id" value="{{ selected_test.pk }}">
+
+            <div style="border: 2px dashed #CBD5E1; border-radius: 6px; padding: 1.5rem; text-align: center; margin-bottom: 1.25rem;">
+                <input type="file" name="excel_file" accept=".xlsx, .xls" required style="font-size: 0.9rem;">
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
+                <button type="button" class="button secondary" onclick="document.getElementById('excelUploadModal').style.display='none'">Cancel</button>
+                <button type="submit" class="button" style="background: #2563EB; color: white;">Upload & Sync Marks</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+const passMarks = {{ selected_test.pass_marks|default:33 }};
+const theoryMax = {{ selected_test.theory_max_marks|default:100 }};
+const practicalMax = {{ selected_test.practical_max_marks|default:0 }};
+
+function calculateRow(sid) {
+    const thInput = document.getElementById('th-' + sid);
+    const prInput = document.getElementById('pr-' + sid);
+    const totSpan = document.getElementById('tot-' + sid);
+    const grdSpan = document.getElementById('grd-' + sid);
+    const resSpan = document.getElementById('res-' + sid);
+    const abCheck = document.getElementById('ab-' + sid);
+
+    if (abCheck && abCheck.checked) {
+        totSpan.innerHTML = '<span style="color: #EF4444;">AB</span>';
+        grdSpan.innerText = 'AB';
+        resSpan.innerHTML = '<span style="color: #EF4444;">ABSENT</span>';
+        return;
+    }
+
+    let thVal = thInput ? parseFloat(thInput.value) : 0;
+    if (isNaN(thVal)) thVal = 0;
+
+    let prVal = prInput ? parseFloat(prInput.value) : 0;
+    if (isNaN(prVal)) prVal = 0;
+
+    // Validation
+    if (thInput && thVal > theoryMax) {
+        thInput.style.borderColor = '#DC2626';
+        thInput.style.backgroundColor = '#FEE2E2';
+    } else if (thInput) {
+        thInput.style.borderColor = '#94A3B8';
+        thInput.style.backgroundColor = '#FFFFFF';
+    }
+
+    if (prInput && prVal > practicalMax) {
+        prInput.style.borderColor = '#DC2626';
+        prInput.style.backgroundColor = '#FEE2E2';
+    } else if (prInput) {
+        prInput.style.borderColor = '#94A3B8';
+        prInput.style.backgroundColor = '#FFFFFF';
+    }
+
+    const hasAnyVal = (thInput && thInput.value.trim() !== '') || (prInput && prInput.value.trim() !== '');
+
+    if (!hasAnyVal) {
+        totSpan.innerText = '—';
+        grdSpan.innerText = '—';
+        resSpan.innerText = '—';
+        return;
+    }
+
+    const total = thVal + prVal;
+    totSpan.innerText = total.toFixed(1).replace(/\.0$/, '');
+
+    // Grade calculation (100 base)
+    const pct = total;
+    let grade = 'E';
+    if (pct >= 90) grade = 'A1';
+    else if (pct >= 80) grade = 'A2';
+    else if (pct >= 70) grade = 'B1';
+    else if (pct >= 60) grade = 'B2';
+    else if (pct >= 50) grade = 'C1';
+    else if (pct >= 40) grade = 'C2';
+    else if (pct >= 33) grade = 'D';
+
+    grdSpan.innerText = grade;
+
+    if (total >= passMarks) {
+        resSpan.innerHTML = '<span style="color: #16A34A; font-weight: 700;">PASS</span>';
+    } else {
+        resSpan.innerHTML = '<span style="color: #DC2626; font-weight: 700;">FAIL</span>';
+    }
+}
+
+function toggleAbsent(sid) {
+    const abCheck = document.getElementById('ab-' + sid);
+    const thInput = document.getElementById('th-' + sid);
+    const prInput = document.getElementById('pr-' + sid);
+
+    if (abCheck.checked) {
+        if (thInput) { thInput.disabled = true; thInput.value = ''; }
+        if (prInput) { prInput.disabled = true; prInput.value = ''; }
+    } else {
+        if (thInput) thInput.disabled = false;
+        if (prInput) prInput.disabled = false;
+    }
+    calculateRow(sid);
+}
+
+function fillDefaultPractical() {
+    const val = prompt('Enter Practical/Project Marks for all students (Max ' + practicalMax + '):', practicalMax.toString());
+    if (val === null) return;
+    const num = parseFloat(val);
+    if (isNaN(num) || num < 0 || num > practicalMax) {
+        alert('Invalid marks! Must be between 0 and ' + practicalMax);
+        return;
+    }
+    const prInputs = document.querySelectorAll('.practical-input');
+    prInputs.forEach(input => {
+        if (!input.disabled) {
+            input.value = num;
+            calculateRow(input.dataset.sid);
+        }
+    });
+}
+
+function handleKeyNavigation(e, current) {
+    if (e.key === 'ArrowDown' || e.key === 'Enter') {
+        e.preventDefault();
+        const inputs = Array.from(document.querySelectorAll('.theory-input, .practical-input'));
+        const idx = inputs.indexOf(current);
+        if (idx !== -1 && idx + 1 < inputs.length) {
+            inputs[idx + 1].focus();
+            inputs[idx + 1].select();
+        }
+    } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        const inputs = Array.from(document.querySelectorAll('.theory-input, .practical-input'));
+        const idx = inputs.indexOf(current);
+        if (idx > 0) {
+            inputs[idx - 1].focus();
+            inputs[idx - 1].select();
+        }
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,327 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Student ID Cards (छात्र पहचान पत्र) | SchoolSoft{% endblock %}
+
+{% block extra_head %}
+<style>
+  .id-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+  .id-kpi-card {
+    background: var(--surface, #ffffff);
+    padding: 1.2rem;
+    border-radius: 8px;
+    border: 1px solid var(--border, #e2e8f0);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+  .id-kpi-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-muted, #64748b);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .id-kpi-val {
+    font-size: 1.8rem;
+    font-weight: 700;
+    margin-top: 0.3rem;
+    color: var(--text, #0f172a);
+  }
+  .id-kpi-sub {
+    font-size: 0.75rem;
+    color: var(--text-muted, #64748b);
+    margin-top: 0.2rem;
+  }
+  .id-tab-btn {
+    padding: 0.55rem 1.2rem;
+    font-size: 0.88rem;
+    font-weight: 600;
+    border-radius: 6px;
+    cursor: pointer;
+    border: 1px solid var(--border, #cbd5e1);
+    background: var(--surface, #ffffff);
+    color: var(--text, #334155);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    text-decoration: none;
+    transition: all 0.15s ease;
+  }
+  .id-tab-btn.active {
+    background: #0d3b13;
+    color: #ffffff;
+    border-color: #0d3b13;
+  }
+  .id-tab-btn:hover:not(.active) {
+    background: #f1f5f9;
+  }
+  .badge-pill {
+    padding: 0.2rem 0.55rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    border-radius: 12px;
+    display: inline-block;
+  }
+  .badge-green {
+    background: #dcfce7;
+    color: #166534;
+    border: 1px solid #bbf7d0;
+  }
+  .badge-red {
+    background: #fee2e2;
+    color: #991b1b;
+    border: 1px solid #fecaca;
+  }
+  .badge-dark {
+    background: #0d3b13;
+    color: #ffffff;
+  }
+  .badge-gray {
+    background: #f1f5f9;
+    color: #475569;
+    border: 1px solid #cbd5e1;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="section">
+  <!-- Page Header -->
+  <div class="section-heading with-actions" style="margin-bottom: 1.5rem;">
+    <div>
+      <h2 style="font-size: 1.5rem; font-weight: 700; color: #0d3b13; margin: 0 0 0.3rem 0;">
+        Student Identity Cards (छात्र पहचान पत्र)
+      </h2>
+      <p style="margin: 0; font-size: 0.85rem; color: var(--text-muted, #64748b);">
+        ISO CR80 Standard (54 × 85.6 mm Portrait) &bull; Single Card PDF &bull; 9-Card A4 Batch Duplex Sheet &bull; Official School Identity (Royal Blue, Golden Yellow &amp; Crimson Red)
+      </p>
+    </div>
+    <div class="action-row" style="display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap;">
+      <a class="button secondary" href="{% url 'core:bulk_photo_upload' %}" style="padding: 0.6rem 1.1rem; background: #eff6ff; color: #1e40af; border: 1px solid #93c5fd; font-weight: 600; text-decoration: none; border-radius: 6px; display: inline-flex; align-items: center; gap: 0.4rem;">
+        📸 Upload Student Photos
+      </a>
+      <a class="button secondary" href="{% url 'core:id_card_issue_list_view' %}" style="padding: 0.6rem 1.1rem; background: #f0fdf4; color: #166534; border: 1px solid #86efac; font-weight: 600; text-decoration: none; border-radius: 6px; display: inline-flex; align-items: center; gap: 0.4rem;">
+        📋 Issue Register
+      </a>
+      <a class="button" href="{% url 'core:id_card_batch_pdf' %}?class={{ selected_class }}&section={{ selected_section }}&q={{ query }}" target="_blank" style="background: #0d3b13; color: #ffffff; padding: 0.6rem 1.2rem; font-weight: 600; text-decoration: none; border-radius: 6px; display: inline-flex; align-items: center; gap: 0.5rem;">
+        🖨️ Print A4 Batch PDF (10 Cards/Page)
+      </a>
+    </div>
+  </div>
+
+  <!-- KPI Summary Grid -->
+  <div class="id-kpi-grid">
+    <div class="id-kpi-card">
+      <div class="id-kpi-label">Total Students (कुल छात्र)</div>
+      <div class="id-kpi-val" style="color: #0d3b13;">{{ total_count }}</div>
+      <div class="id-kpi-sub">Filtered Class &amp; Section</div>
+    </div>
+    <div class="id-kpi-card">
+      <div class="id-kpi-label">Photos Uploaded (फोटो तैयार)</div>
+      <div class="id-kpi-val" style="color: #16a34a;">{{ photos_ready_count }}</div>
+      <div class="id-kpi-sub">Ready with photograph</div>
+    </div>
+    <div class="id-kpi-card">
+      <div class="id-kpi-label">Photos Missing (फोटो शेष)</div>
+      <div class="id-kpi-val" style="color: #d97706;">{{ photos_missing_count }}</div>
+      <div class="id-kpi-sub">Showing silhouette fallback</div>
+    </div>
+    <div class="id-kpi-card">
+      <div class="id-kpi-label">Format &amp; Session</div>
+      <div class="id-kpi-val" style="font-size: 1.3rem; color: #0f172a; margin-top: 0.6rem;">Session 2026-27</div>
+      <div class="id-kpi-sub">CR80 (54×85.6mm) &bull; Gold Keyline</div>
+    </div>
+  </div>
+
+  <!-- Filter & Search Bar -->
+  <form method="get" class="filterbar" style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-end; background: var(--surface, #ffffff); padding: 1.2rem; border-radius: 8px; border: 1px solid var(--border, #e2e8f0); margin-bottom: 1.5rem;">
+    <div style="display: flex; flex-direction: column; gap: 0.3rem;">
+      <label style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted, #64748b);">कक्षा (Class)</label>
+      <select name="class" style="min-width: 150px; padding: 0.5rem 0.7rem; border-radius: 6px; border: 1px solid var(--border, #cbd5e1); font-size: 0.88rem;" onchange="this.form.submit()">
+        <option value="">All Classes (सभी कक्षाएं)</option>
+        {% for c in classes %}
+        <option value="{{ c.pk }}" {% if selected_class == c.pk|stringformat:"s" %}selected{% endif %}>{{ c.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 0.3rem;">
+      <label style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted, #64748b);">वर्ग (Section)</label>
+      <select name="section" style="min-width: 140px; padding: 0.5rem 0.7rem; border-radius: 6px; border: 1px solid var(--border, #cbd5e1); font-size: 0.88rem;" onchange="this.form.submit()">
+        <option value="">All Sections (सभी वर्ग)</option>
+        {% for s in sections %}
+        <option value="{{ s.pk }}" {% if selected_section == s.pk|stringformat:"s" %}selected{% endif %}>Section {{ s.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 0.3rem; flex: 1; min-width: 240px;">
+      <label style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted, #64748b);">छात्र खोजें (Search Name / SID / Adm No)</label>
+      <input type="text" name="q" value="{{ query }}" placeholder="नाम, SID या एडमिशन नंबर लिखें..." style="padding: 0.5rem 0.7rem; border-radius: 6px; border: 1px solid var(--border, #cbd5e1); font-size: 0.88rem;">
+    </div>
+
+    <div style="display: flex; gap: 0.5rem; align-items: center;">
+      <button type="submit" class="button" style="padding: 0.55rem 1.1rem; background: #0d3b13; color: #ffffff; font-weight: 600; border: none; border-radius: 6px; cursor: pointer;">
+        🔍 Filter / Search
+      </button>
+      <a href="{% url 'core:id_cards_dashboard' %}" class="button secondary" style="padding: 0.55rem 1.1rem; background: #f1f5f9; color: #475569; font-weight: 600; border: 1px solid #cbd5e1; border-radius: 6px; text-decoration: none;">
+        Reset Filters
+      </a>
+    </div>
+  </form>
+
+  <!-- Tab Switcher -->
+  <div style="display: flex; gap: 0.6rem; margin-bottom: 1.2rem;">
+    <button type="button" class="id-tab-btn active" id="tab-all-btn" onclick="showTab('all')">
+      🪪 All Students Cards ({{ total_count }})
+    </button>
+    <button type="button" class="id-tab-btn" id="tab-missing-btn" onclick="showTab('missing')">
+      ⚠️ Missing Photos List ({{ photos_missing_count }})
+    </button>
+  </div>
+
+  <!-- TAB 1: ALL STUDENTS CARDS TABLE -->
+  <div id="tab-all-content" class="table-wrap" style="background: var(--surface, #ffffff); border: 1px solid var(--border, #e2e8f0); border-radius: 8px; overflow-x: auto;">
+    <table class="data-table" style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.88rem;">
+      <thead>
+        <tr style="background: #f8fafc; border-bottom: 2px solid var(--border, #e2e8f0);">
+          <th style="padding: 0.75rem 1rem; width: 50px;">Photo</th>
+          <th style="padding: 0.75rem 1rem;">SID / Adm No</th>
+          <th style="padding: 0.75rem 1rem;">Student Name (छात्र नाम)</th>
+          <th style="padding: 0.75rem 1rem;">Class &amp; Section</th>
+          <th style="padding: 0.75rem 1rem;">Roll No</th>
+          <th style="padding: 0.75rem 1rem;">Blood Group</th>
+          <th style="padding: 0.75rem 1rem;">Father's Name</th>
+          <th style="padding: 0.75rem 1rem;">Mobile</th>
+          <th style="padding: 0.75rem 1rem; text-align: right; width: 130px;">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in students %}
+        <tr style="border-bottom: 1px solid var(--border, #e2e8f0);">
+          <td style="padding: 0.6rem 1rem;">
+            {% if s.photo %}
+            <img src="{{ s.photo.url }}" alt="{{ s.full_name }}" style="width: 36px; height: 36px; border-radius: 50%; object-fit: cover; border: 1px solid #cbd5e1;">
+            {% else %}
+            <div style="width: 36px; height: 36px; border-radius: 50%; background: #f1f5f9; border: 1px solid #cbd5e1; display: flex; align-items: center; justify-content: center; color: #94a3b8; font-size: 0.75rem; font-weight: 700;">
+              👤
+            </div>
+            {% endif %}
+          </td>
+          <td style="padding: 0.6rem 1rem;">
+            <span class="badge-pill badge-dark">SID: {{ s.legacy_sid|default:s.id }}</span>
+          </td>
+          <td style="padding: 0.6rem 1rem;">
+            <div style="font-weight: 700; color: #0f172a;">{{ s.full_name }}</div>
+            {% if s.full_name_hindi %}
+            <div style="color: #1b5e20; font-size: 0.8rem; font-weight: 600;">{{ s.full_name_hindi }}</div>
+            {% endif %}
+          </td>
+          <td style="padding: 0.6rem 1rem;">
+            <span class="badge-pill badge-gray">
+              {{ s.current_class.name }}{% if s.current_section %} - {{ s.current_section.name }}{% endif %}
+            </span>
+          </td>
+          <td style="padding: 0.6rem 1rem; color: #475569;">{{ s.roll_no|default:"—" }}</td>
+          <td style="padding: 0.6rem 1rem;">
+            {% if s.blood_group %}
+            <span class="badge-pill badge-red">{{ s.blood_group }}</span>
+            {% else %}
+            <span style="color: #94a3b8; font-size: 0.8rem;">—</span>
+            {% endif %}
+          </td>
+          <td style="padding: 0.6rem 1rem; color: #334155;">{{ s.father_name|default:"—" }}</td>
+          <td style="padding: 0.6rem 1rem; color: #334155; font-family: monospace;">{{ s.mobile_primary|default:"—" }}</td>
+          <td style="padding: 0.6rem 1rem; text-align: right;">
+            <a href="{% url 'core:id_card_single_pdf' s.pk %}" target="_blank" style="display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.4rem 0.8rem; font-size: 0.8rem; font-weight: 600; background: #f0fdf4; color: #166534; border: 1px solid #86efac; border-radius: 6px; text-decoration: none;">
+              📄 Single PDF
+            </a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="9" style="text-align: center; padding: 3rem 1rem; color: #64748b;">
+            <div style="font-size: 2rem; margin-bottom: 0.5rem;">📭</div>
+            No students found matching your filters.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- TAB 2: MISSING PHOTOS LIST TABLE -->
+  <div id="tab-missing-content" class="table-wrap" style="display: none; background: var(--surface, #ffffff); border: 1px solid var(--border, #e2e8f0); border-radius: 8px; overflow-x: auto;">
+    <div style="padding: 1rem 1.2rem; background: #fefce8; border-bottom: 1px solid #fef08a; display: flex; justify-content: space-between; align-items: center;">
+      <div style="font-weight: 700; color: #854d0e; font-size: 0.92rem;">
+        ⚠️ Students Awaiting Photo Upload (फोटो अपलोड हेतु शेष छात्र)
+      </div>
+      <span class="badge-pill" style="background: #fef08a; color: #854d0e;">{{ photos_missing_count }} Students</span>
+    </div>
+    <table class="data-table" style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.88rem;">
+      <thead>
+        <tr style="background: #f8fafc; border-bottom: 2px solid var(--border, #e2e8f0);">
+          <th style="padding: 0.75rem 1rem;">SID</th>
+          <th style="padding: 0.75rem 1rem;">Adm No</th>
+          <th style="padding: 0.75rem 1rem;">Student Name</th>
+          <th style="padding: 0.75rem 1rem;">Class &amp; Sec</th>
+          <th style="padding: 0.75rem 1rem;">Father's Name</th>
+          <th style="padding: 0.75rem 1rem;">Mobile Number</th>
+          <th style="padding: 0.75rem 1rem;">Address</th>
+          <th style="padding: 0.75rem 1rem; text-align: right;">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in missing_photo_students %}
+        <tr style="border-bottom: 1px solid var(--border, #e2e8f0);">
+          <td style="padding: 0.6rem 1rem;"><span class="badge-pill badge-dark">{{ s.legacy_sid|default:s.id }}</span></td>
+          <td style="padding: 0.6rem 1rem; font-weight: 600;">{{ s.admission_no|default:s.legacy_sid|default:s.id }}</td>
+          <td style="padding: 0.6rem 1rem; font-weight: 700; color: #0f172a;">{{ s.full_name }}</td>
+          <td style="padding: 0.6rem 1rem;">{{ s.current_class.name }}{% if s.current_section %} - {{ s.current_section.name }}{% endif %}</td>
+          <td style="padding: 0.6rem 1rem; color: #334155;">{{ s.father_name|default:"—" }}</td>
+          <td style="padding: 0.6rem 1rem; font-family: monospace;">{{ s.mobile_primary|default:"—" }}</td>
+          <td style="padding: 0.6rem 1rem; font-size: 0.8rem; color: #64748b;">{{ s.address_permanent|default:"Dudahi, Kushinagar"|truncatechars:35 }}</td>
+          <td style="padding: 0.6rem 1rem; text-align: right;">
+            <a href="{% url 'core:student_update' s.pk %}" target="_blank" style="padding: 0.35rem 0.75rem; font-size: 0.8rem; font-weight: 600; background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; border-radius: 6px; text-decoration: none;">
+              📷 Upload Photo
+            </a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="8" style="text-align: center; padding: 3rem 1rem; color: #16a34a;">
+            <div style="font-size: 2rem; margin-bottom: 0.5rem;">🎉</div>
+            Great! All students in the current selection have photos uploaded.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<script>
+  function showTab(tab) {
+    var allContent = document.getElementById('tab-all-content');
+    var missingContent = document.getElementById('tab-missing-content');
+    var allBtn = document.getElementById('tab-all-btn');
+    var missingBtn = document.getElementById('tab-missing-btn');
+
+    if (tab === 'all') {
+      allContent.style.display = 'block';
+      missingContent.style.display = 'none';
+      allBtn.classList.add('active');
+      missingBtn.classList.remove('active');
+    } else {
+      allContent.style.display = 'none';
+      missingContent.style.display = 'block';
+      missingBtn.classList.add('active');
+      allBtn.classList.remove('active');
+    }
+  }
+</script>
+{% endblock %}

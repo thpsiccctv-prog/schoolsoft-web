@@ -19,10 +19,13 @@
             {% endif %}
             <a class="button secondary action-secondary" href="{% url 'core:student_register' %}?{{ request.GET.urlencode }}" target="_blank">Print Register</a>
             <a class="button secondary action-secondary" href="{% url 'core:id_card_batch_pdf' %}?{{ request.GET.urlencode }}" target="_blank">Print ID Cards</a>
-            <a class="button secondary action-secondary" href="{% url 'core:student_export_csv' %}?{{ request.GET.urlencode }}">Export Excel</a>
-            <a class="button secondary action-secondary" href="{% url 'core:board_registration_export_csv' 'class9' %}">Board IX</a>
-            <a class="button secondary action-secondary" href="{% url 'core:board_registration_export_csv' 'class11-upboard' %}">Board XI UP</a>
-            <a class="button secondary action-secondary" href="{% url 'core:board_registration_export_csv' 'class11-others' %}">Board XI Other</a>
+            <a class="button secondary action-secondary" href="{% url 'core:student_export_csv' %}?{{ request.GET.urlencode }}">Export Students</a>
+            <a class="button secondary action-secondary" href="{% url 'core:board_registration_export_excel' 'class9' %}" title="Download Excel (.xlsx) file with Hindi fonts for Excel 2007/2010/2016+">📊 Board IX (Excel)</a>
+            <a class="button secondary action-secondary" href="{% url 'core:board_registration_export_csv' 'class9' %}" title="Download CSV file for UP Board Portal Upload">Board IX (CSV)</a>
+            <a class="button secondary action-secondary" href="{% url 'core:board_registration_export_excel' 'class11-upboard' %}" title="Download Excel (.xlsx) file">📊 Board XI UP (Excel)</a>
+            <a class="button secondary action-secondary" href="{% url 'core:board_registration_export_csv' 'class11-upboard' %}" title="Download CSV file">Board XI UP (CSV)</a>
+            <a class="button secondary action-secondary" href="{% url 'core:board_registration_export_excel' 'class11-others' %}" title="Download Excel (.xlsx) file">📊 Board XI Other (Excel)</a>
+            <a class="button secondary action-secondary" href="{% url 'core:board_registration_export_csv' 'class11-others' %}" title="Download CSV file">Board XI Other (CSV)</a>
         </div>
     </div>
 

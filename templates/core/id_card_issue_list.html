@@ -1,0 +1,316 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Student ID Card Issue List & Register | SchoolSoft{% endblock %}
+
+{% block extra_head %}
+<style>
+  .il-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+  .il-kpi-card {
+    background: var(--surface, #ffffff);
+    padding: 1.2rem;
+    border-radius: 8px;
+    border: 1px solid var(--border, #e2e8f0);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+  .il-kpi-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-muted, #64748b);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .il-kpi-val {
+    font-size: 1.8rem;
+    font-weight: 700;
+    margin-top: 0.3rem;
+    color: var(--text, #0f172a);
+  }
+  .il-kpi-sub {
+    font-size: 0.75rem;
+    color: var(--text-muted, #64748b);
+    margin-top: 0.2rem;
+  }
+  .group-banner {
+    background: #0d3b13;
+    color: #ffffff;
+    padding: 0.75rem 1.2rem;
+    border-radius: 8px 8px 0 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: 700;
+    font-size: 0.95rem;
+    margin-top: 1.5rem;
+  }
+  .badge-pill {
+    padding: 0.2rem 0.55rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    border-radius: 12px;
+    display: inline-block;
+  }
+  .badge-dark { background: #0d3b13; color: #ffffff; }
+  .badge-green { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+  .badge-orange { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+  .badge-red { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+  .badge-gray { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
+  .missing-box {
+    color: #dc2626;
+    background: #fef2f2;
+    border: 1px dashed #fca5a5;
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="section">
+  <!-- Page Header -->
+  <div class="section-heading with-actions" style="margin-bottom: 1.5rem;">
+    <div>
+      <h2 style="font-size: 1.5rem; font-weight: 700; color: #0d3b13; margin: 0 0 0.3rem 0;">
+        Student ID Card Issue List &amp; Register (छात्र पहचान पत्र जारी पंजिका)
+      </h2>
+      <p style="margin: 0; font-size: 0.85rem; color: var(--text-muted, #64748b);">
+        A4 Landscape Format &bull; Data Verification Sheet &bull; Distribution Register with Signatures &bull; Class &amp; Feeder School Grouping
+      </p>
+    </div>
+    <div class="action-row" style="display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap;">
+      <a class="button" href="{% url 'core:id_card_issue_list_pdf' %}?class={{ selected_class }}&section={{ selected_section }}&feeder={{ selected_feeder }}&status={{ selected_status }}&q={{ query }}&mode={{ mode }}" target="_blank" style="background: #0d3b13; color: #ffffff; padding: 0.6rem 1.1rem; font-weight: 600; text-decoration: none; border-radius: 6px; display: inline-flex; align-items: center; gap: 0.4rem;">
+        📄 Export PDF (A4 Landscape)
+      </a>
+      <a class="button secondary" href="{% url 'core:id_card_issue_list_excel' %}?class={{ selected_class }}&section={{ selected_section }}&feeder={{ selected_feeder }}&status={{ selected_status }}&q={{ query }}&mode={{ mode }}" style="padding: 0.6rem 1.1rem; background: #f0fdf4; color: #166534; border: 1px solid #86efac; font-weight: 600; text-decoration: none; border-radius: 6px; display: inline-flex; align-items: center; gap: 0.4rem;">
+        📊 Export Excel (.xlsx)
+      </a>
+      <a class="button secondary" href="{% url 'core:id_cards_dashboard' %}" style="padding: 0.6rem 1.1rem; background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; font-weight: 600; text-decoration: none; border-radius: 6px; display: inline-flex; align-items: center; gap: 0.4rem;">
+        🪪 ID Cards Dashboard
+      </a>
+    </div>
+  </div>
+
+  <!-- KPI Summary Cards -->
+  <div class="il-kpi-grid">
+    <div class="il-kpi-card">
+      <div class="il-kpi-label">Total Students (कुल छात्र)</div>
+      <div class="il-kpi-val" style="color: #0d3b13;">{{ total_count }}</div>
+      <div class="il-kpi-sub">{{ groups_data|length }} Group(s) Loaded</div>
+    </div>
+    <div class="il-kpi-card">
+      <div class="il-kpi-label">Photos Uploaded (फोटो तैयार)</div>
+      <div class="il-kpi-val" style="color: #16a34a;">{{ total_photos }}</div>
+      <div class="il-kpi-sub">Ready for printing</div>
+    </div>
+    <div class="il-kpi-card">
+      <div class="il-kpi-label">Photos Missing (फोटो शेष)</div>
+      <div class="il-kpi-val" style="color: #d97706;">{{ total_missing_photos }}</div>
+      <div class="il-kpi-sub">Box marked for paste</div>
+    </div>
+    <div class="il-kpi-card">
+      <div class="il-kpi-label">Active List Mode</div>
+      <div class="il-kpi-val" style="font-size: 1.25rem; color: #0f172a; margin-top: 0.5rem;">
+        {% if mode == 'collection' %}📝 Data Collection{% else %}📋 Issue Register{% endif %}
+      </div>
+      <div class="il-kpi-sub">Session 2026-27 &bull; A4 Landscape</div>
+    </div>
+  </div>
+
+  <!-- Filter & Mode Bar -->
+  <form method="get" class="filterbar" style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-end; background: var(--surface, #ffffff); padding: 1.2rem; border-radius: 8px; border: 1px solid var(--border, #e2e8f0); margin-bottom: 1.5rem;">
+    <div style="display: flex; flex-direction: column; gap: 0.3rem;">
+      <label style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted, #64748b);">कक्षा (Class)</label>
+      <select name="class" style="min-width: 130px; padding: 0.5rem 0.7rem; border-radius: 6px; border: 1px solid var(--border, #cbd5e1); font-size: 0.88rem;" onchange="this.form.submit()">
+        <option value="">All Classes</option>
+        {% for c in classes %}
+        <option value="{{ c.pk }}" {% if selected_class == c.pk|stringformat:"s" %}selected{% endif %}>{{ c.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 0.3rem;">
+      <label style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted, #64748b);">वर्ग (Section)</label>
+      <select name="section" style="min-width: 120px; padding: 0.5rem 0.7rem; border-radius: 6px; border: 1px solid var(--border, #cbd5e1); font-size: 0.88rem;" onchange="this.form.submit()">
+        <option value="">All Sections</option>
+        {% for s in sections %}
+        <option value="{{ s.pk }}" {% if selected_section == s.pk|stringformat:"s" %}selected{% endif %}>Section {{ s.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 0.3rem;">
+      <label style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted, #64748b);">Attached School (फीडर स्कूल)</label>
+      <select name="feeder" style="min-width: 170px; padding: 0.5rem 0.7rem; border-radius: 6px; border: 1px solid var(--border, #cbd5e1); font-size: 0.88rem;" onchange="this.form.submit()">
+        <option value="">All Campuses &amp; Schools</option>
+        <option value="none" {% if selected_feeder == 'none' %}selected{% endif %}>THPS Main Campus (Regular)</option>
+        {% for f in feeder_schools %}
+        <option value="{{ f.pk }}" {% if selected_feeder == f.pk|stringformat:"s" %}selected{% endif %}>{{ f.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 0.3rem;">
+      <label style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted, #64748b);">Data Filter</label>
+      <select name="status" style="min-width: 150px; padding: 0.5rem 0.7rem; border-radius: 6px; border: 1px solid var(--border, #cbd5e1); font-size: 0.88rem;" onchange="this.form.submit()">
+        <option value="all" {% if selected_status == 'all' %}selected{% endif %}>All Students</option>
+        <option value="missing_photo" {% if selected_status == 'missing_photo' %}selected{% endif %}>⚠️ Missing Photo</option>
+        <option value="missing_mobile" {% if selected_status == 'missing_mobile' %}selected{% endif %}>⚠️ Missing Mobile</option>
+        <option value="missing_serial" {% if selected_status == 'missing_serial' %}selected{% endif %}>⚠️ Missing Board Serial</option>
+        <option value="missing_hindi" {% if selected_status == 'missing_hindi' %}selected{% endif %}>⚠️ Missing Hindi Name</option>
+      </select>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 0.3rem;">
+      <label style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted, #64748b);">List Mode</label>
+      <select name="mode" style="min-width: 160px; padding: 0.5rem 0.7rem; border-radius: 6px; border: 1px solid var(--border, #cbd5e1); font-size: 0.88rem; font-weight: 600; color: #0d3b13;" onchange="this.form.submit()">
+        <option value="collection" {% if mode == 'collection' %}selected{% endif %}>📝 Data Collection Sheet</option>
+        <option value="register" {% if mode == 'register' %}selected{% endif %}>📋 Issue &amp; Sign Register</option>
+      </select>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 0.3rem; flex: 1; min-width: 200px;">
+      <label style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted, #64748b);">Search Student</label>
+      <input type="text" name="q" value="{{ query }}" placeholder="Name, SID, Adm, Mobile..." style="padding: 0.5rem 0.7rem; border-radius: 6px; border: 1px solid var(--border, #cbd5e1); font-size: 0.88rem;">
+    </div>
+
+    <div style="display: flex; gap: 0.5rem; align-items: center;">
+      <button type="submit" class="button" style="padding: 0.55rem 1.1rem; background: #0d3b13; color: #ffffff; font-weight: 600; border: none; border-radius: 6px; cursor: pointer;">
+        🔍 Filter / Search
+      </button>
+      <a href="{% url 'core:id_card_issue_list_view' %}" class="button secondary" style="padding: 0.55rem 1.1rem; background: #f1f5f9; color: #475569; font-weight: 600; border: 1px solid #cbd5e1; border-radius: 6px; text-decoration: none;">
+        Reset
+      </a>
+    </div>
+  </form>
+
+  <!-- Grouped Tables -->
+  {% for group in groups_data %}
+  <div style="margin-bottom: 2rem;">
+    <div class="group-banner">
+      <div>
+        <span>🏫 {{ group.group_name }}</span>
+      </div>
+      <div style="font-size: 0.85rem; font-weight: 600;">
+        <span>👦 Boys: {{ group.boys }}</span> &nbsp;|&nbsp;
+        <span>👧 Girls: {{ group.girls }}</span> &nbsp;|&nbsp;
+        <span>👥 Total: {{ group.count }}</span> &nbsp;|&nbsp;
+        <span>📷 Photos: {{ group.photos_ready }}/{{ group.count }}</span>
+      </div>
+    </div>
+
+    <div class="table-wrap" style="background: var(--surface, #ffffff); border: 1px solid var(--border, #e2e8f0); border-top: none; border-radius: 0 0 8px 8px; overflow-x: auto;">
+      <table class="data-table" style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.86rem;">
+        <thead>
+          <tr style="background: #1b5e20; color: #ffffff; font-size: 0.8rem;">
+            <th style="padding: 0.65rem 0.8rem; text-align: center; width: 50px;">S.No</th>
+            <th style="padding: 0.65rem 0.8rem; text-align: center; width: 90px;">Board Sr</th>
+            <th style="padding: 0.65rem 0.8rem; text-align: center; width: 90px;">Adm / SID</th>
+            <th style="padding: 0.65rem 0.8rem;">Student Name</th>
+            <th style="padding: 0.65rem 0.8rem;">छात्र नाम (Hindi)</th>
+            <th style="padding: 0.65rem 0.8rem;">Father's Name</th>
+            <th style="padding: 0.65rem 0.8rem;">Mother's Name</th>
+            <th style="padding: 0.65rem 0.8rem; text-align: center;">D.O.B.</th>
+            <th style="padding: 0.65rem 0.8rem; text-align: center;">Class-Sec</th>
+            <th style="padding: 0.65rem 0.8rem; text-align: center;">Mobile</th>
+            <th style="padding: 0.65rem 0.8rem; text-align: center;">Blood</th>
+            <th style="padding: 0.65rem 0.8rem; text-align: center;">Photo</th>
+            <th style="padding: 0.65rem 0.8rem; text-align: center; width: 120px;">
+              {% if mode == 'collection' %}Correction / Edit{% else %}Signature / Recv{% endif %}
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in group.students %}
+          <tr style="border-bottom: 1px solid var(--border, #e2e8f0); {% if forloop.counter|divisibleby:2 %}background: #f8fafc;{% endif %}">
+            <td style="padding: 0.55rem 0.8rem; text-align: center; font-weight: 700; color: #0d3b13;">
+              {{ forloop.counter }}
+            </td>
+            <td style="padding: 0.55rem 0.8rem; text-align: center;">
+              {% if s.board_sr_number %}
+              <span class="badge-pill badge-dark">{{ s.board_sr_number }}</span>
+              {% elif mode == 'collection' %}
+              <span class="missing-box">[ &nbsp; &nbsp; &nbsp; &nbsp; ]</span>
+              {% else %}
+              <span style="color: #94a3b8; font-weight: 600;">—</span>
+              {% endif %}
+            </td>
+            <td style="padding: 0.55rem 0.8rem; text-align: center;">
+              <div style="font-weight: 700; color: #0f172a;">{{ s.admission_no|default:s.legacy_sid|default:s.id }}</div>
+              <div style="font-size: 0.72rem; color: #64748b;">SID: {{ s.legacy_sid|default:s.id }}</div>
+            </td>
+            <td style="padding: 0.55rem 0.8rem; font-weight: 700; color: #0f172a;">
+              {{ s.full_name }}
+            </td>
+            <td style="padding: 0.55rem 0.8rem;">
+              {% if s.full_name_hindi %}
+              <span style="color: #166534; font-weight: 600;">{{ s.full_name_hindi }}</span>
+              {% else %}
+              <span class="missing-box">[ हिंदी नाम ]</span>
+              {% endif %}
+            </td>
+            <td style="padding: 0.55rem 0.8rem; color: #334155;">{{ s.father_name|default:"—" }}</td>
+            <td style="padding: 0.55rem 0.8rem; color: #334155;">{{ s.mother_name|default:"—" }}</td>
+            <td style="padding: 0.55rem 0.8rem; text-align: center; color: #475569;">
+              {% if s.date_of_birth %}
+              {{ s.date_of_birth|date:"d/m/Y" }}
+              {% else %}
+              <span class="missing-box">[ DD/MM/YY ]</span>
+              {% endif %}
+            </td>
+            <td style="padding: 0.55rem 0.8rem; text-align: center;">
+              <span class="badge-pill badge-gray">
+                {{ s.current_class.name }}{% if s.current_section %} - {{ s.current_section.name }}{% endif %}
+              </span>
+            </td>
+            <td style="padding: 0.55rem 0.8rem; text-align: center; font-family: monospace;">
+              {% if s.mobile_primary %}
+              {{ s.mobile_primary }}
+              {% else %}
+              <span class="missing-box">[ मोबाइल ]</span>
+              {% endif %}
+            </td>
+            <td style="padding: 0.55rem 0.8rem; text-align: center;">
+              {% if s.blood_group %}
+              <span class="badge-pill badge-red">{{ s.blood_group }}</span>
+              {% else %}
+              <span style="color: #94a3b8; font-size: 0.75rem;">[ &nbsp; ]</span>
+              {% endif %}
+            </td>
+            <td style="padding: 0.55rem 0.8rem; text-align: center;">
+              {% if s.photo %}
+              <span class="badge-pill badge-green">📷 Ready</span>
+              {% else %}
+              <span class="badge-pill badge-orange">🔲 Missing</span>
+              {% endif %}
+            </td>
+            <td style="padding: 0.55rem 0.8rem; text-align: center;">
+              {% if mode == 'collection' %}
+              <a href="{% url 'core:student_update' s.pk %}" target="_blank" style="padding: 0.3rem 0.6rem; font-size: 0.75rem; font-weight: 600; background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; border-radius: 4px; text-decoration: none;">
+                ✏️ Edit
+              </a>
+              {% else %}
+              <span style="color: #94a3b8; font-size: 0.75rem;">________________</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% empty %}
+  <div style="text-align: center; padding: 4rem 1rem; background: var(--surface, #ffffff); border: 1px solid var(--border, #e2e8f0); border-radius: 8px; color: #64748b;">
+    <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">📭</div>
+    <h3>No students found matching your filters.</h3>
+    <p>Try adjusting your class, section, feeder school or status filters.</p>
+  </div>
+  {% endfor %}
+</section>
+{% endblock %}

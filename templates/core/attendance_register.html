@@ -10,9 +10,12 @@
             <p>कक्षा, सेक्शन व माह के अनुसार A4 Landscape उपस्थिति पंजिका। कक्षा में पेन से हाजिरी लगाने हेतु प्रिंट करें।</p>
         </div>
         {% if selected_class and students %}
-        <div class="action-row">
-            <a class="button" href="{% url 'core:attendance_register_pdf' %}?class_id={{ selected_class.pk }}&section_id={{ selected_section.pk|default:'' }}&month={{ selected_month }}&year={{ selected_year }}" target="_blank">
-                🖨️ Print Register (A4 PDF)
+        <div class="action-row" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <a class="button" href="{% url 'core:attendance_register_pdf' %}?class_id={{ selected_class.pk }}&section_id={{ selected_section.pk|default:'' }}&month={{ selected_month }}&year={{ selected_year }}&format=teacher" target="_blank" style="background: #166534; color: #ffffff; font-weight: 700;">
+                🖨️ Print Teacher Register (Readable 11pt)
+            </a>
+            <a class="button secondary" href="{% url 'core:attendance_register_pdf' %}?class_id={{ selected_class.pk }}&section_id={{ selected_section.pk|default:'' }}&month={{ selected_month }}&year={{ selected_year }}&format=compact" target="_blank">
+                📄 Compact (Office)
             </a>
         </div>
         {% endif %}
@@ -74,9 +77,12 @@
                 माह: <strong>{{ selected_month_name }} {{ selected_year }}</strong> &bull; कुल नामांकित छात्र: <strong>{{ total_students }}</strong>
             </div>
         </div>
-        <div>
-            <a class="button" href="{% url 'core:attendance_register_pdf' %}?class_id={{ selected_class.pk }}&section_id={{ selected_section.pk|default:'' }}&month={{ selected_month }}&year={{ selected_year }}" target="_blank">
-                🖨️ Download &amp; Print A4 PDF
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <a class="button" href="{% url 'core:attendance_register_pdf' %}?class_id={{ selected_class.pk }}&section_id={{ selected_section.pk|default:'' }}&month={{ selected_month }}&year={{ selected_year }}&format=teacher" target="_blank" style="background: #166534; color: #ffffff; font-weight: 700;">
+                🖨️ Teacher Register (Readable 11pt)
+            </a>
+            <a class="button secondary" href="{% url 'core:attendance_register_pdf' %}?class_id={{ selected_class.pk }}&section_id={{ selected_section.pk|default:'' }}&month={{ selected_month }}&year={{ selected_year }}&format=compact" target="_blank">
+                📄 Compact (Office)
             </a>
         </div>
     </div>
@@ -104,7 +110,7 @@
                 {% for s in students %}
                 <tr style="border-bottom: 1px solid var(--border); height: 26px;">
                     <td style="text-align: center; font-weight: 600; border-right: 1px solid var(--border); background: #F8FAFC;">
-                        {{ s.roll_no|default:forloop.counter }}
+                        {{ forloop.counter }}
                     </td>
                     <td style="text-align: center; border-right: 1px solid var(--border); color: var(--text-muted);">
                         {{ s.admission_no|default:s.legacy_sid }}

@@ -145,7 +145,7 @@
     <div style="background: #fef2f2; border-left: 4px solid #dc2626; padding: 16px 20px; border-radius: 4px;">
         <h3 style="margin: 0 0 4px 0; color: #b91c1c; font-size: 16px; font-weight: 700;">⚠ NOT FULLY PAID - ₹{{ receipt.legacy_due_amount|indian_number }} STILL DUE</h3>
         <p style="margin: 0; color: #991b1b; font-size: 13px;">
-            Month range on this receipt: <strong>{{ receipt.from_month|default:"-" }} to {{ receipt.to_month|default:"-" }}</strong>.
+            Month range on this receipt: <strong>{{ receipt.display_month_range }}</strong>.
             The range being selected does not mean the amount is fully paid - always check the Due amount below before assuming this receipt is settled.
         </p>
     </div>
@@ -249,7 +249,7 @@
         </div>
         <div>
             <span>Fee Month</span>
-            <strong>{{ receipt.from_month }}{% if receipt.to_month and receipt.to_month != receipt.from_month %} to {{ receipt.to_month }}{% endif %}</strong>
+            <strong>{{ receipt.display_month_range }}</strong>
         </div>
         <div>
             <span>Payment Mode</span>

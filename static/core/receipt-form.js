@@ -195,6 +195,17 @@
             btn.addEventListener("click", function(e) {
                 e.preventDefault();
                 var clickedMonth = btn.dataset.month;
+
+                if (clickedMonth === "BAL") {
+                    if (!fromSelect.value || fromSelect.value === "BAL") {
+                        fromSelect.value = "APR";
+                    }
+                    toSelect.value = "BAL";
+                    fromSelect.dispatchEvent(new Event("change", {bubbles: true}));
+                    toSelect.dispatchEvent(new Event("change", {bubbles: true}));
+                    updateUI();
+                    return;
+                }
                 
                 if (!fromSelect.value || (fromSelect.value && toSelect.value)) {
                     fromSelect.value = clickedMonth;
@@ -329,7 +340,8 @@
         }
 
         function selectedTargetMonth() {
-            return (toSelect && toSelect.value) || (fromSelect && fromSelect.value) || form.dataset.defaultDueMonth || "APR";
+            var selected = (toSelect && toSelect.value) || (fromSelect && fromSelect.value) || form.dataset.defaultDueMonth || "APR";
+            return selected === "BAL" ? "MAR" : selected;
         }
 
         function renderMonthStatus(rows) {
@@ -356,6 +368,83 @@
             if (nextDue) nextDue.textContent = "-";
             if (lastPayment) lastPayment.textContent = "-";
             if (monthStatus) monthStatus.innerHTML = "";
+            updateRunningLedger(null);
+        }
+
+        function updateRunningLedger(status) {
+            var ledger = document.getElementById("running-ledger");
+            if (!ledger) return;
+            if (!status || !status.available) {
+                ledger.style.display = "none";
+                return;
+            }
+            ledger.style.display = "block";
+
+            var fmt = function(v) { return "₹" + formatMoney(toNumber(v)); };
+            var fmtMinus = function(v) { var n = toNumber(v); return n > 0 ? "-₹" + formatMoney(n) : "₹0.00"; };
+
+            var opening = toNumber(status.opening_balance_amount);
+            var demand = toNumber(status.scheduled_fee_demand);
+            var concession = toNumber(status.concession_amount || "0");
+            var policyConcession = toNumber(status.policy_concession_amount || "0");
+            var waiver = toNumber(status.waiver_amount || "0");
+            var paid = toNumber(status.received_amount);
+            var due = toNumber(status.due_amount);
+            var credit = toNumber(status.credit_amount);
+            var totalConcession = concession + policyConcession;
+
+            // Opening balance row
+            var openingRow = document.getElementById("rl-opening-row");
+            var openingEl = document.getElementById("rl-opening");
+            if (opening > 0) {
+                if (openingRow) openingRow.style.display = "";
+                if (openingEl) openingEl.textContent = fmt(opening);
+            } else {
+                if (openingRow) openingRow.style.display = "none";
+            }
+
+            // Demand
+            var demandEl = document.getElementById("rl-demand");
+            if (demandEl) demandEl.textContent = fmt(demand);
+
+            // Concession (combined receipt + policy)
+            var concessionRow = document.getElementById("rl-concession-row");
+            var concessionEl = document.getElementById("rl-concession");
+            if (totalConcession > 0) {
+                if (concessionRow) concessionRow.style.display = "";
+                if (concessionEl) concessionEl.textContent = fmtMinus(totalConcession);
+            } else {
+                if (concessionRow) concessionRow.style.display = "none";
+            }
+
+            // Waiver
+            var waiverRow = document.getElementById("rl-waiver-row");
+            var waiverEl = document.getElementById("rl-waiver");
+            if (waiver > 0) {
+                if (waiverRow) waiverRow.style.display = "";
+                if (waiverEl) waiverEl.textContent = fmtMinus(waiver);
+            } else {
+                if (waiverRow) waiverRow.style.display = "none";
+            }
+
+            // Paid
+            var paidEl = document.getElementById("rl-paid");
+            if (paidEl) paidEl.textContent = fmtMinus(paid);
+
+            // Due / Credit
+            var dueRow = document.getElementById("rl-due-row");
+            var creditRow = document.getElementById("rl-credit-row");
+            var dueEl = document.getElementById("rl-due");
+            var creditEl = document.getElementById("rl-credit");
+            if (credit > 0) {
+                if (dueRow) dueRow.style.display = "none";
+                if (creditRow) creditRow.style.display = "";
+                if (creditEl) creditEl.textContent = fmt(credit);
+            } else {
+                if (dueRow) dueRow.style.display = "";
+                if (creditRow) creditRow.style.display = "none";
+                if (dueEl) dueEl.textContent = fmt(due);
+            }
         }
 
         // Track whether a policy concession is currently active for the selected student.
@@ -442,6 +531,7 @@
                 }
             }
             renderMonthStatus(status.month_results);
+            updateRunningLedger(status);
             if (dueAmount > 0) {
                 dueCard.classList.add("is-due");
                 dueValue.textContent = "Rs. " + formatMoney(dueAmount);

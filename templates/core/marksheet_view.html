@@ -1,0 +1,654 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Marksheet — {{ student.full_name }} ({{ term.name }}){% endblock %}
+
+{% block extra_css %}
+<style>
+  :root {
+    --green: #1B5E20;
+    --green-dark: #0D3B13;
+    --gold: #C9A227;
+    --cream: #FBF8F1;
+    --ink: #1A1A1A;
+    --zebra: #F3F7F3;
+    --pass: #2E7D32;
+    --fail: #C62828;
+    --label: #6B7280;
+  }
+  .hi { font-family: 'Noto Sans Devanagari', 'Nirmala UI', 'Mangal', sans-serif; }
+  
+  .marksheet-wrapper {
+    display: flex;
+    justify-content: center;
+    padding: 20px 0;
+    background: #E2E8F0;
+    width: 100%;
+  }
+  .marksheet-sheet {
+    width: 210mm;
+    max-width: 100%;
+    min-height: 297mm;
+    background: #FFFFFF;
+    position: relative;
+    box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1);
+    padding: 11mm 12mm 9mm;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  
+  /* Watermark */
+  .marksheet-sheet::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 90mm;
+    height: 90mm;
+    background-image: url("{% static 'core/school_logo.png' %}");
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: contain;
+    opacity: 0.04;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Double Frame */
+  .frame-outer {
+    position: absolute;
+    inset: 6mm;
+    border: 1.5pt solid var(--green);
+    pointer-events: none;
+    z-index: 2;
+  }
+  .frame-inner {
+    position: absolute;
+    inset: 7.5mm;
+    border: 0.5pt solid var(--gold);
+    pointer-events: none;
+    z-index: 2;
+  }
+  .corner {
+    position: absolute;
+    width: 9mm;
+    height: 9mm;
+    pointer-events: none;
+    z-index: 3;
+  }
+  .corner::before, .corner::after {
+    content: "";
+    position: absolute;
+    background: var(--gold);
+  }
+  .corner.tl { top: 6mm; left: 6mm; }
+  .corner.tr { top: 6mm; right: 6mm; }
+  .corner.bl { bottom: 6mm; left: 6mm; }
+  .corner.br { bottom: 6mm; right: 6mm; }
+  .corner.tl::before, .corner.tr::before, .corner.bl::before, .corner.br::before { width: 9mm; height: 0.8mm; }
+  .corner.tl::after, .corner.tr::after, .corner.bl::after, .corner.br::after { width: 0.8mm; height: 9mm; }
+  .corner.tr::before { right: 0; }
+  .corner.tr::after { right: 0; }
+  .corner.bl::before { bottom: 0; }
+  .corner.br::before { bottom: 0; right: 0; }
+  .corner.br::after { right: 0; }
+
+  /* Header */
+  .head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 3mm;
+    padding-bottom: 2.2mm;
+    border-bottom: 0.8mm double var(--green);
+    position: relative;
+    z-index: 1;
+  }
+  .logo-wrap {
+    width: 75px;
+    height: 75px;
+    max-width: 75px;
+    max-height: 75px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .logo-wrap img {
+    width: 75px !important;
+    height: 75px !important;
+    max-width: 75px !important;
+    max-height: 75px !important;
+    object-fit: contain !important;
+    display: block;
+  }
+  .head-mid {
+    flex: 1;
+    text-align: center;
+  }
+  .h-name {
+    font-family: 'Playfair Display', Georgia, serif;
+    font-weight: 900;
+    font-size: 13.5pt;
+    line-height: 1.15;
+    color: var(--green-dark);
+    letter-spacing: 0.3px;
+  }
+  .h-name-hi {
+    font-size: 11pt;
+    font-weight: 700;
+    color: var(--green);
+    margin-top: 2px;
+  }
+  .h-addr {
+    font-size: 8pt;
+    color: #444;
+    margin-top: 2px;
+  }
+  .h-meta {
+    font-size: 7.2pt;
+    color: #666;
+    margin-top: 2px;
+  }
+  .sr-badge-box {
+    border: 0.4mm solid var(--green);
+    background: #FDFDFB;
+    padding: 3px 6px;
+    text-align: center;
+    border-radius: 4px;
+    flex-shrink: 0;
+    min-width: 100px;
+  }
+  .sr-badge-box small {
+    font-size: 6.5pt;
+    color: #666;
+    display: block;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+  .sr-badge-box b {
+    font-size: 7.5pt;
+    color: var(--green-dark);
+    display: block;
+  }
+
+  /* Band */
+  .band {
+    margin-top: 2.5mm;
+    background: linear-gradient(90deg, var(--green-dark), var(--green) 45%, var(--green-dark));
+    color: #fff;
+    text-align: center;
+    padding: 4px 0;
+    border-radius: 4px;
+    border: 0.4mm solid var(--gold);
+    position: relative;
+    z-index: 1;
+  }
+  .band .en {
+    font-family: 'Playfair Display', Georgia, serif;
+    font-weight: 700;
+    font-size: 11pt;
+    letter-spacing: 2px;
+  }
+  .band .hi-t {
+    font-size: 8.5pt;
+    font-weight: 600;
+    color: #EDE4C8;
+    margin-top: 1px;
+  }
+  .exam-line {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 2mm;
+    position: relative;
+    z-index: 1;
+  }
+  .chip {
+    border: 0.35mm solid var(--green);
+    color: var(--green-dark);
+    border-radius: 12px;
+    padding: 2px 12px;
+    font-size: 8pt;
+    font-weight: 700;
+    background: var(--cream);
+  }
+  .chip.gold {
+    border-color: var(--gold);
+    color: #7A5D10;
+  }
+
+  /* Student Info */
+  .stu {
+    margin-top: 2.2mm;
+    display: flex;
+    gap: 8px;
+    position: relative;
+    z-index: 1;
+  }
+  .stu-grid {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1.2fr 1.2fr 0.8fr;
+    border: 0.35mm solid #D7DDD7;
+    border-radius: 4px;
+    background: #FDFDFB;
+  }
+  .cell {
+    padding: 4px 8px;
+    border-bottom: 0.25mm solid #E3E8E3;
+    border-right: 0.25mm solid #E3E8E3;
+  }
+  .cell:nth-child(3n) { border-right: none; }
+  .cell:nth-last-child(-n+3) { border-bottom: none; }
+  .cell .lb { font-size: 6.5pt; letter-spacing: 0.5px; color: var(--label); font-weight: 700; text-transform: uppercase; }
+  .cell .vl { font-size: 9.5pt; font-weight: 800; margin-top: 1px; color: #0F172A; }
+  .cell .vh { font-size: 8pt; color: var(--green-dark); font-weight: 700; }
+  
+  .photo {
+    width: 95px;
+    height: 112px;
+    border: 0.35mm solid #C9CFC9;
+    border-radius: 4px;
+    background: #F6F7F5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 3px;
+    flex-shrink: 0;
+    overflow: hidden;
+  }
+  .photo img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .photo small { font-size: 6.5pt; color: #8A938A; text-align: center; }
+
+  /* Table */
+  table.m-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 2.2mm;
+    position: relative;
+    z-index: 1;
+    border: 0.4mm solid var(--green);
+  }
+  table.m-table thead th {
+    background: var(--green-dark);
+    color: #fff;
+    font-size: 7.5pt;
+    letter-spacing: 0.3px;
+    padding: 4px 4px;
+    font-weight: 700;
+    border-right: 0.2mm solid rgba(255,255,255,0.18);
+    text-align: center;
+  }
+  table.m-table thead .sub-th {
+    background: var(--green);
+    font-size: 6.8pt;
+    font-weight: 600;
+    color: #E7EFE7;
+    padding: 2px 4px;
+  }
+  table.m-table tbody td {
+    padding: 3.5px 5px;
+    font-size: 8pt;
+    border-bottom: 0.22mm solid #E2E7E2;
+    border-right: 0.22mm solid #EDF1ED;
+  }
+  table.m-table tbody tr:nth-child(even) { background: var(--zebra); }
+  td.num { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+  td.ctr { text-align: center; }
+  .grade-pill {
+    display: inline-block;
+    min-width: 20px;
+    text-align: center;
+    border-radius: 8px;
+    padding: 1px 5px;
+    font-weight: 800;
+    font-size: 7.5pt;
+    background: #E7F0E7;
+    color: var(--green-dark);
+  }
+  .res-p { color: var(--pass); font-weight: 800; }
+  .res-f { color: var(--fail); font-weight: 800; }
+  table.m-table tfoot td {
+    background: #EAF3EA;
+    border-top: 0.5mm solid var(--green);
+    font-weight: 800;
+    padding: 4px 5px;
+    font-size: 8.5pt;
+  }
+
+  /* Summary Cards */
+  .sum {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    margin-top: 2.2mm;
+    position: relative;
+    z-index: 1;
+  }
+  .card {
+    border: 0.35mm solid #D7DDD7;
+    border-top: 1.0mm solid var(--green);
+    border-radius: 4px;
+    text-align: center;
+    padding: 4px 3px;
+    background: #FDFDFB;
+  }
+  .card.gold { border-top-color: var(--gold); }
+  .card .lb { font-size: 6.5pt; letter-spacing: 0.5px; color: var(--label); font-weight: 700; text-transform: uppercase; }
+  .card .vl { font-size: 13pt; font-weight: 800; margin-top: 1px; color: var(--green-dark); line-height: 1.1; }
+  .card .vs { font-size: 7pt; color: #555; font-weight: 600; }
+  .card .pass { color: var(--pass); }
+
+  .words {
+    margin-top: 1.8mm;
+    font-size: 7.8pt;
+    border: 0.3mm solid var(--gold);
+    border-radius: 4px;
+    padding: 3px 8px;
+    background: var(--cream);
+    position: relative;
+    z-index: 1;
+  }
+  .words b { color: var(--green-dark); }
+
+  .meta-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 1.8mm;
+    position: relative;
+    z-index: 1;
+  }
+  .meta-box {
+    flex: 1;
+    border: 0.3mm solid #DCE1DC;
+    border-radius: 4px;
+    padding: 3px 6px;
+    font-size: 7.8pt;
+    background: #fff;
+  }
+  .meta-box .lb { font-size: 6.2pt; color: var(--label); font-weight: 700; text-transform: uppercase; }
+  .meta-box .vl { font-weight: 700; margin-top: 1px; color: #0F172A; }
+
+  .scale {
+    margin-top: 1.8mm;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    border: 0.3mm solid #DCE1DC;
+    border-radius: 4px;
+    padding: 2.5px 6px;
+    font-size: 6.5pt;
+    background: #FBFCFB;
+    flex-wrap: wrap;
+    position: relative;
+    z-index: 1;
+  }
+  .scale b { color: var(--green-dark); margin-right: 2px; }
+  .scale span { padding: 1px 4px; border-radius: 6px; background: #EFF4EF; font-weight: 600; }
+
+  /* Signatures */
+  .signs {
+    margin-top: auto;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+    padding-top: 12px;
+    position: relative;
+    z-index: 1;
+  }
+  .sig { text-align: center; font-size: 7.5pt; }
+  .sig .line { border-top: 0.35mm solid var(--ink); padding-top: 3px; font-weight: 700; }
+  .sig .hi-s { font-size: 7pt; color: var(--green-dark); margin-top: 1px; }
+
+  .foot {
+    margin-top: 2.2mm;
+    border-top: 0.25mm solid #D9DED9;
+    padding-top: 3px;
+    display: flex;
+    justify-content: space-between;
+    font-size: 6.5pt;
+    color: #888;
+    position: relative;
+    z-index: 1;
+  }
+
+  @media print {
+    @page { size: A4 portrait; margin: 0; }
+    body { background: #fff; padding: 0; }
+    .marksheet-wrapper { background: #fff; padding: 0; }
+    .marksheet-sheet { box-shadow: none; width: 100%; min-height: 100vh; }
+    .top-action-bar, nav, header, footer, .sidebar, .app-header { display: none !important; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Double inclusion of styles ensures rock-solid layout in all browser & webview environments -->
+<style>
+  .logo-wrap { width: 75px !important; height: 75px !important; max-width: 75px !important; max-height: 75px !important; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+  .logo-wrap img { width: 75px !important; height: 75px !important; max-width: 75px !important; max-height: 75px !important; object-fit: contain !important; display: block; }
+</style>
+
+<div class="top-action-bar" style="margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; background: white; padding: 10px 16px; border-radius: 8px; border: 1px solid #E2E8F0;">
+  <div style="display: flex; gap: 8px;">
+    <a href="{% url 'core:student_detail' student.pk %}" class="button secondary">&larr; Back to Student Profile</a>
+    <a href="{% url 'core:marks_report' %}" class="button secondary">Marks Register</a>
+  </div>
+  <div style="display: flex; gap: 8px;">
+    <button onclick="window.print()" class="button" style="background: #1E3A8A; color: white;">🖨️ Print Marksheet</button>
+    <a href="{% url 'core:marksheet_pdf' student.pk term.pk %}" class="button" style="background: #0D3B13; color: white;">📥 Download Official PDF</a>
+  </div>
+</div>
+
+<div class="marksheet-wrapper">
+  <div class="marksheet-sheet">
+    <div class="frame-outer"></div><div class="frame-inner"></div>
+    <div class="corner tl"></div><div class="corner tr"></div>
+    <div class="corner bl"></div><div class="corner br"></div>
+
+    <!-- HEADER -->
+    <div class="head">
+      <div class="logo-wrap">
+        <img src="{% static 'core/school_logo.png' %}" alt="Logo" width="75" height="75" style="width: 75px; height: 75px; max-width: 75px; max-height: 75px; object-fit: contain;">
+      </div>
+      <div class="head-mid">
+        <div class="h-name">THAKUR HARIKESH PRATAP SINGH<br/>INTERMEDIATE COLLEGE</div>
+        <div class="h-name-hi hi">ठाकुर हरिकेश प्रताप सिंह इन्टरमीडिएट कॉलेज</div>
+        <div class="h-addr hi">दुदही, कुशीनगर (उ०प्र०) — 274302</div>
+        <div class="h-meta">UDISE: 09570806404 &nbsp;|&nbsp; Dist. Code: 78 &nbsp;|&nbsp; School Code: 1200 &nbsp;|&nbsp; Phone: 9919984292</div>
+      </div>
+      <div class="sr-badge-box">
+        <small>Sl. No. / Serial</small>
+        <b>THPSIC/26/{{ student.current_class.name }}/{{ student.legacy_sid }}</b>
+      </div>
+    </div>
+
+    <!-- TITLE BAND -->
+    <div class="band">
+      <div class="en">PROGRESS REPORT CARD</div>
+      <div class="hi-t hi">प्रगति आख्या / अंक-पत्रक</div>
+    </div>
+
+    <div class="exam-line">
+      <div class="chip hi">त्रैमासिक परीक्षा — Quarterly Examination</div>
+      <div class="chip gold">Session {{ term.session.name }}</div>
+    </div>
+
+    <!-- STUDENT INFO -->
+    <div class="stu">
+      <div class="stu-grid">
+        <div class="cell">
+          <div class="lb">STUDENT NAME</div>
+          <div class="vl">{{ student.full_name }}</div>
+          {% if student.full_name_hindi %}<div class="vh hi">{{ student.full_name_hindi }}</div>{% endif %}
+        </div>
+        <div class="cell">
+          <div class="lb">FATHER'S NAME</div>
+          <div class="vl">{{ student.father_name }}</div>
+          {% if student.father_name_hindi %}<div class="vh hi">{{ student.father_name_hindi }}</div>{% endif %}
+        </div>
+        <div class="cell">
+          <div class="lb">ROLL NO.</div>
+          <div class="vl">{{ student.roll_no|default:"—" }}</div>
+        </div>
+
+        <div class="cell">
+          <div class="lb">MOTHER'S NAME</div>
+          <div class="vl">{{ student.mother_name|default:"—" }}</div>
+        </div>
+        <div class="cell">
+          <div class="lb">CLASS &amp; SECTION</div>
+          <div class="vl">{{ student.current_class.name }}{% if student.current_section %} — {{ student.current_section.name }}{% endif %}</div>
+        </div>
+        <div class="cell">
+          <div class="lb">DATE OF BIRTH</div>
+          <div class="vl">{{ student.date_of_birth|date:"d-m-Y"|default:"—" }}</div>
+        </div>
+
+        <div class="cell">
+          <div class="lb">ADMISSION / SID</div>
+          <div class="vl">{{ student.admission_no|default:student.legacy_sid }} / {{ student.legacy_sid }}</div>
+        </div>
+        <div class="cell">
+          <div class="lb">MEDIUM</div>
+          <div class="vl hi">हिंदी (Hindi)</div>
+        </div>
+        <div class="cell">
+          <div class="lb">ISSUE DATE</div>
+          <div class="vl">{% now "d-m-Y" %}</div>
+        </div>
+      </div>
+
+      <div class="photo">
+        {% if student.photo %}
+          <img src="{{ student.photo.url }}" alt="{{ student.full_name }}">
+        {% else %}
+          <b style="font-size: 8pt; color: #9AA59A;">PHOTO</b>
+          <small>Student Photograph</small>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- MARKS TABLE -->
+    <table class="m-table">
+      <thead>
+        <tr>
+          <th rowspan="2" style="width: 30px;">S.N.</th>
+          <th rowspan="2" style="text-align: left; padding-left: 8px;">SUBJECT / विषय</th>
+          <th colspan="2">THEORY / लिखित</th>
+          <th colspan="2">PRACTICAL / आंतरिक</th>
+          <th colspan="2">TOTAL / योग</th>
+          <th rowspan="2" style="width: 45px;">GRADE</th>
+          <th rowspan="2" style="width: 55px;">RESULT</th>
+        </tr>
+        <tr>
+          <th class="sub-th" style="width: 40px;">Max</th>
+          <th class="sub-th" style="width: 40px;">Obt.</th>
+          <th class="sub-th" style="width: 40px;">Max</th>
+          <th class="sub-th" style="width: 40px;">Obt.</th>
+          <th class="sub-th" style="width: 40px;">Max</th>
+          <th class="sub-th" style="width: 45px;">Obt.</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in marks_rows %}
+        <tr>
+          <td class="ctr">{{ forloop.counter }}</td>
+          <td><b>{{ row.subject_name }}</b></td>
+          <td class="num">{{ row.theory_max|floatformat:0 }}</td>
+          <td class="num">{% if row.is_absent %}<span style="color:#ef4444;font-weight:700;">AB</span>{% else %}{{ row.theory_obt|default:"—"|floatformat:0 }}{% endif %}</td>
+          <td class="num">{% if row.practical_max > 0 %}{{ row.practical_max|floatformat:0 }}{% else %}—{% endif %}</td>
+          <td class="num">{% if row.practical_max > 0 %}{% if row.is_absent %}<span style="color:#ef4444;font-weight:700;">AB</span>{% else %}{{ row.practical_obt|default:"0"|floatformat:0 }}{% endif %}{% else %}—{% endif %}</td>
+          <td class="num">{{ row.max_marks|floatformat:0 }}</td>
+          <td class="num" style="font-weight: 800; color: var(--green-dark);">{% if row.is_absent %}<span style="color:#ef4444;font-weight:700;">AB</span>{% else %}{{ row.marks_obtained|default:"0"|floatformat:0 }}{% endif %}</td>
+          <td class="ctr"><span class="grade-pill">{{ row.grade|default:"—" }}</span></td>
+          <td class="ctr {% if row.is_pass %}res-p{% else %}res-f{% endif %}">{% if row.is_absent %}AB{% elif row.is_pass %}PASS{% else %}FAIL{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td></td>
+          <td>GRAND TOTAL <span class="hi">/ महायोग</span></td>
+          <td class="num">—</td>
+          <td class="num">—</td>
+          <td class="num">—</td>
+          <td class="num">—</td>
+          <td class="num">{{ total_max|floatformat:0 }}</td>
+          <td class="num" style="color: var(--green-dark); font-size: 9.5pt;">{{ total_obtained|floatformat:0 }}</td>
+          <td class="ctr"><span class="grade-pill" style="background: var(--green-dark); color: #fff;">{{ overall_grade }}</span></td>
+          <td class="ctr {% if final_is_pass %}res-p{% else %}res-f{% endif %}">{% if final_is_pass %}PASS{% else %}FAIL{% endif %}</td>
+        </tr>
+      </tfoot>
+    </table>
+
+    <!-- SUMMARY CARDS -->
+    <div class="sum">
+      <div class="card">
+        <div class="lb">Total Marks</div>
+        <div class="vl">{{ total_obtained|floatformat:0 }}<span class="vs"> / {{ total_max|floatformat:0 }}</span></div>
+      </div>
+      <div class="card">
+        <div class="lb">Percentage</div>
+        <div class="vl">{{ overall_percentage|floatformat:1 }}%</div>
+      </div>
+      <div class="card gold">
+        <div class="lb hi">श्रेणी / Division</div>
+        <div class="vl" style="font-size: 11pt;">{{ division }}</div>
+      </div>
+      <div class="card">
+        <div class="lb hi">परिणाम / Result</div>
+        <div class="vl {% if final_is_pass %}pass{% else %}res-f{% endif %}" style="font-size: 11.5pt;">
+          {% if final_is_pass %}PASS<div class="vs hi" style="color: var(--pass);">उत्तीर्ण</div>{% else %}FAIL<div class="vs hi" style="color: var(--fail);">अनुत्तीर्ण</div>{% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- WORDS -->
+    <div class="words hi">
+      <b>प्राप्तांक शब्दों में / Marks in Words:</b> केवल {{ words_hi }} — {{ words_en }} Only
+    </div>
+
+    <!-- META ROW -->
+    <div class="meta-row">
+      <div class="meta-box"><div class="lb hi">उपस्थिति / Attendance</div><div class="vl">182 / 210 <span style="color:#666;font-weight:600;">(86.7%)</span></div></div>
+      <div class="meta-box"><div class="lb hi">कक्षा स्थान / Class Rank</div><div class="vl">3<sup>rd</sup></div></div>
+      <div class="meta-box"><div class="lb hi">आचरण / Conduct</div><div class="vl hi">उत्कृष्ट (Excellent)</div></div>
+      <div class="meta-box"><div class="lb hi">टिप्पणी / Remarks</div><div class="vl hi">बहुत अच्छा प्रदर्शन। — Keep it up!</div></div>
+    </div>
+
+    <!-- SCALE -->
+    <div class="scale">
+      <b>GRADING SCALE:</b>
+      <span>A1 · 91–100</span><span>A2 · 81–90</span><span>B1 · 71–80</span><span>B2 · 61–70</span>
+      <span>C1 · 51–60</span><span>C2 · 41–50</span><span>D · 33–40</span>
+      <span style="background:#FBEAEA;color:var(--fail)">E · Below 33 (Fail)</span>
+      &nbsp;|&nbsp; <b>DIVISION:</b> <span class="hi">प्रथम ≥ 60%</span><span class="hi">द्वितीय ≥ 45%</span><span class="hi">तृतीय ≥ 33%</span>
+    </div>
+
+    <!-- SIGNATURES -->
+    <div class="signs">
+      <div class="sig"><div class="line">Class Teacher</div><div class="hi-s hi">कक्षाध्यापक</div></div>
+      <div class="sig"><div class="line">Examination Incharge</div><div class="hi-s hi">परीक्षा प्रभारी</div></div>
+      <div class="sig"><div class="line">Principal (Seal)</div><div class="hi-s hi">प्रधानाचार्य (मुहर सहित)</div></div>
+    </div>
+
+    <!-- FOOTER -->
+    <div class="foot">
+      <span>This is a computer-generated marksheet. Any alteration renders it invalid.</span>
+      <span>THPSIC SchoolSoft v1.x • Generated: {% now "d-m-Y" %}</span>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

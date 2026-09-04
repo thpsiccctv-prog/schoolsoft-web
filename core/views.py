@@ -1,4 +1,5 @@
 import csv
+import json
 import os
 import shutil
 import sqlite3
@@ -36,6 +37,7 @@ from .fee_engine import (
     package_receipt_default_amount,
     student_is_zero_fee,
     student_uses_fee_package,
+    student_fee_package_amount,
 )
 from .forms import DisciplineRecordForm, FamilyForm, FeeReceiptEditForm, FeeReceiptEntryForm, FeeReceiptLineEntryForm, InventoryIssueForm, InventoryItemForm, SalaryPaymentForm, StudentForm, TransferCertificateForm
 from .models import (
@@ -49,6 +51,7 @@ from .models import (
     FeeReceipt,
     FeeReceiptAuditLog,
     FeeStructure,
+    FeederSchool,
     House,
     InventoryIssue,
     InventoryItem,
@@ -69,23 +72,30 @@ from .models import (
 from .whatsapp import build_wa_link, family_due_message
 from .pdf import (
     build_admission_form_pdf,
+    build_attendance_register_pdf,
+    build_batch_marksheet_pdf,
     build_character_certificate_pdf,
+    build_collection_report_pdf,
     build_discipline_summary_pdf,
     build_due_report_pdf,
     build_due_slip_pdf,
     build_due_up_to_month_report_pdf,
     build_fee_receipt_pdf,
     build_fee_receipt_pdf_2up,
+    build_fee_register_pdf,
+    build_feeder_school_statement_pdf,
     build_id_card_batch_pdf,
+    build_id_card_issue_list_pdf,
     build_id_card_pdf,
-    build_staff_id_card_pdf,
-    build_staff_id_card_batch_pdf,
     build_marksheet_pdf,
     build_salary_payslip_pdf,
     build_scholar_register_book_pdf,
     build_scholar_register_index_pdf,
     build_scholar_register_pdf,
+    build_staff_id_card_batch_pdf,
+    build_staff_id_card_pdf,
     build_transfer_certificate_pdf,
+    build_voucher_pdf,
 )
 
 APP_TITLE = os.environ.get("SCHOOLSOFT_APP_TITLE", "THPSIC SchoolSoft")
@@ -308,16 +318,27 @@ def _read_last_sync_success(sync_log):
     return None, str(marker_paths[0] if marker_paths else sync_log)
 
 def _latest_backup_info():
-    backup_root = Path(os.environ.get("SCHOOLSOFT_BACKUP_ROOT", DEFAULT_BACKUP_ROOT))
-    try:
-        backups = [item for item in backup_root.iterdir() if item.is_dir()]
-    except OSError:
-        backups = []
+    backup_roots = [
+        Path(os.environ.get("SCHOOLSOFT_BACKUP_ROOT", DEFAULT_BACKUP_ROOT)),
+        Path("E:/THPSIC-INTER-COLLEGE/04-backups/daily_backups"),
+        Path("E:/THPSIC-INTER-COLLEGE/04-backups/daily-db"),
+    ]
+    backups = []
+    seen = set()
+    for b_root in backup_roots:
+        if b_root.exists():
+            try:
+                for item in b_root.iterdir():
+                    if item.is_dir() and item.resolve() not in seen:
+                        seen.add(item.resolve())
+                        backups.append(item)
+            except OSError:
+                pass
     if not backups:
         return {
             "label": "Last Backup",
             "value": "No backup found",
-            "detail": str(backup_root),
+            "detail": str(backup_roots[0]),
             "tone": "danger",
             "warning": "Database backup nahi mila!",
         }
@@ -2121,6 +2142,289 @@ def character_certificate_pdf(request, pk):
     return response
 
 
+def id_cards_dashboard(request):
+    students, query, class_id, section_id, status = _get_filtered_students(request)
+    students = students.select_related("current_class", "current_section")
+    
+    total_count = students.count()
+    photos_ready_count = students.exclude(photo='').exclude(photo__isnull=True).count()
+    photos_missing_count = total_count - photos_ready_count
+    
+    missing_photo_students = students.filter(Q(photo='') | Q(photo__isnull=True))[:100]
+    
+    classes = SchoolClass.objects.order_by("display_order", "name")
+    sections = Section.objects.all()
+    if class_id:
+        sections = sections.filter(school_class_id=class_id)
+        
+    return render(
+        request,
+        "core/id_cards.html",
+        {
+            "students": students[:200],
+            "missing_photo_students": missing_photo_students,
+            "total_count": total_count,
+            "photos_ready_count": photos_ready_count,
+            "photos_missing_count": photos_missing_count,
+            "classes": classes,
+            "sections": sections,
+            "selected_class": class_id,
+            "selected_section": section_id,
+            "query": query,
+        }
+    )
+
+
+def _get_id_card_issue_list_data(request):
+    students = Student.objects.filter(is_active=True).select_related(
+        "current_class", "current_section", "feeder_school"
+    )
+    
+    class_id = request.GET.get("class", "")
+    section_id = request.GET.get("section", "")
+    feeder_id = request.GET.get("feeder", "")
+    status_filter = request.GET.get("status", "all")
+    query = request.GET.get("q", "").strip()
+    mode = request.GET.get("mode", "collection")
+
+    if class_id:
+        students = students.filter(current_class_id=class_id)
+    if section_id:
+        students = students.filter(current_section_id=section_id)
+    if feeder_id:
+        if feeder_id == "none":
+            students = students.filter(feeder_school__isnull=True)
+        else:
+            students = students.filter(feeder_school_id=feeder_id)
+
+    if status_filter == "missing_photo":
+        students = students.filter(Q(photo="") | Q(photo__isnull=True))
+    elif status_filter == "missing_mobile":
+        students = students.filter(Q(mobile_primary="") | Q(mobile_primary__isnull=True))
+    elif status_filter == "missing_serial":
+        students = students.filter(Q(board_sr_number="") | Q(board_sr_number__isnull=True))
+    elif status_filter == "missing_hindi":
+        students = students.filter(Q(full_name_hindi="") | Q(full_name_hindi__isnull=True))
+
+    if query:
+        students = students.filter(
+            Q(full_name__icontains=query) |
+            Q(admission_no__icontains=query) |
+            Q(legacy_sid__icontains=query) |
+            Q(mobile_primary__icontains=query) |
+            Q(father_name__icontains=query)
+        )
+
+    students = students.order_by(
+        "current_class__display_order",
+        "current_class__name",
+        "current_section__name",
+        "feeder_school__name",
+        "full_name"
+    )
+
+    grouped_dict = {}
+    for s in students:
+        cls_name = s.current_class.name if s.current_class else "Unassigned Class"
+        sec_name = f"Sec {s.current_section.name}" if s.current_section else "All Sections"
+        feeder_name = s.feeder_school.name if s.feeder_school else "THPS Main Campus (Regular)"
+        key = f"Class {cls_name} — {sec_name} — {feeder_name}"
+        if key not in grouped_dict:
+            grouped_dict[key] = []
+        grouped_dict[key].append(s)
+
+    groups_data = []
+    total_count = 0
+    total_photos = 0
+    total_missing_photos = 0
+
+    for grp_name, stu_list in grouped_dict.items():
+        cnt = len(stu_list)
+        b_cnt = sum(1 for st in stu_list if getattr(st, "gender", "") == "M")
+        g_cnt = sum(1 for st in stu_list if getattr(st, "gender", "") == "F")
+        p_cnt = sum(1 for st in stu_list if st.photo and hasattr(st.photo, "name") and st.photo.name)
+        groups_data.append({
+            "group_name": grp_name,
+            "students": stu_list,
+            "count": cnt,
+            "boys": b_cnt,
+            "girls": g_cnt,
+            "photos_ready": p_cnt,
+            "photos_missing": cnt - p_cnt,
+        })
+        total_count += cnt
+        total_photos += p_cnt
+        total_missing_photos += (cnt - p_cnt)
+
+    classes = SchoolClass.objects.order_by("display_order", "name")
+    sections = Section.objects.all()
+    if class_id:
+        sections = sections.filter(school_class_id=class_id)
+    feeder_schools = FeederSchool.objects.all()
+
+    return {
+        "groups_data": groups_data,
+        "students": students,
+        "total_count": total_count,
+        "total_photos": total_photos,
+        "total_missing_photos": total_missing_photos,
+        "classes": classes,
+        "sections": sections,
+        "feeder_schools": feeder_schools,
+        "selected_class": class_id,
+        "selected_section": section_id,
+        "selected_feeder": feeder_id,
+        "selected_status": status_filter,
+        "query": query,
+        "mode": mode,
+    }
+
+
+def id_card_issue_list_view(request):
+    ctx = _get_id_card_issue_list_data(request)
+    return render(request, "core/id_card_issue_list.html", ctx)
+
+
+def id_card_issue_list_pdf(request):
+    ctx = _get_id_card_issue_list_data(request)
+    mode = ctx["mode"]
+    pdf_bytes = build_id_card_issue_list_pdf(
+        groups_data=ctx["groups_data"],
+        mode=mode,
+        school_profile=get_active_school_profile()
+    )
+    filename = f"ID_Card_Data_Collection_Sheet.pdf" if mode == "collection" else "ID_Card_Issue_Register.pdf"
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
+    response["Content-Disposition"] = f'inline; filename="{filename}"'
+    return response
+
+
+def id_card_issue_list_excel(request):
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+
+    ctx = _get_id_card_issue_list_data(request)
+    groups_data = ctx["groups_data"]
+    profile = get_active_school_profile()
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "ID Card Issue List"
+
+    school_name = profile.name.upper() if profile and profile.name else "THAKUR HARIKESH PRATAP SINGH INTERMEDIATE COLLEGE"
+
+    ws.merge_cells("A1:N1")
+    ws["A1"] = school_name
+    ws["A1"].font = Font(name="Calibri", size=14, bold=True, color="FFFFFF")
+    ws["A1"].fill = PatternFill(start_color="0D3B13", end_color="0D3B13", fill_type="solid")
+    ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
+
+    ws.merge_cells("A2:N2")
+    ws["A2"] = f"STUDENT ID CARD DATA COLLECTION & ISSUE REGISTER — Total Students: {ctx['total_count']}"
+    ws["A2"].font = Font(name="Calibri", size=10, bold=True, color="0D3B13")
+    ws["A2"].fill = PatternFill(start_color="FBF8F1", end_color="FBF8F1", fill_type="solid")
+    ws["A2"].alignment = Alignment(horizontal="center", vertical="center")
+
+    headers = [
+        "S.No", "Grand #", "Board Sr", "Admission No", "Student ID",
+        "Student Name (EN)", "Hindi Name (HI)", "Father's Name", "Mother's Name",
+        "D.O.B.", "Class & Section", "Mobile Number", "Blood Group", "Photo Status", "Signature / Received By"
+    ]
+
+    header_font = Font(name="Calibri", size=10, bold=True, color="FFFFFF")
+    header_fill = PatternFill(start_color="1B5E20", end_color="1B5E20", fill_type="solid")
+    thin_border = Border(
+        left=Side(style="thin", color="CBD5E1"),
+        right=Side(style="thin", color="CBD5E1"),
+        top=Side(style="thin", color="CBD5E1"),
+        bottom=Side(style="thin", color="CBD5E1"),
+    )
+
+    current_row = 4
+    grand_idx = 1
+
+    for group in groups_data:
+        group_name = group["group_name"]
+        students = group["students"]
+
+        # Group Banner Row
+        ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=len(headers))
+        g_cell = ws.cell(row=current_row, column=1)
+        g_cell.value = f"GROUP: {group_name.upper()}  |  BOYS: {group['boys']}  |  GIRLS: {group['girls']}  |  TOTAL: {group['count']}"
+        g_cell.font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+        g_cell.fill = PatternFill(start_color="0D3B13", end_color="0D3B13", fill_type="solid")
+        g_cell.alignment = Alignment(horizontal="left", vertical="center")
+        current_row += 1
+
+        # Table Header
+        for col_idx, h_text in enumerate(headers, start=1):
+            c = ws.cell(row=current_row, column=col_idx)
+            c.value = h_text
+            c.font = header_font
+            c.fill = header_fill
+            c.alignment = Alignment(horizontal="center", vertical="center")
+            c.border = thin_border
+        current_row += 1
+
+        for s_idx, stu in enumerate(students, start=1):
+            sid_val = stu.legacy_sid or stu.id
+            adm_val = stu.admission_no or sid_val
+            bsr_val = (stu.board_sr_number or "").strip()
+            hi_name = getattr(stu, "full_name_hindi", "") or ""
+            dob_str = stu.date_of_birth.strftime("%d/%m/%Y") if stu.date_of_birth else ""
+            cls_sec = f"{stu.current_class.name} - {stu.current_section.name}" if stu.current_section else (stu.current_class.name if stu.current_class else "")
+            has_photo = "READY" if (stu.photo and hasattr(stu.photo, "name") and stu.photo.name) else "MISSING"
+
+            row_values = [
+                s_idx,
+                grand_idx,
+                bsr_val,
+                adm_val,
+                sid_val,
+                stu.full_name.upper(),
+                hi_name,
+                stu.father_name.upper() if stu.father_name else "",
+                stu.mother_name.upper() if stu.mother_name else "",
+                dob_str,
+                cls_sec,
+                stu.mobile_primary or "",
+                stu.blood_group or "",
+                has_photo,
+                ""
+            ]
+
+            is_alt = (s_idx % 2 == 0)
+            row_fill = PatternFill(start_color="F8FAFC", end_color="F8FAFC", fill_type="solid") if is_alt else None
+
+            for col_idx, val in enumerate(row_values, start=1):
+                c = ws.cell(row=current_row, column=col_idx)
+                c.value = val
+                c.font = Font(name="Calibri", size=9.5)
+                c.border = thin_border
+                if row_fill:
+                    c.fill = row_fill
+                if col_idx in [1, 2, 3, 4, 5, 10, 11, 13, 14]:
+                    c.alignment = Alignment(horizontal="center", vertical="center")
+                else:
+                    c.alignment = Alignment(horizontal="left", vertical="center")
+
+            current_row += 1
+            grand_idx += 1
+
+        current_row += 1
+
+    for col in ws.columns:
+        max_len = max(len(str(cell.value or "")) for cell in col)
+        col_letter = get_column_letter(col[0].column)
+        ws.column_dimensions[col_letter].width = max(max_len + 3, 11)
+
+    response = HttpResponse(content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    response["Content-Disposition"] = 'attachment; filename="ID_Card_Issue_List.xlsx"'
+    wb.save(response)
+    return response
+
+
 def id_card_pdf(request, pk):
     student = get_object_or_404(Student.objects.select_related("current_class", "current_section", "house"), pk=pk)
     pdf_bytes = build_id_card_pdf(student, get_active_school_profile())
@@ -2134,7 +2438,7 @@ def id_card_batch_pdf(request):
     students = students.select_related("current_class", "current_section", "house")
     pdf_bytes = build_id_card_batch_pdf(list(students), get_active_school_profile())
     response = HttpResponse(pdf_bytes, content_type="application/pdf")
-    response["Content-Disposition"] = 'inline; filename="id-cards.pdf"'
+    response["Content-Disposition"] = 'inline; filename="id-cards-a4-batch.pdf"'
     return response
 
 
@@ -3210,6 +3514,50 @@ def board_registration_export_csv(request, kind):
     writer.writerows(build_rows(kind))
     return response
 
+
+def board_registration_export_excel(request, kind):
+    """
+    Exports UP Board registration-ready Excel (.xlsx) files with exact template headings
+    and full native Unicode Devanagari Hindi font support for Microsoft Excel.
+    """
+    if kind not in {"class9", "class11-upboard", "class11-others"}:
+        raise Http404("Unknown board registration export type")
+
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = kind.replace("-", "_")
+
+    cols = export_columns(kind)
+    ws.append(cols)
+
+    # Style header
+    header_fill = PatternFill(start_color="1E293B", end_color="1E293B", fill_type="solid")
+    header_font = Font(name="Calibri", size=10, bold=True, color="FFFFFF")
+    for cell in ws[1]:
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    rows = build_rows(kind)
+    for r in rows:
+        ws.append(r)
+
+    # Auto-adjust column widths
+    for col in ws.columns:
+        max_len = max(len(str(cell.value or "")) for cell in col)
+        col_letter = openpyxl.utils.get_column_letter(col[0].column)
+        ws.column_dimensions[col_letter].width = max(max_len + 3, 10)
+
+    filename = export_filename(kind).replace(".csv", ".xlsx")
+    response = HttpResponse(content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    wb.save(response)
+    return response
+
+
 def student_delete(request, pk):
     student = get_object_or_404(Student, pk=pk)
     
@@ -4254,7 +4602,7 @@ def feeder_school_statement_pdf(request, pk):
     from core.models import FeederSchool, Voucher, SchoolProfile
     from core.pdf import build_feeder_school_statement_pdf
     school = get_object_or_404(FeederSchool, pk=pk)
-    students = school.students.filter(is_active=True).select_related("current_class", "current_section").order_by("current_class__display_order", "full_name")
+    students = school.students.filter(is_active=True).select_related("current_class", "current_section").order_by("current_class__display_order", "board_sr_number", "admission_no")
     
     vouchers = []
     if school.ledger_account:
@@ -4280,7 +4628,7 @@ def feeder_school_statement_excel(request, pk):
     from openpyxl.utils import get_column_letter
     
     school = get_object_or_404(FeederSchool, pk=pk)
-    students = school.students.filter(is_active=True).select_related("current_class", "current_section").order_by("current_class__display_order", "full_name")
+    students = school.students.filter(is_active=True).select_related("current_class", "current_section").order_by("current_class__display_order", "board_sr_number", "admission_no")
     
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -4303,17 +4651,21 @@ def feeder_school_statement_excel(request, pk):
     ws.append([school.total_enrolled_students, float(school.package_rate_per_student), float(school.total_demand), float(school.total_received), float(school.balance_due)])
     
     ws.append([])
-    ws.append(["#", "Adm No / SID", "Student Name", "Father Name", "Class", "Section", "Mobile"])
+    ws.append(["#", "Board Sr", "Adm No / SID", "Student Name", "Father Name", "Mother Name", "DOB", "Class", "Section", "Mobile", "Address / Village"])
     
     for idx, s in enumerate(students, 1):
         ws.append([
             idx,
+            (s.board_sr_number or "").strip(),
             s.admission_no or s.legacy_sid or "",
             s.full_name,
-            s.father_name,
+            s.father_name or "",
+            s.mother_name or "",
+            s.date_of_birth.strftime("%d/%m/%Y") if s.date_of_birth else "",
             str(s.current_class or ""),
             str(s.current_section.name if s.current_section else ""),
-            s.mobile_primary or s.mobile_secondary or ""
+            s.mobile_primary or s.mobile_secondary or "",
+            s.address_permanent or s.village_locality or ""
         ])
         
     for col in ws.columns:
@@ -4362,7 +4714,7 @@ def attendance_register_view(request):
         qs = Student.objects.filter(is_active=True, current_class=selected_class)
         if selected_section:
             qs = qs.filter(current_section=selected_section)
-        students = qs.select_related("current_class", "current_section").order_by("roll_no", "full_name")
+        students = qs.select_related("current_class", "current_section").order_by("full_name", "admission_no")
 
     num_days = calendar.monthrange(selected_year, selected_month)[1]
     days_list = []
@@ -4406,6 +4758,7 @@ def attendance_register_pdf(request):
     today = date.today()
     month = int(request.GET.get("month", today.month))
     year = int(request.GET.get("year", today.year))
+    format_mode = request.GET.get("format", "teacher")
     
     class_id = request.GET.get("class_id")
     school_class = get_object_or_404(SchoolClass, pk=class_id) if class_id else SchoolClass.objects.first()
@@ -4416,7 +4769,7 @@ def attendance_register_pdf(request):
     qs = Student.objects.filter(is_active=True, current_class=school_class)
     if section:
         qs = qs.filter(current_section=section)
-    students = list(qs.select_related("current_class", "current_section").order_by("roll_no", "full_name"))
+    students = list(qs.select_related("current_class", "current_section").order_by("full_name", "admission_no"))
 
     session = AcademicSession.objects.filter(is_active=True).first() or AcademicSession.objects.first()
     school_profile = SchoolProfile.objects.first()
@@ -4429,10 +4782,12 @@ def attendance_register_pdf(request):
         year=year,
         session=session,
         school_profile=school_profile,
+        format_mode=format_mode,
     )
 
     sec_name = f"_{section.name}" if section else ""
-    filename = f"Attendance_{school_class.name}{sec_name}_{calendar.month_name[month]}_{year}.pdf".replace(" ", "_")
+    fmt_tag = "_Compact" if format_mode == "compact" else "_Teacher"
+    filename = f"Attendance_{school_class.name}{sec_name}_{calendar.month_name[month]}_{year}{fmt_tag}.pdf".replace(" ", "_")
     response = HttpResponse(pdf_bytes, content_type="application/pdf")
     response["Content-Disposition"] = f'inline; filename="{filename}"'
     return response
@@ -4823,4 +5178,874 @@ def attendance_summary_report_excel(request):
     response = HttpResponse(content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     response["Content-Disposition"] = f'attachment; filename="{filename}"'
     wb.save(response)
+    return response
+
+
+
+def _get_fee_register_data(request):
+    ZERO = Decimal("0.00")
+    session = AcademicSession.objects.filter(is_active=True).first()
+    session_id = request.GET.get("session")
+    if session_id:
+        session = AcademicSession.objects.filter(pk=session_id).first() or session
+
+    class_id = request.GET.get("class", "").strip()
+    section_id = request.GET.get("section", "").strip()
+    through_month = (request.GET.get("month") or "AUG").strip().upper()[:3]
+    if through_month not in ACADEMIC_MONTHS:
+        through_month = "AUG"
+    
+    student_type = request.GET.get("type", "all").strip().lower()
+    due_status = request.GET.get("status", "all").strip().lower()
+    search_query = request.GET.get("q", "").strip()
+
+    qs = Student.objects.filter(is_active=True).select_related(
+        "current_class", "current_section", "feeder_school"
+    )
+
+    if class_id:
+        qs = qs.filter(current_class_id=class_id)
+    if section_id:
+        qs = qs.filter(current_section_id=section_id)
+    if search_query:
+        qs = qs.filter(
+            Q(full_name__icontains=search_query)
+            | Q(legacy_sid__icontains=search_query)
+            | Q(admission_no__icontains=search_query)
+            | Q(father_name__icontains=search_query)
+            | Q(mobile_primary__icontains=search_query)
+        )
+
+    qs = qs.order_by("current_class__display_order", "current_section__name", "roll_no", "id")
+
+    # Map student_id -> last active receipt
+    all_receipts = FeeReceipt.objects.filter(session=session, is_cancelled=False).order_by("-receipt_date", "-id")
+    last_receipt_map = {}
+    for r in all_receipts:
+        if r.student_id not in last_receipt_map:
+            last_receipt_map[r.student_id] = r
+
+    rows = []
+    tot_opening = ZERO
+    tot_demand = ZERO
+    tot_paid = ZERO
+    tot_concession = ZERO
+    tot_due = ZERO
+
+    for st in qs:
+        is_zero = student_is_zero_fee(st)
+        is_pkg = student_uses_fee_package(st)
+
+        if is_zero:
+            type_label = f"Feeder: {st.feeder_school.name if st.feeder_school else 'Attached'}"
+            type_code = "feeder"
+        elif is_pkg:
+            type_label = f"Package (Rs. {student_fee_package_amount(st):,.0f})"
+            type_code = "package"
+        else:
+            type_label = "Regular"
+            type_code = "regular"
+
+        if student_type != "all" and type_code != student_type:
+            continue
+
+        due_info = calculate_student_due(student=st, session=session, through_month=through_month)
+
+        opening_due = due_info.opening_balance_amount
+        demand = due_info.scheduled_fee_demand
+        paid = due_info.received_amount
+        concession = due_info.concession_amount
+        final_due = due_info.due_amount
+
+        if due_status == "due_only" and final_due <= ZERO:
+            continue
+        if due_status == "cleared" and (final_due > ZERO or (paid == ZERO and not is_zero)):
+            continue
+        if due_status == "zero_fee" and not is_zero:
+            continue
+
+        last_r = last_receipt_map.get(st.id)
+        last_receipt_str = f"{last_r.receipt_no} ({last_r.receipt_date.strftime('%d-%m')})" if last_r else "-"
+
+        tot_opening += opening_due
+        tot_demand += demand
+        tot_paid += paid
+        tot_concession += concession
+        tot_due += final_due
+
+        rows.append({
+            "student": st,
+            "sid": st.legacy_sid or str(st.id),
+            "adm_no": st.admission_no or "-",
+            "name": st.full_name,
+            "name_hindi": getattr(st, "full_name_hindi", "") or "",
+            "father_name": st.father_name or "-",
+            "class_name": st.current_class.name if st.current_class else "-",
+            "section_name": st.current_section.name if st.current_section else "-",
+            "class_section": f"{st.current_class.name if st.current_class else ''} {st.current_section.name if st.current_section else ''}".strip(),
+            "type_label": type_label,
+            "type_code": type_code,
+            "opening_due": opening_due,
+            "demand": demand,
+            "paid": paid,
+            "concession": concession,
+            "final_due": final_due,
+            "last_receipt": last_receipt_str,
+            "mobile": st.mobile_primary or "-",
+        })
+
+    totals = {
+        "count": len(rows),
+        "opening_due": tot_opening,
+        "demand": tot_demand,
+        "paid": tot_paid,
+        "concession": tot_concession,
+        "due": tot_due,
+        "collection_pct": ((tot_paid / tot_demand * 100) if tot_demand > ZERO else Decimal("0.0")),
+    }
+
+    selected_class_obj = SchoolClass.objects.filter(pk=class_id).first() if class_id else None
+    selected_section_obj = Section.objects.filter(pk=section_id).first() if section_id else None
+
+    filters_info = {
+        "session": session.name if session else "-",
+        "class": selected_class_obj.name if selected_class_obj else "All Classes",
+        "section": selected_section_obj.name if selected_section_obj else "All Sections",
+        "through_month": through_month,
+        "type": student_type,
+        "status": due_status,
+        "search": search_query,
+    }
+
+    context = {
+        "rows": rows,
+        "totals": totals,
+        "filters_info": filters_info,
+        "sessions": AcademicSession.objects.all(),
+        "selected_session": session,
+        "classes": SchoolClass.objects.order_by("display_order", "name"),
+        "sections": Section.objects.all(),
+        "academic_months": ACADEMIC_MONTHS,
+        "selected_class": class_id,
+        "selected_section": section_id,
+        "selected_month": through_month,
+        "selected_type": student_type,
+        "selected_status": due_status,
+        "search_query": search_query,
+    }
+    return context
+
+
+def fee_register(request):
+    context = _get_fee_register_data(request)
+    return render(request, "core/fee_register.html", context)
+
+
+def fee_register_pdf(request):
+    context = _get_fee_register_data(request)
+    profile = get_active_school_profile()
+    pdf_bytes = build_fee_register_pdf(
+        rows=context["rows"],
+        totals=context["totals"],
+        filters_info=context["filters_info"],
+        school_profile=profile
+    )
+    cls_tag = context["filters_info"]["class"].replace(" ", "_")
+    sec_tag = context["filters_info"]["section"].replace(" ", "_")
+    month_tag = context["filters_info"]["through_month"]
+    filename = f"Fee_Register_{cls_tag}_{sec_tag}_{month_tag}.pdf"
+    
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
+    if request.GET.get("download") == "1":
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    else:
+        response["Content-Disposition"] = f'inline; filename="{filename}"'
+    return response
+
+
+def fee_register_excel(request):
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+
+    context = _get_fee_register_data(request)
+    rows = context["rows"]
+    totals = context["totals"]
+    filters_info = context["filters_info"]
+    profile = get_active_school_profile()
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Fee Register"
+
+    # Header fonts and styles
+    school_name = profile.name if profile and profile.name else "THAKUR HARIKESH PRATAP SINGH INTERMEDIATE COLLEGE"
+    school_address = profile.address if profile and profile.address else "Dudahi, Kushinagar, U.P."
+
+    ws.merge_cells("A1:L1")
+    ws["A1"] = school_name.upper()
+    ws["A1"].font = Font(name="Calibri", size=14, bold=True, color="0F766E")
+    ws["A1"].alignment = Alignment(horizontal="center")
+
+    ws.merge_cells("A2:L2")
+    ws["A2"] = f"{school_address} | MONTHLY FEE REGISTER (मासिक छात्र शुल्क पंजिका)"
+    ws["A2"].font = Font(name="Calibri", size=10, italic=True, color="475569")
+    ws["A2"].alignment = Alignment(horizontal="center")
+
+    ws.merge_cells("A3:L3")
+    ws["A3"] = f"Session: {filters_info['session']} | Class: {filters_info['class']} | Section: {filters_info['section']} | Month: Through {filters_info['through_month']} | Total Students: {totals['count']}"
+    ws["A3"].font = Font(name="Calibri", size=9, bold=True, color="1E293B")
+    ws["A3"].alignment = Alignment(horizontal="center")
+
+    headers = [
+        "#", "SID / Adm", "Student Name", "Father's Name", "Class-Sec",
+        "Student Type", "Opening Due", "Current Demand", "Total Paid",
+        "Concession", "Final Due", "Last Receipt"
+    ]
+    ws.append(headers)
+
+    header_fill = PatternFill(start_color="0F766E", end_color="0F766E", fill_type="solid")
+    header_font = Font(name="Calibri", size=10, bold=True, color="FFFFFF")
+    thin_border = Border(
+        left=Side(style="thin", color="CBD5E1"),
+        right=Side(style="thin", color="CBD5E1"),
+        top=Side(style="thin", color="CBD5E1"),
+        bottom=Side(style="thin", color="CBD5E1"),
+    )
+
+    for col_idx in range(1, 13):
+        cell = ws.cell(row=4, column=col_idx)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.border = thin_border
+        cell.alignment = Alignment(horizontal="center" if col_idx in [1, 2, 5, 6, 12] else ("right" if col_idx in [7, 8, 9, 10, 11] else "left"))
+
+    curr_format = "#,##0.00"
+    row_num = 5
+
+    for idx, r in enumerate(rows, start=1):
+        ws.append([
+            idx,
+            r["sid"],
+            r["name"],
+            r["father_name"],
+            r["class_section"],
+            r["type_label"],
+            float(r["opening_due"]),
+            float(r["demand"]),
+            float(r["paid"]),
+            float(r["concession"]),
+            float(r["final_due"]),
+            r["last_receipt"],
+        ])
+        for col_idx in range(1, 13):
+            cell = ws.cell(row=row_num, column=col_idx)
+            cell.border = thin_border
+            if col_idx in [1, 2, 5, 6, 12]:
+                cell.alignment = Alignment(horizontal="center")
+            elif col_idx in [7, 8, 9, 10, 11]:
+                cell.alignment = Alignment(horizontal="right")
+                cell.number_format = curr_format
+            if col_idx == 11 and r["final_due"] > Decimal("0.00"):
+                cell.font = Font(name="Calibri", size=10, bold=True, color="DC2626")
+        row_num += 1
+
+    # Totals Row
+    ws.append([
+        "TOTAL",
+        f"{totals['count']} Students",
+        "", "", "", "",
+        float(totals["opening_due"]),
+        float(totals["demand"]),
+        float(totals["paid"]),
+        float(totals["concession"]),
+        float(totals["due"]),
+        f"Coll: {totals['collection_pct']:.1f}%"
+    ])
+
+    tot_fill = PatternFill(start_color="1E293B", end_color="1E293B", fill_type="solid")
+    tot_font = Font(name="Calibri", size=10, bold=True, color="FFFFFF")
+
+    for col_idx in range(1, 13):
+        cell = ws.cell(row=row_num, column=col_idx)
+        cell.fill = tot_fill
+        cell.font = tot_font
+        cell.border = thin_border
+        if col_idx in [7, 8, 9, 10, 11]:
+            cell.alignment = Alignment(horizontal="right")
+            cell.number_format = curr_format
+        else:
+            cell.alignment = Alignment(horizontal="center")
+
+    custom_widths = {
+        "A": 6,    # #
+        "B": 12,   # SID / Adm
+        "C": 26,   # Student Name
+        "D": 26,   # Father's Name
+        "E": 12,   # Class-Sec
+        "F": 14,   # Student Type
+        "G": 14,   # Opening Due
+        "H": 16,   # Current Demand
+        "I": 14,   # Total Paid
+        "J": 14,   # Concession
+        "K": 14,   # Final Due
+        "L": 15,   # Last Receipt
+    }
+    for col_letter, width in custom_widths.items():
+        ws.column_dimensions[col_letter].width = width
+
+    cls_tag = filters_info["class"].replace(" ", "_")
+    sec_tag = filters_info["section"].replace(" ", "_")
+    month_tag = filters_info["through_month"]
+    filename = f"Fee_Register_{cls_tag}_{sec_tag}_{month_tag}.xlsx"
+
+    response = HttpResponse(content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    wb.save(response)
+    return response
+
+def guardian_demand_slip(request):
+    """
+    Renders Guardian Hisab Parchi (Due Slip) without creating any FeeReceipt or cashbook entry.
+    Supports printable layout with full student fee breakdown.
+    """
+    student_id = request.GET.get("student_id")
+    through_month = request.GET.get("through_month", "MAR")
+    if not student_id:
+        return HttpResponse("Student ID missing", status=400)
+
+    student = get_object_or_404(Student, pk=student_id)
+    session = AcademicSession.objects.filter(is_active=True).first()
+
+    calc = calculate_student_due(student=student, session=session, through_month=through_month)
+    profile = get_active_school_profile()
+
+    context = {
+        "student": student,
+        "calc": calc,
+        "through_month": through_month,
+        "school_profile": profile,
+        "today": timezone.localtime().date(),
+        "today_str": timezone.localtime().strftime("%d/%m/%Y"),
+    }
+    return render(request, "core/demand_slip.html", context)
+
+
+
+
+@login_required
+def marks_entry_view(request):
+    """
+    Superfast interactive bulk marks entry screen for a selected ExamTerm, Class, Section, and ExamTest (Subject).
+    """
+    from decimal import Decimal
+    from django.db import transaction
+    from core.models import SchoolClass, Section, Student, ExamTerm, ExamTest, ExamMark, AcademicSession
+
+    session = AcademicSession.objects.filter(is_active=True).first()
+    terms = ExamTerm.objects.select_related("session").filter(session=session).order_by("display_order", "id") if session else ExamTerm.objects.none()
+
+    selected_term_id = request.GET.get("term_id") or request.POST.get("term_id")
+    selected_term = terms.filter(pk=selected_term_id).first() if selected_term_id else terms.first()
+
+    classes = SchoolClass.objects.all().order_by("display_order", "id")
+    selected_class_id = request.GET.get("class_id") or request.POST.get("class_id")
+    selected_class = classes.filter(pk=selected_class_id).first() if selected_class_id else classes.first()
+
+    sections = selected_class.sections.all().order_by("name") if selected_class else Section.objects.none()
+    selected_section_id = request.GET.get("section_id") or request.POST.get("section_id")
+    selected_section = sections.filter(pk=selected_section_id).first() if selected_section_id else None
+
+    class_tests = ExamTest.objects.select_related("subject").filter(term=selected_term, school_class=selected_class).order_by("subject__display_order", "subject__name") if (selected_term and selected_class) else ExamTest.objects.none()
+    selected_test_id = request.GET.get("test_id") or request.POST.get("test_id")
+    selected_test = class_tests.filter(pk=selected_test_id).first() if selected_test_id else class_tests.first()
+
+    # Active students query
+    students = Student.objects.filter(is_active=True)
+    if selected_class:
+        students = students.filter(current_class=selected_class)
+    if selected_section:
+        students = students.filter(current_section=selected_section)
+    students = students.order_by("roll_no", "legacy_sid", "full_name")
+
+    # POST Handling (Bulk Save)
+    if request.method == "POST" and selected_test:
+        saved_count = 0
+        with transaction.atomic():
+            for student in students:
+                sid = student.id
+                th_val_str = request.POST.get(f"theory_{sid}", "").strip()
+                pr_val_str = request.POST.get(f"practical_{sid}", "").strip()
+                is_ab = bool(request.POST.get(f"absent_{sid}"))
+                rem_val = request.POST.get(f"remarks_{sid}", "").strip()
+
+                if is_ab:
+                    ExamMark.objects.update_or_create(
+                        exam_test=selected_test,
+                        student=student,
+                        defaults={
+                            "is_absent": True,
+                            "theory_marks_obtained": None,
+                            "practical_marks_obtained": None,
+                            "marks_obtained": None,
+                            "grade": "AB",
+                            "remarks": rem_val,
+                        }
+                    )
+                    saved_count += 1
+                elif th_val_str or pr_val_str:
+                    th_val = Decimal(th_val_str) if th_val_str else Decimal("0.00")
+                    pr_val = Decimal(pr_val_str) if pr_val_str else Decimal("0.00")
+                    
+                    # Cap at max if user exceeded
+                    if selected_test.theory_max_marks and th_val > selected_test.theory_max_marks:
+                        th_val = selected_test.theory_max_marks
+                    if selected_test.practical_max_marks and pr_val > selected_test.practical_max_marks:
+                        pr_val = selected_test.practical_max_marks
+
+                    tot_val = th_val + pr_val
+                    pct = (tot_val / selected_test.max_marks * Decimal("100")) if selected_test.max_marks else Decimal("0.00")
+                    grd = grade_for_percentage(pct)
+
+                    ExamMark.objects.update_or_create(
+                        exam_test=selected_test,
+                        student=student,
+                        defaults={
+                            "is_absent": False,
+                            "theory_marks_obtained": th_val,
+                            "practical_marks_obtained": pr_val,
+                            "marks_obtained": tot_val,
+                            "grade": grd,
+                            "remarks": rem_val,
+                        }
+                    )
+                    saved_count += 1
+
+        messages.success(request, f"Marks successfully saved for {saved_count} students in {selected_class.name} ({selected_test.subject.name})!")
+        return redirect(f"{reverse('core:marks_entry')}?term_id={selected_term.pk}&class_id={selected_class.pk}&section_id={selected_section.pk if selected_section else ''}&test_id={selected_test.pk}")
+
+    # Build student row objects for table
+    existing_marks = {}
+    if selected_test:
+        for mark in ExamMark.objects.filter(exam_test=selected_test, student__in=students):
+            existing_marks[mark.student_id] = mark
+
+    student_rows = []
+    for s in students:
+        m = existing_marks.get(s.id)
+        student_rows.append({
+            "student": s,
+            "mark": m,
+        })
+
+    context = {
+        "terms": terms,
+        "selected_term": selected_term,
+        "classes": classes,
+        "selected_class": selected_class,
+        "sections": sections,
+        "selected_section": selected_section,
+        "class_tests": class_tests,
+        "selected_test": selected_test,
+        "students": students,
+        "student_rows": student_rows,
+    }
+    return render(request, "core/marks_entry.html", context)
+
+
+@login_required
+def marks_entry_export_excel(request):
+    """
+    Exports blank or pre-filled Excel sheet for offline marks entry.
+    """
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from core.models import ExamTest, Student, Section
+
+    test_id = request.GET.get("test_id")
+    section_id = request.GET.get("section_id")
+
+    test = get_object_or_404(ExamTest.objects.select_related("term", "school_class", "subject", "term__session"), pk=test_id)
+    school_class = test.school_class
+    section = Section.objects.filter(pk=section_id).first() if section_id else None
+
+    students = Student.objects.filter(is_active=True, current_class=school_class)
+    if section:
+        students = students.filter(current_section=section)
+    students = students.order_by("roll_no", "legacy_sid", "full_name")
+
+    existing_marks = {m.student_id: m for m in ExamMark.objects.filter(exam_test=test, student__in=students)}
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = f"{school_class.name[:10]}_{test.subject.name[:10]}"
+
+    # Title & Metadata
+    ws.merge_cells("A1:G1")
+    ws["A1"] = f"THPS INTERMEDIATE COLLEGE - {test.term.name.upper()}"
+    ws["A1"].font = Font(name="Calibri", size=13, bold=True, color="1E3A8A")
+    ws["A1"].alignment = Alignment(horizontal="center")
+
+    sec_label = f" - Section {section.name}" if section else ""
+    ws.merge_cells("A2:G2")
+    ws["A2"] = f"Class: {school_class.name}{sec_label} | Subject: {test.subject.name} | Max Theory: {test.theory_max_marks} | Max Practical: {test.practical_max_marks} | Pass: {test.pass_marks}"
+    ws["A2"].font = Font(name="Calibri", size=10, bold=True, color="475569")
+    ws["A2"].alignment = Alignment(horizontal="center")
+
+    headers = ["Roll No", "Admission / SID", "Student Name", "Father Name", f"Theory (Max {int(test.theory_max_marks)})", f"Practical (Max {int(test.practical_max_marks)})", "Absent (Y/N)", "Remarks"]
+    ws.append(headers)
+
+    header_fill = PatternFill(start_color="1E293B", end_color="1E293B", fill_type="solid")
+    header_font = Font(name="Calibri", size=10, bold=True, color="FFFFFF")
+    for cell in ws[3]:
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    for s in students:
+        m = existing_marks.get(s.id)
+        th_val = m.theory_marks_obtained if (m and not m.is_absent and m.theory_marks_obtained is not None) else ""
+        pr_val = m.practical_marks_obtained if (m and not m.is_absent and m.practical_marks_obtained is not None) else ""
+        ab_val = "Y" if (m and m.is_absent) else "N"
+        rem_val = m.remarks if m else ""
+
+        ws.append([
+            s.roll_no or "",
+            s.admission_no or s.legacy_sid,
+            s.full_name,
+            s.father_name,
+            th_val,
+            pr_val,
+            ab_val,
+            rem_val,
+        ])
+
+    for col in ws.columns:
+        max_len = max(len(str(cell.value or "")) for cell in col)
+        col_letter = openpyxl.utils.get_column_letter(col[0].column)
+        ws.column_dimensions[col_letter].width = max(max_len + 4, 12)
+
+    filename = f"Marks_{school_class.name}{sec_label}_{test.subject.name}_{test.term.name}.xlsx".replace(" ", "_").replace("/", "-")
+    response = HttpResponse(content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    wb.save(response)
+    return response
+
+
+@login_required
+def marks_entry_import_excel(request):
+    """
+    Imports filled Excel sheet to update student marks in bulk.
+    """
+    import openpyxl
+    from decimal import Decimal
+    from django.db import transaction
+    from core.models import ExamTest, Student, ExamMark
+
+    if request.method != "POST" or "excel_file" not in request.FILES:
+        messages.error(request, "Please choose an Excel file to upload.")
+        return redirect("core:marks_entry")
+
+    test_id = request.POST.get("test_id")
+    test = get_object_or_404(ExamTest.objects.select_related("term", "school_class", "subject"), pk=test_id)
+
+    excel_file = request.FILES["excel_file"]
+    try:
+        wb = openpyxl.load_workbook(excel_file, data_only=True)
+        ws = wb.active
+
+        updated_count = 0
+        with transaction.atomic():
+            for row in ws.iter_rows(min_row=4, values_only=True):
+                if not row or not row[1]:
+                    continue
+                adm_or_sid = str(row[1]).strip()
+                student = Student.objects.filter(
+                    Q(admission_no=adm_or_sid) | Q(legacy_sid=adm_or_sid),
+                    current_class=test.school_class,
+                    is_active=True
+                ).first()
+
+                if not student:
+                    continue
+
+                th_cell = row[4]
+                pr_cell = row[5] if len(row) > 5 else None
+                ab_cell = str(row[6] or "").strip().upper() if len(row) > 6 else "N"
+                rem_cell = str(row[7] or "").strip() if len(row) > 7 else ""
+
+                is_ab = (ab_cell in ("Y", "YES", "AB", "ABSENT", "1"))
+
+                if is_ab:
+                    ExamMark.objects.update_or_create(
+                        exam_test=test,
+                        student=student,
+                        defaults={
+                            "is_absent": True,
+                            "theory_marks_obtained": None,
+                            "practical_marks_obtained": None,
+                            "marks_obtained": None,
+                            "grade": "AB",
+                            "remarks": rem_cell,
+                        }
+                    )
+                    updated_count += 1
+                elif th_cell is not None and str(th_cell).strip() != "":
+                    try:
+                        th_val = Decimal(str(th_cell).strip())
+                        pr_val = Decimal(str(pr_cell).strip()) if (pr_cell is not None and str(pr_cell).strip() != "") else Decimal("0.00")
+
+                        if test.theory_max_marks and th_val > test.theory_max_marks:
+                            th_val = test.theory_max_marks
+                        if test.practical_max_marks and pr_val > test.practical_max_marks:
+                            pr_val = test.practical_max_marks
+
+                        tot_val = th_val + pr_val
+                        pct = (tot_val / test.max_marks * Decimal("100")) if test.max_marks else Decimal("0.00")
+                        grd = grade_for_percentage(pct)
+
+                        ExamMark.objects.update_or_create(
+                            exam_test=test,
+                            student=student,
+                            defaults={
+                                "is_absent": False,
+                                "theory_marks_obtained": th_val,
+                                "practical_marks_obtained": pr_val,
+                                "marks_obtained": tot_val,
+                                "grade": grd,
+                                "remarks": rem_cell,
+                            }
+                        )
+                        updated_count += 1
+                    except Exception:
+                        pass
+
+        messages.success(request, f"Successfully imported and updated marks for {updated_count} students!")
+    except Exception as exc:
+        messages.error(request, f"Error processing Excel file: {exc}")
+
+    return redirect(f"{reverse('core:marks_entry')}?term_id={test.term.pk}&class_id={test.school_class.pk}&test_id={test.pk}")
+
+
+@login_required
+def marksheet_view(request, pk, term_id):
+    """
+    Responsive interactive web marksheet view for a student and exam term.
+    """
+    from decimal import Decimal
+    from core.models import Student, ExamTerm, ExamMark, division_for_percentage, grade_for_percentage
+
+    student = get_object_or_404(Student.objects.select_related("current_class", "current_section"), pk=pk)
+    term = get_object_or_404(ExamTerm.objects.select_related("session"), pk=term_id)
+
+    exam_marks = ExamMark.objects.select_related(
+        "exam_test", "exam_test__subject"
+    ).filter(student=student, exam_test__term=term).order_by("exam_test__subject__display_order", "exam_test__subject__name")
+
+    total_max = Decimal("0.00")
+    total_obtained = Decimal("0.00")
+    has_fail = False
+
+    marks_rows = []
+    for mark in exam_marks:
+        tot_m = mark.exam_test.max_marks or Decimal("100.00")
+        th_m = mark.exam_test.theory_max_marks or Decimal("100.00")
+        pr_m = mark.exam_test.practical_max_marks or Decimal("0.00")
+        pass_m = mark.exam_test.pass_marks or Decimal("33.00")
+
+        obt = mark.marks_obtained
+        is_pass = (obt is not None and obt >= pass_m and not mark.is_absent)
+        if not is_pass:
+            has_fail = True
+
+        total_max += tot_m
+        if obt is not None and not mark.is_absent:
+            total_obtained += obt
+
+        marks_rows.append({
+            "subject_name": mark.exam_test.subject.name,
+            "theory_max": th_m,
+            "practical_max": pr_m,
+            "max_marks": tot_m,
+            "theory_obt": mark.theory_marks_obtained,
+            "practical_obt": mark.practical_marks_obtained,
+            "marks_obtained": obt,
+            "is_absent": mark.is_absent,
+            "grade": mark.grade,
+            "is_pass": is_pass,
+        })
+
+    overall_pct = (total_obtained / total_max * Decimal("100")) if total_max else Decimal("0.00")
+    final_is_pass = (not has_fail and overall_pct >= Decimal("33.00"))
+    overall_grade = grade_for_percentage(overall_pct)
+    div_label = division_for_percentage(overall_pct, is_failed=not final_is_pass)
+
+    from core.pdf import _num_to_words_hi, _num_to_words_en
+    words_hi = _num_to_words_hi(int(total_obtained))
+    words_en = _num_to_words_en(int(total_obtained))
+
+    context = {
+        "student": student,
+        "term": term,
+        "marks_rows": marks_rows,
+        "total_max": total_max,
+        "total_obtained": total_obtained,
+        "words_hi": words_hi,
+        "words_en": words_en,
+        "overall_percentage": overall_pct,
+        "overall_grade": overall_grade,
+        "division": div_label,
+        "final_is_pass": final_is_pass,
+    }
+    return render(request, "core/marksheet_view.html", context)
+
+
+@login_required
+def marksheet_batch_pdf(request):
+    """
+    Generates a single multi-page PDF containing official marksheets for all students in a Class/Section.
+    """
+    from core.models import SchoolClass, Section, Student, ExamTerm, ExamMark
+    from core.pdf import build_batch_marksheet_pdf
+
+    term_id = request.GET.get("term_id")
+    class_id = request.GET.get("class_id")
+    section_id = request.GET.get("section_id")
+
+    term = get_object_or_404(ExamTerm.objects.select_related("session"), pk=term_id)
+    school_class = get_object_or_404(SchoolClass, pk=class_id)
+    section = Section.objects.filter(pk=section_id).first() if section_id else None
+
+    students = Student.objects.filter(is_active=True, current_class=school_class)
+    if section:
+        students = students.filter(current_section=section)
+    students = students.order_by("roll_no", "legacy_sid", "full_name")
+
+    students_with_marks = []
+    for student in students:
+        exam_marks = ExamMark.objects.select_related(
+            "exam_test", "exam_test__subject"
+        ).filter(student=student, exam_test__term=term).order_by("exam_test__subject__display_order", "exam_test__subject__name")
+        if exam_marks.exists():
+            students_with_marks.append((student, list(exam_marks)))
+
+    if not students_with_marks:
+        messages.error(request, "No marks found for any student in this class and term.")
+        return redirect(f"{reverse('core:marks_report')}?term={term.pk}&class={school_class.pk}")
+
+    pdf_buffer = build_batch_marksheet_pdf(students_with_marks, term)
+    sec_label = f"_{section.name}" if section else ""
+    filename = f"Marksheets_{school_class.name}{sec_label}_{term.name}.pdf".replace(" ", "_").replace("/", "-")
+
+    response = HttpResponse(pdf_buffer, content_type="application/pdf")
+    response["Content-Disposition"] = f'inline; filename="{filename}"'
+    return response
+
+
+# -----------------------------------------------------------------------------
+# BULK STUDENT PHOTO UPLOAD & MATCHING SUITE
+# -----------------------------------------------------------------------------
+from core.photo_processor import (
+    run_bulk_photo_dry_run, apply_bulk_photos, parse_excel_mapping_file
+)
+from django.http import JsonResponse
+import csv
+
+
+def bulk_photo_upload_view(request):
+    """
+    Main View for Student Bulk Photo Upload & Matching Suite.
+    Supports Drag-and-drop ZIP upload, photographer schema matching (CCSSSS),
+    optional Excel mapping, smart 4:5 portrait crop preview, dry-run analysis,
+    and safe one-click live application.
+    """
+    school_classes = SchoolClass.objects.all().order_by("name")
+    total_active = Student.objects.filter(is_active=True).count()
+    with_photo = Student.objects.filter(is_active=True).exclude(photo="").exclude(photo__isnull=True).count()
+    missing_photo = total_active - with_photo
+
+    if request.method == "POST":
+        action = request.POST.get("action", "dry_run")
+
+        if action == "dry_run":
+            zip_file = request.FILES.get("zip_file")
+            if not zip_file:
+                return JsonResponse({"status": "error", "message": "कृपया ज़िप फ़ाइल (.zip) अपलोड करें।"}, status=400)
+
+            mapping_file = request.FILES.get("mapping_file")
+            excel_mapping = parse_excel_mapping_file(mapping_file) if mapping_file else None
+
+            class_id = request.POST.get("class_id")
+            class_filter = SchoolClass.objects.filter(pk=class_id).first() if class_id else None
+            crop_mode = request.POST.get("crop_mode", "smart_portrait")
+
+            try:
+                result = run_bulk_photo_dry_run(
+                    zip_file,
+                    excel_mapping=excel_mapping,
+                    class_filter=class_filter,
+                    crop_mode=crop_mode
+                )
+                return JsonResponse({"status": "success", "data": result})
+            except Exception as e:
+                return JsonResponse({"status": "error", "message": f"फ़ाइल प्रोसेसिंग में त्रुटि: {str(e)}"}, status=500)
+
+        elif action == "apply":
+            session_token = request.POST.get("session_token")
+            if not session_token:
+                return JsonResponse({"status": "error", "message": "सत्र टोकन गायब है। कृपया पुनः ड्राई-रन करें।"}, status=400)
+
+            selected_filenames_raw = request.POST.get("selected_filenames")
+            selected_filenames = json.loads(selected_filenames_raw) if selected_filenames_raw else None
+
+            if not selected_filenames:
+                return JsonResponse({"status": "error", "message": "कृपया सुरक्षित करने के लिए कम से कम एक फ़ोटो का चयन करें।"}, status=400)
+
+            try:
+                res = apply_bulk_photos(session_token, selected_filenames=selected_filenames)
+                return JsonResponse({"status": "success", "data": res})
+            except Exception as e:
+                return JsonResponse({"status": "error", "message": f"फ़ोटो सुरक्षित करने में त्रुटि: {str(e)}"}, status=500)
+
+    context = {
+        "classes": school_classes,
+        "total_active": total_active,
+        "with_photo": with_photo,
+        "missing_photo": missing_photo,
+        "photo_coverage_pct": round((with_photo / total_active * 100) if total_active else 0, 1),
+    }
+    return render(request, "core/bulk_photo_upload.html", context)
+
+
+def bulk_photo_export_csv(request):
+    """
+    Exports the latest dry-run analysis or photo missing list to CSV.
+    """
+    response = HttpResponse(content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = 'attachment; filename="student_photo_status_report.csv"'
+    response.write("\ufeff".encode("utf8")) # BOM for Excel
+
+    writer = csv.writer(response)
+    writer.writerow([
+        "S.No", "Admission No", "Legacy SID", "Board Sr", "Student Name",
+        "Class", "Section", "Mobile", "Photo Status", "Document Photo Received"
+    ])
+
+    students = Student.objects.filter(is_active=True).select_related("current_class", "current_section").order_by("current_class__name", "current_section__name", "admission_no")
+    
+    for idx, s in enumerate(students, start=1):
+        has_photo = "YES" if (s.photo and hasattr(s.photo, "name") and s.photo.name) else "NO"
+        writer.writerow([
+            idx,
+            s.admission_no or "",
+            s.legacy_sid or "",
+            s.board_sr_number or "",
+            s.full_name,
+            s.current_class.name if s.current_class else "",
+            s.current_section.name if s.current_section else "",
+            s.mobile_primary or "",
+            has_photo,
+            "YES" if s.doc_photo_received else "NO",
+        ])
+
     return response

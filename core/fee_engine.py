@@ -14,6 +14,7 @@ from .models import (
     FeeReceiptLine,
     FeeStructure,
     Student,
+    StudentFeeWaiver,
     StudentOpeningBalance,
     StudentTransport,
 )
@@ -52,6 +53,7 @@ class DueResult:
     received_amount: Decimal
     concession_amount: Decimal
     policy_concession_amount: Decimal
+    waiver_amount: Decimal
     raw_balance: Decimal
     due_amount: Decimal
     credit_amount: Decimal
@@ -136,13 +138,29 @@ def _fee_structure_queryset_for_student(*, student: Student, session: AcademicSe
     return structures
 
 
+def student_is_second_year_package(student: Student) -> bool:
+    if not student_uses_fee_package(student):
+        return False
+    class_name = str(student.current_class.name if student.current_class else "").strip().upper()
+    return class_name in {"X", "10", "10TH"} or class_name.startswith("XII") or class_name.startswith("12")
+
+
 def _package_demand(student: Student):
     if student_is_zero_fee(student):
+        return ZERO
+    if student_is_second_year_package(student):
+        # In Year 2 of 2-year package (Class X & XII), 2-year package fee (Rs. 4,500)
+        # was already billed in Year 1 (Class IX & XI). The remaining unpaid balance
+        # is carried forward via StudentOpeningBalance. Year 2 new demand is Rs. 0.
         return ZERO
     return student_fee_package_amount(student)
 
 
 def package_receipt_default_amount(*, student: Student, session: AcademicSession):
+    if student_is_second_year_package(student):
+        due_res = calculate_student_due(student=student, session=session, through_month="MAR")
+        return max(due_res.raw_balance, ZERO)
+
     package_total = student_fee_package_amount(student)
     if package_total <= ZERO:
         return ZERO
@@ -218,8 +236,6 @@ def calculate_structure_receipt_amount(*, structure, student: Student, session: 
         raise ValidationError(f"Invalid academic month: {from_month or '(blank)' }.")
     if to_month not in ACADEMIC_MONTHS:
         raise ValidationError(f"Invalid academic month: {to_month or '(blank)' }.")
-    if not student.admission_date:
-        raise ValidationError("Student admission date is required to derive New/Old status.")
     if not session.starts_on or not session.ends_on:
         raise ValidationError("Academic session must have starts_on and ends_on dates.")
 
@@ -336,8 +352,6 @@ def calculate_student_due(*, student: Student, session: AcademicSession, through
         raise ValidationError(f"Invalid academic month: {through_month or '(blank)' }.")
     if not student.current_class_id:
         raise ValidationError("Student must have a current class for due calculation.")
-    if not student.admission_date:
-        raise ValidationError("Student admission date is required to derive New/Old status.")
     if not session.starts_on or not session.ends_on:
         raise ValidationError("Academic session must have starts_on and ends_on dates.")
 
@@ -435,10 +449,18 @@ def calculate_student_due(*, student: Student, session: AcademicSession, through
                     policy_concession_amount = _money(concession.amount or ZERO)
 
 
+    waiver_amount = _money(
+        StudentFeeWaiver.objects.filter(student=student, session=session).aggregate(total=Sum("amount"))[
+            "total"
+        ]
+    )
+
     gross_demand = _money(
         scheduled_fee_demand + transport_demand + opening_balance_amount + late_fee_amount
     )
-    raw_balance = _money(gross_demand - received_amount - concession_amount - policy_concession_amount)
+    raw_balance = _money(
+        gross_demand - received_amount - concession_amount - policy_concession_amount - waiver_amount
+    )
     due_amount = max(raw_balance, ZERO)
     credit_amount = max(-raw_balance, ZERO)
 
@@ -454,6 +476,7 @@ def calculate_student_due(*, student: Student, session: AcademicSession, through
         received_amount=received_amount,
         concession_amount=concession_amount,
         policy_concession_amount=policy_concession_amount,
+        waiver_amount=waiver_amount,
         raw_balance=raw_balance,
         due_amount=_money(due_amount),
         credit_amount=_money(credit_amount),
