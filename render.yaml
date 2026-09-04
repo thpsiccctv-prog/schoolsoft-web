@@ -16,7 +16,7 @@ services:
     plan: free
     region: oregon
     buildCommand: "pip install -r requirements.txt && python manage.py collectstatic --noinput"
-    startCommand: "gunicorn schoolsoft.wsgi:application"
+    startCommand: "gunicorn app:app --timeout 120 --workers 2"
     envVars:
       - key: SCHOOLSOFT_SECRET_KEY
         generateValue: true

@@ -16,7 +16,7 @@ from django.contrib.auth.decorators import login_required, permission_required
 from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.db import connection, transaction
-from django.db.models import Count, F, Max, ProtectedError, Q, Sum
+from django.db.models import Count, F, Max, Prefetch, ProtectedError, Q, Sum
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.clickjacking import xframe_options_sameorigin
@@ -5199,8 +5199,17 @@ def _get_fee_register_data(request):
     due_status = request.GET.get("status", "all").strip().lower()
     search_query = request.GET.get("q", "").strip()
 
+    # Default to Class IX if no class and no search query is specified on initial load,
+    # preventing timeout from sequentially calculating all 1,674 students across network DB
+    if not class_id and not search_query and "class" not in request.GET:
+        default_class = SchoolClass.objects.filter(name="IX").first() or SchoolClass.objects.order_by("display_order").first()
+        if default_class:
+            class_id = str(default_class.id)
+
     qs = Student.objects.filter(is_active=True).select_related(
         "current_class", "current_section", "feeder_school"
+    ).prefetch_related(
+        Prefetch("concessions", queryset=StudentConcession.objects.filter(session=session, is_active=True))
     )
 
     if class_id:
