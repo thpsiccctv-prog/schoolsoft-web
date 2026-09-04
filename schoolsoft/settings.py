@@ -226,6 +226,8 @@ LOGOUT_REDIRECT_URL = "core:login"
 # fine for production (build step runs collectstatic), but painful for local
 # runserver/.exe/test runs where nobody runs collectstatic by hand. So: plain
 # storage in DEBUG, manifest+compression only when DEBUG=False.
+WHITENOISE_USE_FINDERS = True
+
 STORAGES = {
     "default": {
         "BACKEND": "django.core.files.storage.FileSystemStorage",
