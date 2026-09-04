@@ -63,9 +63,14 @@ SECRET_KEY = os.environ.get(
 # Set SCHOOLSOFT_DEBUG=False in the environment for the online deployment.
 DEBUG = env_bool("SCHOOLSOFT_DEBUG", default=True)
 
+if DEBUG:
+    _default_allowed = ["127.0.0.1", "localhost", "192.168.1.57"]
+else:
+    _default_allowed = ["thpsic-schoolsoft.onrender.com", "127.0.0.1", "localhost"]
+
 ALLOWED_HOSTS = env_list(
     "SCHOOLSOFT_ALLOWED_HOSTS",
-    default=["127.0.0.1", "localhost", "english-medium.thpsic.com"],
+    default=_default_allowed,
 )
 
 # Render sets RENDER_EXTERNAL_HOSTNAME automatically for the service's *.onrender.com URL.
@@ -75,7 +80,7 @@ if _render_host and _render_host not in ALLOWED_HOSTS:
 
 CSRF_TRUSTED_ORIGINS = env_list(
     "SCHOOLSOFT_CSRF_TRUSTED_ORIGINS",
-    default=["https://english-medium.thpsic.com"],
+    default=["https://thpsic-schoolsoft.onrender.com"],
 )
 if _render_host:
     CSRF_TRUSTED_ORIGINS.append(f"https://{_render_host}")
