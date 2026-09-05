@@ -185,15 +185,15 @@ echo   https://schoolsoft-web.onrender.com
 echo.
 echo Expected:
 echo   - Active Students: 1,674
-echo   - Fee Receipts: 755
-echo   - Cash in DB: Rs 14,49,580.00
-pause
+echo   - Fee Receipts: 759
+echo   - Cash in DB: Rs 14,58,880.00
+if not "%AUTO_SYNC%"=="1" pause
 exit /b 0
 
 :cancel
 echo.
 echo Sync cancel kar diya gaya.
-pause
+if not "%AUTO_SYNC%"=="1" pause
 exit /b 0
 
 :fail
@@ -202,5 +202,5 @@ echo SYNC FAILED - upar ka error message dekhiye.
 echo Log file:
 echo   %cd%\%SYNC_LOG%
 echo Agar online data half-sync lage to backup aur log ke saath developer ko batayein.
-pause
+if not "%AUTO_SYNC%"=="1" pause
 exit /b 1
