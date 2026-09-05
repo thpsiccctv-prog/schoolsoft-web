@@ -46,7 +46,7 @@ def configure_desktop_environment():
     os.environ["SCHOOLSOFT_APP_TITLE"] = APP_TITLE
     os.environ["SCHOOLSOFT_APP_DATA_DIR_NAME"] = APP_DATA_DIR_NAME
     os.environ.setdefault("SCHOOLSOFT_BACKUP_ROOT", DEFAULT_BACKUP_ROOT)
-    os.environ.setdefault("SCHOOLSOFT_ONLINE_SYNC_ENABLED", "0")
+    os.environ.setdefault("SCHOOLSOFT_ONLINE_SYNC_ENABLED", "1")
     # Student photos and other uploads: same reasoning as the sqlite db above -
     # must live under the per-school LOCALAPPDATA folder, never beside the EXE.
     media_dir = APP_DATA / "media"

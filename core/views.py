@@ -458,6 +458,7 @@ def _sync_batch_candidates():
     base_dir = Path(settings.BASE_DIR).resolve()
     candidates = [base_dir / "sync-desktop-to-online.bat"]
     for parent in [base_dir, *base_dir.parents]:
+        candidates.append(parent / "sync-desktop-to-online.bat")
         candidates.append(parent / "01-source-code" / "schoolsoft_web" / "sync-desktop-to-online.bat")
     return candidates
 
@@ -732,7 +733,7 @@ def dashboard(request):
         "can_online_sync": (
             user_can_manage_users(user)
             and not is_online_deployment()
-            and os.environ.get("SCHOOLSOFT_ONLINE_SYNC_ENABLED", "0").strip().lower() in {"1", "true", "yes", "on"}
+            and os.environ.get("SCHOOLSOFT_ONLINE_SYNC_ENABLED", "1").strip().lower() in {"1", "true", "yes", "on"}
         ),
         "can_backup": user_can_manage_users(user) and connection.vendor == "sqlite",
     }

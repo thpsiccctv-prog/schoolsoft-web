@@ -6,7 +6,7 @@ REM Source of truth:
 REM   %LOCALAPPDATA%\THPSIC-InterCollege-SchoolSoft\db.sqlite3
 REM
 REM Destination:
-REM   Render PostgreSQL from render-db-url.txt
+REM   Render PostgreSQL from render-db-url-intercollege.txt
 REM
 REM WARNING:
 REM   This replaces the online database with the desktop database
@@ -64,6 +64,7 @@ if "%AUTO_SYNC%"=="1" (
 )
 
 if exist "render-db-url-intercollege.txt" goto :read_url
+if exist "render-db-url.txt" goto :read_url_legacy
 
     echo.
     echo Render ka External Database URL paste kijiye.
@@ -75,12 +76,16 @@ if exist "render-db-url-intercollege.txt" goto :read_url
     >"render-db-url-intercollege.txt" echo %DATABASE_URL%
     goto :check_url
 
+:read_url_legacy
+    for /f "usebackq delims=" %%A in ("render-db-url.txt") do set "DATABASE_URL=%%A"
+    for /f "tokens=* delims= " %%A in ("%DATABASE_URL%") do set "DATABASE_URL=%%A"
+    goto :check_url
+
 :read_url
     for /f "usebackq delims=" %%A in ("render-db-url-intercollege.txt") do set "DATABASE_URL=%%A"
     for /f "tokens=* delims= " %%A in ("%DATABASE_URL%") do set "DATABASE_URL=%%A"
 
 :check_url
-
 if "%DATABASE_URL%"=="" (
     echo ERROR: DATABASE_URL blank hai.
     >>"%SYNC_LOG%" echo ERROR: DATABASE_URL blank hai.
@@ -133,7 +138,7 @@ echo.
 echo [3/6] Desktop DB se fresh export ho raha hai (clean UTF-8, BOM-safe)...
 set "DATABASE_URL="
 set "SCHOOLSOFT_SQLITE_PATH=%SOURCE_DB%"
-REM export_for_sync.py handles Windows-1252/BOM encoding — avoids UnicodeDecodeError in fast_load_data.py
+REM export_for_sync.py handles Windows-1252/BOM encoding - avoids UnicodeDecodeError in fast_load_data.py
 "%PYTHON_EXE%" export_for_sync.py >>"%SYNC_LOG%" 2>&1
 if errorlevel 1 (
     echo ERROR: Desktop DB export fail hua. Details: %SYNC_LOG%
@@ -153,6 +158,8 @@ if errorlevel 1 (
 echo.
 echo [5/6] Online Render DB me fast batch load ho raha hai...
 set "DATABASE_URL=%RENDER_DATABASE_URL%"
+set "SCHOOLSOFT_SYNC_BATCH_SIZE=1000"
+set "SCHOOLSOFT_SYNC_BATCH_PAUSE_SECONDS=0.0"
 set "LOAD_SUCCESS_MARKER=sync-backups\sync-load-success.tmp"
 if exist "%LOAD_SUCCESS_MARKER%" del "%LOAD_SUCCESS_MARKER%" >nul 2>&1
 set "SCHOOLSOFT_SYNC_LOAD_MARKER=%cd%\%LOAD_SUCCESS_MARKER%"
@@ -172,12 +179,14 @@ echo [6/6] Sync complete.
 >>"%SYNC_LOG%" echo Sync complete at %DATE% %TIME%
 >"%SYNC_SUCCESS_MARKER%" echo Sync complete at %DATE% %TIME%
 >"%APPDATA_SYNC_SUCCESS_MARKER%" echo Sync complete at %DATE% %TIME%
+echo.
 echo Online website refresh karke dashboard verify kijiye:
-echo   https://schoolsoft-english-medium.onrender.com
+echo   https://schoolsoft-web.onrender.com
 echo.
 echo Expected:
-echo   - Online dashboard Desktop dashboard se match kare.
-echo   - Cash Book 01/06/2026 to 12/07/2026, Include salary ON, closing Rs. -3,633 rahe.
+echo   - Active Students: 1,674
+echo   - Fee Receipts: 755
+echo   - Cash in DB: Rs 14,49,580.00
 pause
 exit /b 0
 
@@ -192,6 +201,6 @@ echo.
 echo SYNC FAILED - upar ka error message dekhiye.
 echo Log file:
 echo   %cd%\%SYNC_LOG%
-echo Agar online data half-sync lage to backup aur log ke saath developer/Codex ko batayein.
+echo Agar online data half-sync lage to backup aur log ke saath developer ko batayein.
 pause
 exit /b 1
