@@ -184,9 +184,9 @@ echo Online website refresh karke dashboard verify kijiye:
 echo   https://schoolsoft-web.onrender.com
 echo.
 echo Expected:
-echo   - Active Students: 1,674
-echo   - Fee Receipts: 760
-echo   - Cash in DB: Rs 14,62,380.00
+echo   - Active Students: 1,675
+echo   - Fee Receipts: 785
+echo   - Cash in DB: Rs 15,00,980.00
 if not "%AUTO_SYNC%"=="1" pause
 exit /b 0
 
