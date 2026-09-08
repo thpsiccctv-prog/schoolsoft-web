@@ -34,6 +34,7 @@ from .fee_engine import (
     PACKAGE_FEE_HEAD_NAME,
     calculate_student_due,
     calculate_structure_receipt_amount,
+    get_student_outstanding_balance,
     package_receipt_default_amount,
     student_is_zero_fee,
     student_uses_fee_package,
@@ -43,6 +44,7 @@ from .forms import DisciplineRecordForm, FamilyForm, FeeReceiptEditForm, FeeRece
 from .models import (
     ACADEMIC_MONTHS,
     AcademicSession,
+    BALANCE_FEE_MONTH_CODE,
     DisciplineRecord,
     ExamMark,
     ExamTerm,
@@ -819,9 +821,7 @@ def student_detail(request, pk):
         Student.objects.select_related("current_class", "current_section"),
         pk=pk,
     )
-    due_total = FeeReceipt.objects.filter(
-        student=student, is_cancelled=False, carried_forward=False, legacy_due_amount__gt=0
-    ).aggregate(total=Sum("legacy_due_amount"))["total"] or 0
+    due_total = get_student_outstanding_balance(student)
     
     active_session = AcademicSession.objects.filter(is_active=True).order_by("-starts_on").first()
     concessions = StudentConcession.objects.filter(student=student, session=active_session).order_by("-id") if active_session else []
@@ -1567,7 +1567,9 @@ def receipt_create(request):
             line_total = line_form.cleaned_data["line_total"]
             with transaction.atomic():
                 receipt = receipt_form.save(commit=False)
-                receipt.receipt_no = next_manual_receipt_no()
+                new_r_no, new_leg_no = next_manual_receipt_no(session=receipt.session)
+                receipt.receipt_no = new_r_no
+                receipt.legacy_receipt_no = new_leg_no
                 receipt.legacy_fee_total = line_total
                 receipt.legacy_net_total = (
                     line_total + receipt.late_fee_amount - receipt.concession_amount
@@ -1587,11 +1589,30 @@ def receipt_create(request):
             return redirect("core:receipt_detail", pk=receipt.pk)
     else:
         student_id = request.GET.get("student")
+        receipt_type = request.GET.get("type", "").strip().lower()
         initial_data = {}
+        initial_lines = {}
         if student_id:
             initial_data["student"] = student_id
+            st = Student.objects.select_related("current_class", "current_section").filter(pk=student_id).first()
+            if st:
+                due_total = get_student_outstanding_balance(st)
+                if receipt_type == "arrear" or not st.is_active or due_total > Decimal("0.00"):
+                    initial_data["to_month"] = BALANCE_FEE_MONTH_CODE
+                    initial_data["from_month"] = "APR"
+                    # Do NOT silently fill default 2025-26! Clerk must consciously choose originating session.
+                    if due_total > Decimal("0.00"):
+                        initial_data["received_amount"] = due_total
+                        bal_head = FeeHead.objects.filter(name="Balance Fee", is_active=True).first()
+                        if bal_head:
+                            initial_lines[f"fee_head_{bal_head.id}"] = due_total
+                    cls_name = st.current_class.name if st.current_class else "Passout"
+                    initial_data["remarks"] = f"Class {cls_name} Arrears / Previous Due Cleared"
         receipt_form = FeeReceiptEntryForm(initial=initial_data)
-        line_form = FeeReceiptLineEntryForm()
+        line_form = FeeReceiptLineEntryForm(initial=initial_lines)
+
+    active_session = AcademicSession.objects.filter(is_active=True).first()
+    next_receipt_no, _ = next_manual_receipt_no(active_session)
 
     return render(
         request,
@@ -1601,7 +1622,8 @@ def receipt_create(request):
             "line_form": line_form,
             "recent_receipts": recent_receipts,
             "today_totals": today_totals,
-            "default_due_month": _default_due_month(AcademicSession.objects.filter(is_active=True).first()),
+            "next_receipt_no": next_receipt_no,
+            "default_due_month": _default_due_month(active_session),
         },
     )
 
@@ -2048,17 +2070,33 @@ def student_fee_defaults(request, pk):
         }
     )
 
-def next_manual_receipt_no():
-    timestamp = timezone.localtime().strftime("%Y%m%d%H%M%S")
-    base = f"MR-{timestamp}"
-    receipt_no = base
-    suffix = 1
+def next_manual_receipt_no(session=None):
+    if session is None:
+        session = AcademicSession.objects.filter(is_active=True).first()
 
-    while FeeReceipt.objects.filter(receipt_no=receipt_no).exists():
-        suffix += 1
-        receipt_no = f"{base}-{suffix}"
+    max_no = 0
+    if session:
+        res = FeeReceipt.objects.filter(session=session).aggregate(Max('legacy_receipt_no'))
+        max_no = res.get('legacy_receipt_no__max') or 0
 
-    return receipt_no
+        # Also inspect existing receipt numbers starting with SF-
+        for r_no in FeeReceipt.objects.filter(session=session, receipt_no__startswith="SF-").values_list("receipt_no", flat=True):
+            try:
+                parts = r_no.split("-")
+                val = int(parts[-1])
+                if val > max_no:
+                    max_no = val
+            except (ValueError, IndexError):
+                pass
+
+    next_no = max_no + 1
+    prefix = f"SF-{session.name.split('-')[0]}-" if (session and not session.is_active) else "SF-"
+    candidate = f"{prefix}{next_no}"
+    while FeeReceipt.objects.filter(receipt_no=candidate).exists():
+        next_no += 1
+        candidate = f"{prefix}{next_no}"
+
+    return candidate, next_no
 
 def get_collection_report_rows(request):
     from datetime import datetime, time
@@ -2125,6 +2163,167 @@ def collection_report_pdf(request):
     response = HttpResponse(pdf_bytes, content_type='application/pdf')
     response['Content-Disposition'] = 'attachment; filename="collection-report.pdf"'
     return response
+
+
+def old_session_arrears_report(request):
+    """
+    Unified Old Session Arrears Collection Register.
+    Provides Dual-Perspective Reconciliation:
+    1. Cash-Book Perspective: Counter collections in 2025-26 vs 2026-27 sessions.
+    2. Originating Session Perspective: Past academic years for which dues were recovered.
+    Also distinguishes cash-paid collections (received_amount > 0) from zero-paid slips (SF-705).
+    """
+    date_from_str = request.GET.get("date_from", "").strip()
+    date_to_str = request.GET.get("date_to", "").strip()
+    stream_filter = request.GET.get("stream", "all").strip()
+    query = request.GET.get("q", "").strip()
+
+    # 1. Migrated Arrears (2025-26 post-March 31 or tagged ARREAR)
+    migrated_qs = FeeReceipt.objects.select_related(
+        "student", "student__current_class", "student__current_section", "session", "originating_session"
+    ).filter(
+        session__name="2025-26",
+        receipt_date__gt=date(2026, 3, 31),
+        is_cancelled=False,
+    )
+
+    # 2. Live Arrears (2026-27 and future active sessions)
+    live_qs = FeeReceipt.objects.select_related(
+        "student", "student__current_class", "student__current_section", "session", "originating_session"
+    ).filter(
+        session__name="2026-27",
+        is_cancelled=False,
+    ).filter(
+        Q(to_month=BALANCE_FEE_MONTH_CODE)
+        | (Q(originating_session__isnull=False) & ~Q(originating_session__name="2026-27"))
+        | Q(remarks__icontains="arrear")
+        | Q(remarks__icontains="due")
+        | Q(lines__fee_head__name__icontains="balance")
+    ).distinct()
+
+    if date_from_str:
+        try:
+            d_from = datetime.strptime(date_from_str, "%Y-%m-%d").date()
+            migrated_qs = migrated_qs.filter(receipt_date__gte=d_from)
+            live_qs = live_qs.filter(receipt_date__gte=d_from)
+        except ValueError:
+            pass
+
+    if date_to_str:
+        try:
+            d_to = datetime.strptime(date_to_str, "%Y-%m-%d").date()
+            migrated_qs = migrated_qs.filter(receipt_date__lte=d_to)
+            live_qs = live_qs.filter(receipt_date__lte=d_to)
+        except ValueError:
+            pass
+
+    if query:
+        q_filter = (
+            Q(receipt_no__icontains=query)
+            | Q(student__full_name__icontains=query)
+            | Q(student__legacy_sid__icontains=query)
+            | Q(student__admission_no__icontains=query)
+        )
+        migrated_qs = migrated_qs.filter(q_filter)
+        live_qs = live_qs.filter(q_filter)
+
+    # Paid totals (cash recovery received_amount > 0)
+    migrated_paid = migrated_qs.filter(received_amount__gt=0)
+    migrated_total = migrated_paid.aggregate(total=Sum("received_amount"))["total"] or Decimal("0.00")
+    migrated_paid_count = migrated_paid.count()
+    migrated_zero_count = migrated_qs.filter(received_amount=0).count()
+
+    live_paid = live_qs.filter(received_amount__gt=0)
+    live_total = live_paid.aggregate(total=Sum("received_amount"))["total"] or Decimal("0.00")
+    live_paid_count = live_paid.count()
+    live_zero_count = live_qs.filter(received_amount=0).count()
+
+    total_paid_count = migrated_paid_count + live_paid_count
+    total_zero_count = migrated_zero_count + live_zero_count
+    grand_total = migrated_total + live_total
+
+    combined_rows = []
+    if stream_filter in ("all", "migrated"):
+        for r in migrated_qs:
+            cls_str = r.class_snapshot or (
+                f"{r.student.current_class.name}-{r.student.current_section.name}"
+                if r.student and r.student.current_class and r.student.current_section
+                else (r.student.current_class.name if r.student and r.student.current_class else "-")
+            )
+            orig_sess_name = r.originating_session.name if r.originating_session else "2025-26"
+            combined_rows.append({
+                "receipt": r,
+                "stream": "Migrated (2025-26)",
+                "stream_badge": "neutral",
+                "origin_session": orig_sess_name,
+                "cash_session": r.session.name if r.session else "2025-26",
+                "class_snapshot": cls_str,
+                "receipt_no": r.receipt_no,
+                "date": r.receipt_date,
+                "student": r.student,
+                "amount": r.received_amount,
+                "is_zero_paid": (r.received_amount == Decimal("0.00")),
+                "remarks": r.remarks,
+            })
+
+    if stream_filter in ("all", "live"):
+        for r in live_qs:
+            cls_str = r.class_snapshot or (
+                f"{r.student.current_class.name}-{r.student.current_section.name}"
+                if r.student and r.student.current_class and r.student.current_section
+                else (r.student.current_class.name if r.student and r.student.current_class else "-")
+            )
+            orig_sess_name = r.originating_session.name if r.originating_session else "2025-26"
+            combined_rows.append({
+                "receipt": r,
+                "stream": "Live (2026-27)",
+                "stream_badge": "success",
+                "origin_session": orig_sess_name,
+                "cash_session": r.session.name if r.session else "2026-27",
+                "class_snapshot": cls_str,
+                "receipt_no": r.receipt_no,
+                "date": r.receipt_date,
+                "student": r.student,
+                "amount": r.received_amount,
+                "is_zero_paid": (r.received_amount == Decimal("0.00")),
+                "remarks": r.remarks,
+            })
+
+    combined_rows.sort(key=lambda x: (x["date"], x["receipt"].id), reverse=True)
+
+    # Originating Session aggregation for dual-perspective summary
+    originating_totals = {}
+    for row in combined_rows:
+        if not row["is_zero_paid"]:
+            s_name = row["origin_session"]
+            if s_name not in originating_totals:
+                originating_totals[s_name] = {"total": Decimal("0.00"), "count": 0}
+            originating_totals[s_name]["total"] += row["amount"]
+            originating_totals[s_name]["count"] += 1
+
+    orig_summary_list = [
+        {"session_name": k, "total": v["total"], "count": v["count"]}
+        for k, v in sorted(originating_totals.items())
+    ]
+
+    context = {
+        "rows": combined_rows,
+        "migrated_total": migrated_total,
+        "migrated_paid_count": migrated_paid_count,
+        "migrated_zero_count": migrated_zero_count,
+        "live_total": live_total,
+        "live_paid_count": live_paid_count,
+        "live_zero_count": live_zero_count,
+        "grand_total": grand_total,
+        "total_paid_count": total_paid_count,
+        "total_zero_count": total_zero_count,
+        "orig_summary_list": orig_summary_list,
+        "date_from": date_from_str,
+        "date_to": date_to_str,
+        "stream_filter": stream_filter,
+        "query": query,
+    }
+    return render(request, "core/arrears_report.html", context)
 
 
 def admission_form_pdf(request, pk):
@@ -2475,6 +2674,7 @@ def next_tc_number():
 def tc_detail(request, pk):
     student = get_object_or_404(Student.objects.select_related("current_class", "current_section"), pk=pk)
     tc = getattr(student, "transfer_certificate", None)
+    due_total = get_student_outstanding_balance(student)
 
     if request.method == "POST":
         instance = tc if tc else TransferCertificate(student=student)
@@ -2508,12 +2708,21 @@ def tc_detail(request, pk):
             "student": student,
             "tc": tc,
             "form": form,
+            "due_total": due_total,
         },
     )
 
 
 def tc_pdf(request, pk):
     student = get_object_or_404(Student, pk=pk)
+    due_total = get_student_outstanding_balance(student)
+    is_forced = bool(request.user.is_authenticated and request.user.is_superuser and request.GET.get("force") == "1")
+    if due_total > 0 and not is_forced:
+        return render(request, "core/no_dues_required.html", {
+            "student": student,
+            "due_total": due_total,
+            "document_name": "Transfer Certificate (TC)",
+        }, status=403)
     tc = get_object_or_404(TransferCertificate.objects.select_related("student", "last_class_studied"), student=student)
     pdf_bytes = build_transfer_certificate_pdf(tc, get_active_school_profile())
     response = HttpResponse(pdf_bytes, content_type="application/pdf")
@@ -2605,7 +2814,8 @@ def marksheet_select(request, pk):
     terms = ExamTerm.objects.select_related("session").filter(
         tests__marks__student=student
     ).distinct().order_by("-session__name", "display_order")
-    return render(request, "core/marksheet_select.html", {"student": student, "terms": terms})
+    due_total = get_student_outstanding_balance(student)
+    return render(request, "core/marksheet_select.html", {"student": student, "terms": terms, "due_total": due_total})
 
 
 def check_duplicate_receipt(request):
@@ -2659,6 +2869,19 @@ def check_duplicate_receipt(request):
 def marksheet_pdf(request, pk, term_id):
     student = get_object_or_404(Student.objects.select_related("current_class", "current_section"), pk=pk)
     term = get_object_or_404(ExamTerm.objects.select_related("session"), pk=term_id)
+    due_total = get_student_outstanding_balance(student)
+    is_forced = bool(request.user.is_authenticated and request.user.is_superuser and request.GET.get("force") == "1")
+    if due_total > 0 and not is_forced:
+        return render(
+            request,
+            "core/no_dues_required.html",
+            {
+                "student": student,
+                "due_total": due_total,
+                "document_name": f"Marksheet ({term.name})",
+            },
+            status=403,
+        )
     exam_marks = (
         ExamMark.objects.select_related("exam_test", "exam_test__subject")
         .filter(student=student, exam_test__term=term)
@@ -2824,9 +3047,7 @@ def _class_label(student):
 
 
 def _student_due_total(student):
-    return FeeReceipt.objects.filter(
-        student=student, is_cancelled=False, carried_forward=False, legacy_due_amount__gt=0
-    ).aggregate(total=Sum("legacy_due_amount"))["total"] or Decimal("0")
+    return get_student_outstanding_balance(student)
 
 
 def family_list(request):
@@ -5894,9 +6115,24 @@ def marksheet_view(request, pk, term_id):
     words_hi = _num_to_words_hi(int(total_obtained))
     words_en = _num_to_words_en(int(total_obtained))
 
+    due_total = get_student_outstanding_balance(student)
+    is_forced = bool(request.user.is_authenticated and request.user.is_superuser and request.GET.get("force") == "1")
+    if due_total > 0 and not is_forced:
+        return render(
+            request,
+            "core/no_dues_required.html",
+            {
+                "student": student,
+                "due_total": due_total,
+                "document_name": f"Marksheet ({term.name})",
+            },
+            status=403,
+        )
+
     context = {
         "student": student,
         "term": term,
+        "due_total": due_total,
         "marks_rows": marks_rows,
         "total_max": total_max,
         "total_obtained": total_obtained,

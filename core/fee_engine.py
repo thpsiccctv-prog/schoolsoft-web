@@ -481,3 +481,64 @@ def calculate_student_due(*, student: Student, session: AcademicSession, through
         due_amount=_money(due_amount),
         credit_amount=_money(credit_amount),
     )
+
+
+def get_student_outstanding_balance(student: Student, session: AcademicSession = None) -> Decimal:
+    """
+    Returns the true outstanding balance (Decimal >= 0.00) for a student across all sessions.
+    
+    1. Active students:
+       Uses formal Fee Engine `calculate_student_due` for the active session through MAR.
+       This correctly accounts for: current year fee structure demand + opening balance
+       - cash payments - concessions - waivers.
+       
+    2. Inactive / Alumni students:
+       Alumni do not have current-year academic demands. Their outstanding liability is:
+       - Base due: Carried-forward debt from their final session (from active session's
+         StudentOpeningBalance, or last recorded past receipt's legacy_due_amount).
+       - Minus: Any arrears payments received in the active session (session 2026-27 or newer).
+       - Result is max(0.00, remaining_due).
+    """
+    if not student:
+        return ZERO
+
+    if not session:
+        session = AcademicSession.objects.filter(is_active=True).first() or AcademicSession.objects.order_by("-id").first()
+
+    if student.is_active and session and student.current_class_id:
+        try:
+            res = calculate_student_due(student=student, session=session, through_month="MAR")
+            return _money(res.due_amount)
+        except Exception:
+            pass
+
+    # Inactive / Alumni student liability calculation
+    base_due = ZERO
+    if session:
+        ob = StudentOpeningBalance.objects.filter(student=student, session=session).first()
+        if ob and ob.amount > ZERO:
+            base_due = _money(ob.amount)
+
+    if base_due <= ZERO:
+        last_past_rcp = (
+            FeeReceipt.objects.filter(student=student, is_cancelled=False)
+            .exclude(session=session if session else 0)
+            .order_by("-receipt_date", "-id")
+            .first()
+        )
+        if last_past_rcp and last_past_rcp.legacy_due_amount:
+            base_due = _money(last_past_rcp.legacy_due_amount)
+
+    # Deduct any payments made in current/active session
+    active_paid = ZERO
+    if session:
+        active_paid = _money(
+            FeeReceipt.objects.filter(
+                student=student,
+                session=session,
+                is_cancelled=False,
+            ).aggregate(total=Sum("received_amount"))["total"]
+        )
+
+    return max(ZERO, _money(base_due - active_paid))
+

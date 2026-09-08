@@ -666,6 +666,14 @@ class FeeReceipt(TimeStampedModel):
     receipt_no = models.CharField(max_length=30, unique=True)
     student = models.ForeignKey(Student, on_delete=models.PROTECT, related_name="fee_receipts")
     session = models.ForeignKey(AcademicSession, on_delete=models.PROTECT, related_name="fee_receipts")
+    originating_session = models.ForeignKey(
+        AcademicSession,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="originating_fee_receipts",
+        help_text="Original academic session for which this arrears payment was incurred.",
+    )
     student_name_snapshot = models.CharField(max_length=120, blank=True)
     father_name_snapshot = models.CharField(max_length=120, blank=True)
     class_snapshot = models.CharField(max_length=30, blank=True)

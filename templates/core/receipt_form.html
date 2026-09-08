@@ -10,7 +10,11 @@
             <strong>Fee Collection Master</strong>
             <span>Manual receipt entry, fee heads, payment and recent register</span>
         </div>
-        <div class="classic-title-actions">
+        <div class="classic-title-actions" style="display: flex; align-items: center; gap: 8px;">
+            <span class="next-receipt-badge" style="background: #0f766e; color: #ffffff; padding: 4px 10px; border-radius: 4px; font-weight: 700; font-size: 0.88rem; display: inline-flex; align-items: center; gap: 6px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                Next Receipt: <strong>{{ next_receipt_no|default:"SF-830" }}</strong>
+            </span>
             <a class="mini-button" href="{% url 'core:receipt_list' %}">Receipt Register</a>
             <a class="mini-button" href="{% url 'core:collection_report' %}">Collection Report</a>
         </div>
@@ -86,6 +90,25 @@
                                 </div>
                                 {% if receipt_form.from_month.errors %}<small>{{ receipt_form.from_month.errors|striptags }}</small>{% endif %}
                                 {% if receipt_form.to_month.errors %}<small>{{ receipt_form.to_month.errors|striptags }}</small>{% endif %}
+                            </label>
+                        </div>
+                        <div id="originating-session-container" class="wide-field" style="background: #f8fafc; border: 1.5px solid #cbd5e1; padding: 10px 14px; border-radius: 6px; margin: 4px 0 8px 0; transition: all 0.25s ease;">
+                            <label style="display: block; margin-bottom: 0;">
+                                <span style="font-weight: 700; color: #1e293b; display: flex; align-items: center; gap: 6px; margin-bottom: 5px;">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+                                    {{ receipt_form.originating_session.label }}
+                                    <span class="required-star" style="color: #dc2626; font-size: 1.15rem; font-weight: 900; display: none;" id="orig-sess-required-star">* (अनिवार्य)</span>
+                                    <span id="orig-sess-hint" style="font-size: 0.8rem; font-weight: normal; color: #64748b; margin-left: auto;">(Balance Fee / पुराना बकाया होने पर अनिवार्य)</span>
+                                </span>
+                                {{ receipt_form.originating_session }}
+                                <small id="orig-sess-desc" style="color: #64748b; font-size: 0.8rem; display: block; margin-top: 4px;">
+                                    यदि यह रसीद किसी पुराने सत्र (2025-26, 2024-25, 2023-24 आदि) के बकाया की है, तो वह सत्र यहाँ अवश्य चुनें।
+                                </small>
+                                {% if receipt_form.originating_session.errors %}
+                                    <small style="color: #b91c1c; font-weight: 700; font-size: 0.85rem; display: block; margin-top: 5px; background: #fee2e2; padding: 4px 8px; border-radius: 4px; border: 1px solid #fca5a5;">
+                                        ⚠️ {{ receipt_form.originating_session.errors|striptags }}
+                                    </small>
+                                {% endif %}
                             </label>
                         </div>
                         <label>
@@ -298,5 +321,55 @@
         });
         window.open('/receipts/demand-slip/?' + params.toString(), '_blank', 'width=700,height=700');
     }
+
+    function updateOriginatingSessionUI() {
+        const toMonthInput = document.getElementById("id_to_month");
+        const container = document.getElementById("originating-session-container");
+        const star = document.getElementById("orig-sess-required-star");
+        const hint = document.getElementById("orig-sess-hint");
+        if (!container || !toMonthInput) return;
+
+        const isBal = (toMonthInput.value === "BAL");
+        if (isBal) {
+            container.style.background = "#fffbeb";
+            container.style.borderColor = "#f59e0b";
+            container.style.boxShadow = "0 0 0 3px rgba(245, 158, 11, 0.25)";
+            if (star) star.style.display = "inline";
+            if (hint) {
+                hint.textContent = "⚠️ Balance Fee: पुराना सत्र चुनना अनिवार्य है";
+                hint.style.color = "#b45309";
+                hint.style.fontWeight = "700";
+            }
+        } else {
+            container.style.background = "#f8fafc";
+            container.style.borderColor = "#cbd5e1";
+            container.style.boxShadow = "none";
+            if (star) star.style.display = "none";
+            if (hint) {
+                hint.textContent = "(मासिक रसीद के लिए स्वतः चालू सत्र रहेगा)";
+                hint.style.color = "#64748b";
+                hint.style.fontWeight = "normal";
+            }
+        }
+    }
+
+    document.addEventListener("DOMContentLoaded", function() {
+        updateOriginatingSessionUI();
+        const toMonthInput = document.getElementById("id_to_month");
+        if (toMonthInput) {
+            toMonthInput.addEventListener("change", updateOriginatingSessionUI);
+        }
+        document.querySelectorAll("#month-chips-container button").forEach(function(b) {
+            b.addEventListener("click", function() {
+                setTimeout(updateOriginatingSessionUI, 60);
+            });
+        });
+        const fillBalBtn = document.querySelector("[data-fill-balance-fee]");
+        if (fillBalBtn) {
+            fillBalBtn.addEventListener("click", function() {
+                setTimeout(updateOriginatingSessionUI, 60);
+            });
+        }
+    });
     </script>
 {% endblock %}

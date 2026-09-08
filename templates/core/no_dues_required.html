@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% load schoolsoft_extras %}
+
+{% block title %}No-Dues Clearance Required | THPSIC SchoolSoft{% endblock %}
+
+{% block content %}
+<section class="section" style="max-width: 650px; margin: 2rem auto;">
+    <div style="background: #FFFFFF; border: 2px solid #EF4444; border-radius: 12px; padding: 2rem; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.15); text-align: center;">
+        <div style="font-size: 3rem; margin-bottom: 1rem;">⛔</div>
+        <h2 style="color: #991B1B; margin-bottom: 0.5rem;">No-Dues Clearance Required</h2>
+        <p style="color: #4B5563; font-size: 1rem; margin-bottom: 1.5rem;">
+            Official document <strong>{{ document_name|default:"Document" }}</strong> cannot be issued because the student has outstanding fee dues.
+        </p>
+
+        <div style="background: #FEF2F2; border: 1px solid #FCA5A5; border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem; display: inline-block; min-width: 280px;">
+            <div style="color: #7F1D1D; font-size: 0.9rem;">Student: <strong>{{ student.full_name }}</strong></div>
+            <div style="color: #7F1D1D; font-size: 0.85rem; margin-top: 2px;">
+                SID: {{ student.legacy_sid|default:"-" }} &bull; Class: {{ student.current_class.name|default:"-" }}
+            </div>
+            <div style="margin-top: 0.75rem; font-size: 1.4rem; font-weight: 700; color: #DC2626;">
+                Pending Due: &#8377;&nbsp;{{ due_total|indian_number }}
+            </div>
+        </div>
+
+        <div style="display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap;">
+            <a class="button action-primary" href="{% url 'core:receipt_create' %}?student={{ student.pk }}&type=arrear" style="background: #DC2626; border-color: #DC2626;">
+                💰 Collect Due & Issue Clearance Receipt
+            </a>
+            <a class="button secondary" href="{% url 'core:student_detail' student.pk %}">
+                Return to Student Profile
+            </a>
+        </div>
+
+        {% if request.user.is_superuser %}
+        <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px dashed #E5E7EB; font-size: 0.8rem; color: #6B7280;">
+            Principal / Admin Override: <a href="?force=1" style="color: #DC2626; text-decoration: underline;">Proceed anyway (Download with Due)</a>
+        </div>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

@@ -67,6 +67,7 @@ urlpatterns = [
     path("api/receipts/check-duplicate/", module_required("fee_collection")(views.check_duplicate_receipt), name="check_duplicate_receipt"),
     path("collection/", module_required("collection")(views.collection_report), name="collection_report"),
     path("collection/pdf/", module_required("collection")(views.collection_report_pdf), name="collection_report_pdf"),
+    path("reports/old-session-arrears/", module_required("collection")(views.old_session_arrears_report), name="old_session_arrears_report"),
     path("students/<int:pk>/admission-form/pdf/", module_required("students")(views.admission_form_pdf), name="admission_form_pdf"),
     path("students/<int:pk>/character-certificate/pdf/", module_required("students")(views.character_certificate_pdf), name="character_certificate_pdf"),
     path("students/<int:pk>/id-card/pdf/", module_required("students")(views.id_card_pdf), name="id_card_pdf"),

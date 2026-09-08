@@ -389,6 +389,7 @@ class FeeReceiptEntryForm(forms.ModelForm):
         fields = [
             "student",
             "session",
+            "originating_session",
             "receipt_date",
             "from_month",
             "to_month",
@@ -408,13 +409,17 @@ class FeeReceiptEntryForm(forms.ModelForm):
         self.fields["student"].queryset = Student.objects.select_related(
             "current_class",
             "current_section",
-        ).filter(is_active=True).order_by("full_name")
+        ).all().order_by("full_name")
         self.fields["session"].queryset = AcademicSession.objects.filter(is_active=True).order_by("-starts_on", "name")
+        self.fields["originating_session"].queryset = AcademicSession.objects.all().order_by("-starts_on", "name")
+        self.fields["originating_session"].required = False
+        self.fields["originating_session"].label = "Originating Session (बकाया का मूल सत्र)"
+        self.fields["originating_session"].empty_label = "--- Select Old Session / पुराना सत्र चुनें ---"
         active_session = AcademicSession.objects.filter(is_active=True).order_by("-starts_on").first()
         if "session" not in self.initial and active_session:
             self.fields["session"].initial = active_session
         self.fields["receipt_date"].initial = timezone.localdate()
-        self.fields["student"].empty_label = "Select active student"
+        self.fields["student"].empty_label = "Select student (Active or Alumni)"
         self.fields["session"].empty_label = "Select session"
 
     def _clean_month(self, value, *, allow_balance_fee=False):
@@ -438,10 +443,29 @@ class FeeReceiptEntryForm(forms.ModelForm):
         cleaned_data = super().clean()
         from_month = cleaned_data.get("from_month")
         to_month = cleaned_data.get("to_month")
+        session = cleaned_data.get("session")
+        originating_session = cleaned_data.get("originating_session")
 
         if from_month and to_month and to_month != BALANCE_FEE_MONTH_CODE:
             if ACADEMIC_MONTHS.index(from_month) > ACADEMIC_MONTHS.index(to_month):
                 self.add_error("to_month", f"To Month ({to_month}) must be on or after From Month ({from_month}).")
+
+        # Strict Backend Validation for Arrears / Balance Fee
+        is_balance_fee = (to_month == BALANCE_FEE_MONTH_CODE)
+        if is_balance_fee:
+            if not originating_session:
+                self.add_error(
+                    "originating_session",
+                    "बकाया रसीद (Balance Fee) के लिए मूल सत्र (Originating Session) चुनना अनिवार्य है। कृपया पुराना सत्र चुनें (उदा. 2025-26, 2024-25, 2023-24 आदि)।"
+                )
+            elif session and originating_session == session:
+                self.add_error(
+                    "originating_session",
+                    f"बकाया रसीद के लिए मूल सत्र ({originating_session.name}) चालू सत्र ({session.name}) नहीं हो सकता। कृपया पिछला पुराना सत्र चुनें।"
+                )
+        else:
+            if not originating_session and session:
+                cleaned_data["originating_session"] = session
 
         return cleaned_data
 
