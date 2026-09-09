@@ -299,11 +299,21 @@ class Command(BaseCommand):
         }
 
     def _create_receipt(self, *, student, session, parsed, concession, line_items):
+        is_balance_fee = (
+            str(parsed.get("from_month", "")).strip().upper() == "BALANCE FEE"
+            or str(parsed.get("to_month", "")).strip().upper() == "BALANCE FEE"
+        )
+        if is_balance_fee:
+            orig_session = AcademicSession.objects.filter(name="2025-26").first() or session
+        else:
+            orig_session = session
+
         receipt = FeeReceipt.objects.create(
             legacy_receipt_no=parsed["legacy_receipt_no"],
             receipt_no=f"SF-{parsed['legacy_receipt_no']}",
             student=student,
             session=session,
+            originating_session=orig_session,
             student_name_snapshot=student.full_name,
             father_name_snapshot=student.father_name,
             class_snapshot=student.current_class.name if student.current_class else "",

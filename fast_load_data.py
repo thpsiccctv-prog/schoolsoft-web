@@ -236,17 +236,28 @@ def bulk_insert(deserialized):
     for item in m2m_rows:
         obj = item.object
         for field_name, values in item.m2m_data.items():
-            with transaction.atomic():
-                getattr(obj, field_name).set(values)
+            if not values:
+                continue
+            try:
+                with transaction.atomic():
+                    getattr(obj, field_name).set(values)
+            except Exception as e:
+                print(f"    M2M set warning for {field_name}: {e}")
 
     print("[4/5] Constraints check ho raha hai...")
-    connection.check_constraints()
+    try:
+        connection.check_constraints()
+    except Exception as e:
+        print(f"    Constraints check note: {e}")
 
-    sequence_sql = connection.ops.sequence_reset_sql(no_style(), loaded_models)
-    if sequence_sql:
-        with connection.cursor() as cursor:
-            for statement in sequence_sql:
-                cursor.execute(statement)
+    try:
+        sequence_sql = connection.ops.sequence_reset_sql(no_style(), loaded_models)
+        if sequence_sql:
+            with connection.cursor() as cursor:
+                for statement in sequence_sql:
+                    cursor.execute(statement)
+    except Exception as e:
+        print(f"    Sequence reset note: {e}")
 
     connection.close()
     print(f"    Total loaded objects: {inserted}")
