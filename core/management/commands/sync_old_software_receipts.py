@@ -1,4 +1,6 @@
 import csv
+import hashlib
+import json
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -105,9 +107,12 @@ class Command(BaseCommand):
         if options["apply"] and options.get("confirm") != "THPSIC":
             raise CommandError("Apply blocked. Use --apply --confirm THPSIC after reviewing dry-run.")
 
+        start_time = timezone.localtime()
         stufee_path = Path(options["stufee_csv"])
         if not stufee_path.exists():
             raise CommandError(f"StuFee CSV not found: {stufee_path}")
+
+        source_sha256 = hashlib.sha256(stufee_path.read_bytes()).hexdigest()
 
         out_dir = Path(options["out_dir"])
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -124,14 +129,27 @@ class Command(BaseCommand):
         )
         watermark = options["from_rcp"] if options.get("from_rcp") is not None else auto_watermark
 
+        mode_str = "apply" if options["apply"] else "dryrun"
+        run_id = f"{start_time:%Y%m%d_%H%M%S}_{mode_str}_watermark_{watermark}"
+        run_dir = out_dir / run_id
+        run_dir.mkdir(parents=True, exist_ok=True)
+
         self.stdout.write(self.style.MIGRATE_HEADING("=== OLD SOFTWARE RECEIPT INCREMENTAL SYNC ==="))
+        self.stdout.write(f"Run ID: {run_id}")
         self.stdout.write(f"Mode: {'APPLY LIVE' if options['apply'] else 'DRY-RUN ONLY'}")
         self.stdout.write(f"CSV: {stufee_path}")
+        self.stdout.write(f"Source SHA-256: {source_sha256}")
         self.stdout.write(f"Session: {session}")
         self.stdout.write(f"Watermark: import rcpno > {watermark} (auto max={auto_watermark})")
+        self.stdout.write(f"Run Output Dir: {run_dir}")
 
+        backup_file_path = None
         if options["apply"]:
-            call_command("safe_sqlite_backup", out_dir=options["backup_out_dir"], label="before-old-receipt-sync")
+            backup_label = f"before-sync-{run_id}"
+            call_command("safe_sqlite_backup", out_dir=options["backup_out_dir"], label=backup_label)
+            backup_candidates = sorted(Path(options["backup_out_dir"]).glob(f"*{backup_label}*"))
+            if backup_candidates:
+                backup_file_path = str((backup_candidates[-1] / "db.sqlite3").resolve())
 
         students = {str(s.legacy_sid).strip(): s for s in Student.objects.select_related("current_class", "current_section") if s.legacy_sid}
         existing_by_sid_rcp = set(
@@ -263,19 +281,75 @@ class Command(BaseCommand):
                         line_items=receipt_line_items,
                     )
 
-        preview_path = out_dir / "OLD_SOFTWARE_RECEIPT_SYNC_PREVIEW.csv"
-        exception_path = out_dir / "OLD_SOFTWARE_RECEIPT_SYNC_EXCEPTIONS.csv"
-        self._write_csv(preview_path, preview)
-        self._write_csv(exception_path, exceptions)
+        end_time = timezone.localtime()
+        created_rcps = [r["old_rcp_no"] for r in preview if r.get("action") == "CREATE"]
+        watermark_to = max(created_rcps) if created_rcps else watermark
+
+        # 1. Write run-specific immutable files inside run_dir
+        run_preview_path = run_dir / "OLD_SOFTWARE_RECEIPT_SYNC_PREVIEW.csv"
+        run_exception_path = run_dir / "OLD_SOFTWARE_RECEIPT_SYNC_EXCEPTIONS.csv"
+        self._write_csv(run_preview_path, preview)
+        self._write_csv(run_exception_path, exceptions)
+
+        manifest = {
+            "run_id": run_id,
+            "mode": "APPLY LIVE" if options["apply"] else "DRY-RUN ONLY",
+            "session": str(session.name),
+            "watermark_from": watermark,
+            "watermark_to": watermark_to,
+            "source_file": {
+                "path": str(stufee_path.resolve()),
+                "sha256": source_sha256,
+            },
+            "backup_file": backup_file_path,
+            "timestamp_start": start_time.isoformat(),
+            "timestamp_end": end_time.isoformat(),
+            "summary": {
+                "to_create": create_count,
+                "skipped_duplicates": skip_count,
+                "exceptions": len(exceptions),
+                "total_paid": f"{total_paid:.2f}",
+                "total_concession": f"{total_concession:.2f}",
+            },
+        }
+        manifest_path = run_dir / "SYNC_RUN_MANIFEST.json"
+        manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+
+        # 2. Write/update global latest pointer in out_dir
+        latest_pointer = {
+            "latest_run_id": run_id,
+            "latest_run_dir": str(run_dir.resolve()),
+            "mode": manifest["mode"],
+            "timestamp": end_time.isoformat(),
+            "watermark_from": watermark,
+            "watermark_to": watermark_to,
+            "manifest_file": str(manifest_path.resolve()),
+            "summary": manifest["summary"],
+        }
+        (out_dir / "LATEST_RUN.json").write_text(json.dumps(latest_pointer, indent=2), encoding="utf-8")
+
+        # 3. For backward compatibility: only overwrite root preview/exceptions
+        # if this run actually processed records (or if root files do not exist yet).
+        # A verification rerun with 0 records will NEVER blank out existing audit files!
+        root_preview_path = out_dir / "OLD_SOFTWARE_RECEIPT_SYNC_PREVIEW.csv"
+        root_exception_path = out_dir / "OLD_SOFTWARE_RECEIPT_SYNC_EXCEPTIONS.csv"
+        if create_count > 0 or len(exceptions) > 0 or not root_preview_path.exists():
+            self._write_csv(root_preview_path, preview)
+            self._write_csv(root_exception_path, exceptions)
+            if options["apply"] and create_count > 0:
+                (out_dir / "LATEST_APPLY_MANIFEST.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
 
         self.stdout.write(self.style.SUCCESS("Receipt sync summary"))
+        self.stdout.write(f"- Run ID: {run_id}")
+        self.stdout.write(f"- Watermark: {watermark} -> {watermark_to}")
         self.stdout.write(f"- To create: {create_count}")
         self.stdout.write(f"- Skipped duplicates: {skip_count}")
         self.stdout.write(f"- Exceptions: {len(exceptions)}")
         self.stdout.write(f"- Total paid to import: Rs. {total_paid:,.2f}")
         self.stdout.write(f"- Total concession to import: Rs. {total_concession:,.2f}")
-        self.stdout.write(f"- Preview CSV: {preview_path}")
-        self.stdout.write(f"- Exceptions CSV: {exception_path}")
+        self.stdout.write(f"- Run Directory: {run_dir}")
+        self.stdout.write(f"- Manifest: {manifest_path}")
+        self.stdout.write(f"- Latest Pointer: {out_dir / 'LATEST_RUN.json'}")
         if not options["apply"]:
             self.stdout.write(self.style.WARNING("Dry-run only. Live DB not changed."))
 
