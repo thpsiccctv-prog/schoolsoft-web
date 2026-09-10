@@ -6295,3 +6295,20 @@ def bulk_photo_export_csv(request):
         ])
 
     return response
+
+
+def version_view(request):
+    commit = os.environ.get("RENDER_GIT_COMMIT")
+    if not commit:
+        try:
+            import subprocess
+            commit = subprocess.check_output(["git", "rev-parse", "HEAD"], stderr=subprocess.DEVNULL).decode().strip()
+        except Exception:
+            commit = "unknown"
+    branch = os.environ.get("RENDER_GIT_BRANCH", "main")
+    return JsonResponse({
+        "app": "THPSIC-InterCollege-SchoolSoft",
+        "commit": commit[:7] if commit else "unknown",
+        "commit_full": commit or "unknown",
+        "branch": branch,
+    })

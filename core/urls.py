@@ -23,6 +23,7 @@ urlpatterns = [
     # PWA files
     path("manifest.webmanifest", TemplateView.as_view(template_name="core/manifest.webmanifest", content_type="application/manifest+json"), name="manifest"),
     path("service-worker.js", TemplateView.as_view(template_name="core/service-worker.js", content_type="application/javascript"), name="service_worker"),
+    path("version/", views.version_view, name="version_view"),
 
     path("", module_required("dashboard")(views.dashboard), name="dashboard"),
     path("admin/online-sync/start/", admin_only_required("Online Sync")(views.online_sync_start), name="online_sync_start"),
