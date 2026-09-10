@@ -6306,9 +6306,13 @@ def version_view(request):
         except Exception:
             commit = "unknown"
     branch = os.environ.get("RENDER_GIT_BRANCH", "main")
-    return JsonResponse({
+    response = JsonResponse({
         "app": "THPSIC-InterCollege-SchoolSoft",
         "commit": commit[:7] if commit else "unknown",
         "commit_full": commit or "unknown",
         "branch": branch,
-    })
+    })
+    response["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response["Pragma"] = "no-cache"
+    response["Expires"] = "0"
+    return response
