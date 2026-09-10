@@ -117,7 +117,7 @@ class Command(BaseCommand):
             raise CommandError("Active academic session not found.")
 
         auto_watermark = (
-            FeeReceipt.objects.filter(carried_forward=False, legacy_receipt_no__isnull=False).aggregate(
+            FeeReceipt.objects.filter(session=session, carried_forward=False, legacy_receipt_no__isnull=False).aggregate(
                 max_rcp=Max("legacy_receipt_no")
             )["max_rcp"]
             or 0
@@ -135,7 +135,7 @@ class Command(BaseCommand):
 
         students = {str(s.legacy_sid).strip(): s for s in Student.objects.select_related("current_class", "current_section") if s.legacy_sid}
         existing_by_sid_rcp = set(
-            FeeReceipt.objects.filter(legacy_receipt_no__isnull=False)
+            FeeReceipt.objects.filter(session=session, legacy_receipt_no__isnull=False)
             .values_list("student__legacy_sid", "legacy_receipt_no")
         )
         existing_by_sid_date_amount = set(
