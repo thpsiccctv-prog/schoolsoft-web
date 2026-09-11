@@ -5,11 +5,13 @@ generates dry-run preview CSVs, and safely commits marks to ExamMark.
 """
 
 import csv
+import datetime as dt_module
 import hashlib
 import json
 from pathlib import Path
 import re
 import sys
+import zoneinfo
 
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
@@ -18,6 +20,26 @@ from core.award_sheet_processor import (
     parse_sheet_token, get_expected_page_roster, validate_and_reconcile_row,
     export_preview_csv, export_exceptions_csv, commit_award_sheet_marks
 )
+
+IST_TZ = zoneinfo.ZoneInfo("Asia/Kolkata")
+
+
+def format_iso_utc(dt):
+    """Returns ISO-8601 string strictly in UTC (+00:00)."""
+    if timezone.is_naive(dt):
+        dt = timezone.make_aware(dt, dt_module.timezone.utc)
+    else:
+        dt = dt.astimezone(dt_module.timezone.utc)
+    return dt.isoformat()
+
+
+def format_iso_ist(dt):
+    """Returns ISO-8601 string in Indian Standard Time (+05:30)."""
+    if timezone.is_naive(dt):
+        dt = timezone.make_aware(dt, IST_TZ)
+    else:
+        dt = dt.astimezone(IST_TZ)
+    return dt.isoformat()
 
 
 def compute_file_sha256(file_path):
@@ -506,13 +528,21 @@ class Command(BaseCommand):
         audit_seal = "SEALED_WITH_EXCEPTIONS" if total_blocked > 0 else "SEALED_CLEAN"
         exceptions_sha256 = {exc.name: compute_file_sha256(exc) for exc in exception_files}
 
+        start_time_utc = format_iso_utc(start_time)
+        start_time_ist = format_iso_ist(start_time)
+        end_time_utc = format_iso_utc(end_time)
+        end_time_ist = format_iso_ist(end_time)
+
         # 3. Write INGESTION_RUN_MANIFEST.json into run_dir
         if dry_run:
             manifest = {
                 "run_id": run_id,
                 "mode": "DRY-RUN (PREVIEW ONLY)",
-                "timestamp_start": start_time.isoformat(),
-                "timestamp_end": end_time.isoformat(),
+                "timezone": "UTC",
+                "timestamp_start": start_time_utc,
+                "timestamp_start_ist": start_time_ist,
+                "timestamp_end": end_time_utc,
+                "timestamp_end_ist": end_time_ist,
                 "source_file": {
                     "path": str(csv_path.resolve()),
                     "filename": csv_path.name,
@@ -523,11 +553,13 @@ class Command(BaseCommand):
                 "exceptions_sha256": exceptions_sha256,
                 "consumed_by_apply": None,
                 "consumed_at": None,
+                "consumed_at_ist": None,
                 "consumed_by_reviewer": None,
                 "security_audit": {
                     "hard_commit_gate_enforced": True,
                     "reviewer": reviewer if reviewer else "System / Unspecified Reviewer",
-                    "review_timestamp": end_time.isoformat(),
+                    "review_timestamp": end_time_utc,
+                    "review_timestamp_ist": end_time_ist,
                     "review_count": total_review,
                     "force_flagged_override": force_flagged,
                     "force_reason": force_reason if force_flagged else None,
@@ -558,15 +590,19 @@ class Command(BaseCommand):
             # Single-Use Consumption: seal and consume the dry-run manifest
             if dry_manifest and dry_manifest_path:
                 dry_manifest["consumed_by_apply"] = run_id
-                dry_manifest["consumed_at"] = end_time.isoformat()
+                dry_manifest["consumed_at"] = end_time_utc
+                dry_manifest["consumed_at_ist"] = end_time_ist
                 dry_manifest["consumed_by_reviewer"] = reviewer
                 dry_manifest_path.write_text(json.dumps(dry_manifest, indent=2, ensure_ascii=False), encoding="utf-8")
 
             manifest = {
                 "run_id": run_id,
                 "mode": "LIVE COMMIT (DATABASE WRITE)",
-                "timestamp_start": start_time.isoformat(),
-                "timestamp_end": end_time.isoformat(),
+                "timezone": "UTC",
+                "timestamp_start": start_time_utc,
+                "timestamp_start_ist": start_time_ist,
+                "timestamp_end": end_time_utc,
+                "timestamp_end_ist": end_time_ist,
                 "source_file": {
                     "path": str(csv_path.resolve()),
                     "filename": csv_path.name,
@@ -578,7 +614,8 @@ class Command(BaseCommand):
                 "security_audit": {
                     "hard_commit_gate_enforced": True,
                     "reviewer": reviewer,
-                    "review_timestamp": end_time.isoformat(),
+                    "review_timestamp": end_time_utc,
+                    "review_timestamp_ist": end_time_ist,
                     "review_count": total_review,
                     "reviewed_dry_run_id": dry_run_id,
                     "reviewed_source_sha256": dry_manifest.get("source_file", {}).get("sha256") if dry_manifest else None,
@@ -624,12 +661,15 @@ class Command(BaseCommand):
             "latest_run_id": run_id,
             "latest_run_dir": str(run_dir.resolve()),
             "mode": manifest["mode"],
-            "timestamp": end_time.isoformat(),
+            "timezone": "UTC",
+            "timestamp": end_time_utc,
+            "timestamp_ist": end_time_ist,
             "source_file": csv_path.name,
             "source_sha256": source_sha256,
             "config_fingerprint": current_config_fingerprint,
             "reviewer": reviewer if reviewer else "System / Unspecified Reviewer",
-            "review_timestamp": end_time.isoformat(),
+            "review_timestamp": end_time_utc,
+            "review_timestamp_ist": end_time_ist,
             "review_count": total_review,
             "manifest_file": str(manifest_path.resolve()),
             "summary": manifest["summary"],
