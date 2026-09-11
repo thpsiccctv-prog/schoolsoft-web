@@ -201,7 +201,8 @@ class Command(BaseCommand):
             # Stale Source Check: Compare file SHA-256
             reviewed_source_sha256 = dry_manifest.get("source_file", {}).get("sha256")
             current_source_sha256 = compute_file_sha256(source_path)
-            if current_source_sha256 != reviewed_source_sha256:
+            source_sha256_match = bool(reviewed_source_sha256 and (current_source_sha256 == reviewed_source_sha256))
+            if not source_sha256_match:
                 raise CommandError(
                     f"Stale Approval Violation: Source file '{source_path.name}' has been MODIFIED since dry-run review!\n"
                     f"  Reviewed SHA-256: {reviewed_source_sha256}\n"
@@ -209,6 +210,9 @@ class Command(BaseCommand):
                     f"The data reviewed by '{reviewer}' does not match the file on disk.\n"
                     f"Please run a fresh --dry-run and inspect the new exceptions before applying."
                 )
+        else:
+            reviewed_source_sha256 = None
+            source_sha256_match = None
 
         # 1. Unique Run Directory (fee-sync pattern)
         timestamp_str = start_time.strftime("%Y%m%d_%H%M%S")
@@ -239,7 +243,8 @@ class Command(BaseCommand):
             self.process_csv_source(
                 source_path, dry_run, run_dir, out_dir, run_id, start_time, source_sha256,
                 force_flagged=force_flagged, force_reason=force_reason, reviewer=reviewer,
-                dry_run_id=dry_run_id, dry_manifest=dry_manifest, dry_manifest_path=dry_manifest_path
+                dry_run_id=dry_run_id, dry_manifest=dry_manifest, dry_manifest_path=dry_manifest_path,
+                reviewed_source_sha256=reviewed_source_sha256, source_sha256_match=source_sha256_match
             )
         else:
             raise CommandError(f"Unsupported file format '{source_path.suffix}'. Please provide an extracted CSV or manifest.")
@@ -247,7 +252,8 @@ class Command(BaseCommand):
     def process_csv_source(
         self, csv_path, dry_run, run_dir, out_dir, run_id, start_time, source_sha256,
         force_flagged=False, force_reason="", reviewer="",
-        dry_run_id="", dry_manifest=None, dry_manifest_path=None
+        dry_run_id="", dry_manifest=None, dry_manifest_path=None,
+        reviewed_source_sha256=None, source_sha256_match=None
     ):
         """
         Parses a CSV file with columns:
@@ -273,10 +279,15 @@ class Command(BaseCommand):
         involved_tests = extract_tests_from_rows(grouped)
         current_config_fingerprint = compute_config_fingerprint(involved_tests)
 
-        # Stale Config Check on apply mode
+        # Stale Config Check on apply mode (dynamically derived boolean)
+        reviewed_config_fingerprint = dry_manifest.get("config_fingerprint") if dry_manifest else None
+        config_fingerprint_match = (
+            bool(reviewed_config_fingerprint and (current_config_fingerprint == reviewed_config_fingerprint))
+            if not dry_run else None
+        )
+
         if not dry_run and dry_manifest:
-            reviewed_config_fingerprint = dry_manifest.get("config_fingerprint")
-            if reviewed_config_fingerprint and current_config_fingerprint != reviewed_config_fingerprint:
+            if not config_fingerprint_match:
                 raise CommandError(
                     f"Stale Config Violation: Examination configuration (theory/practical max marks or pass marks) in the database "
                     f"has CHANGED since dry-run review!\n"
@@ -572,10 +583,10 @@ class Command(BaseCommand):
                     "reviewed_dry_run_id": dry_run_id,
                     "reviewed_source_sha256": dry_manifest.get("source_file", {}).get("sha256") if dry_manifest else None,
                     "applied_source_sha256": source_sha256,
-                    "source_sha256_match": True,
+                    "source_sha256_match": source_sha256_match,
                     "reviewed_config_fingerprint": dry_manifest.get("config_fingerprint") if dry_manifest else None,
                     "applied_config_fingerprint": current_config_fingerprint,
-                    "config_fingerprint_match": True,
+                    "config_fingerprint_match": config_fingerprint_match,
                     "reviewed_exceptions_sha256": dry_manifest.get("exceptions_sha256", {}) if dry_manifest else {},
                     "applied_exceptions_sha256": exceptions_sha256,
                     "one_time_approval_consumed": True,
