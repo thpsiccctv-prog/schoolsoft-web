@@ -6017,11 +6017,13 @@ def award_sheet_pdf_view(request):
 def marks_entry_import_excel(request):
     """
     Imports filled Excel sheet to update student marks in bulk.
+    Validates marks using the centralized award sheet validation engine.
     """
     import openpyxl
     from decimal import Decimal
     from django.db import transaction
     from core.models import ExamTest, Student, ExamMark
+    from core.award_sheet_processor import validate_and_reconcile_row
 
     if request.method != "POST" or "excel_file" not in request.FILES:
         messages.error(request, "Please choose an Excel file to upload.")
@@ -6036,6 +6038,9 @@ def marks_entry_import_excel(request):
         ws = wb.active
 
         updated_count = 0
+        skipped_count = 0
+        flagged_errors = []
+
         with transaction.atomic():
             for row in ws.iter_rows(min_row=4, values_only=True):
                 if not row or not row[1]:
@@ -6057,51 +6062,45 @@ def marks_entry_import_excel(request):
 
                 is_ab = (ab_cell in ("Y", "YES", "AB", "ABSENT", "1"))
 
-                if is_ab:
+                reconciled = validate_and_reconcile_row(
+                    student,
+                    test,
+                    raw_th=th_cell,
+                    raw_pr=pr_cell,
+                    raw_tot=None,
+                    is_absent=is_ab,
+                    remarks=rem_cell
+                )
+
+                if reconciled["status"] == "BLANK_ROW":
+                    skipped_count += 1
+                    continue
+                elif reconciled["status"] in ("VALID", "ABSENT"):
                     ExamMark.objects.update_or_create(
                         exam_test=test,
                         student=student,
                         defaults={
-                            "is_absent": True,
-                            "theory_marks_obtained": None,
-                            "practical_marks_obtained": None,
-                            "marks_obtained": None,
-                            "grade": "AB",
-                            "remarks": rem_cell,
+                            "is_absent": reconciled["is_absent"],
+                            "theory_marks_obtained": reconciled["theory_marks"],
+                            "practical_marks_obtained": reconciled["practical_marks"],
+                            "marks_obtained": reconciled["total_marks"],
+                            "grade": reconciled["grade"],
+                            "remarks": "; ".join(reconciled["flags"]) if reconciled["flags"] else rem_cell,
                         }
                     )
                     updated_count += 1
-                elif th_cell is not None and str(th_cell).strip() != "":
-                    try:
-                        th_val = Decimal(str(th_cell).strip())
-                        pr_val = Decimal(str(pr_cell).strip()) if (pr_cell is not None and str(pr_cell).strip() != "") else Decimal("0.00")
+                else:
+                    # Flagged / blocked row (e.g. EXCEEDS_MAX, INVALID_DIGIT)
+                    err_msg = f"{student.full_name} (Adm: {student.admission_no or student.legacy_sid}): {'; '.join(reconciled['flags'])}"
+                    flagged_errors.append(err_msg)
 
-                        if test.theory_max_marks and th_val > test.theory_max_marks:
-                            th_val = test.theory_max_marks
-                        if test.practical_max_marks and pr_val > test.practical_max_marks:
-                            pr_val = test.practical_max_marks
-
-                        tot_val = th_val + pr_val
-                        pct = (tot_val / test.max_marks * Decimal("100")) if test.max_marks else Decimal("0.00")
-                        grd = grade_for_percentage(pct)
-
-                        ExamMark.objects.update_or_create(
-                            exam_test=test,
-                            student=student,
-                            defaults={
-                                "is_absent": False,
-                                "theory_marks_obtained": th_val,
-                                "practical_marks_obtained": pr_val,
-                                "marks_obtained": tot_val,
-                                "grade": grd,
-                                "remarks": rem_cell,
-                            }
-                        )
-                        updated_count += 1
-                    except Exception:
-                        pass
-
-        messages.success(request, f"Successfully imported and updated marks for {updated_count} students!")
+        if flagged_errors:
+            err_preview = " | ".join(flagged_errors[:3])
+            if len(flagged_errors) > 3:
+                err_preview += f" ... (+{len(flagged_errors) - 3} more)"
+            messages.warning(request, f"Updated {updated_count} students. {len(flagged_errors)} invalid rows were BLOCKED from DB: {err_preview}")
+        else:
+            messages.success(request, f"Successfully imported and updated marks for {updated_count} students!")
     except Exception as exc:
         messages.error(request, f"Error processing Excel file: {exc}")
 

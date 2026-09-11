@@ -223,7 +223,7 @@ def validate_and_reconcile_row(student, exam_test, raw_th, raw_pr, raw_tot, is_a
             final_tot = tot_val
     else:
         final_tot = calculated_tot
-        result["flags"].append("Written total was blank, used calculated sum")
+        result["flags"].append("Total blank: auto-calculated sum (no cross-check — manually verify)")
 
     if final_tot > total_max:
         result["status"] = "EXCEEDS_MAX"
@@ -246,7 +246,7 @@ def validate_and_reconcile_row(student, exam_test, raw_th, raw_pr, raw_tot, is_a
     if not subj_pass:
         result["fail_reasons"] = fail_reasons
 
-    if not result["flags"]:
+    if result["status"] not in ("ARITHMETIC_MISMATCH", "EXCEEDS_MAX", "INVALID_DIGIT", "BLANK_ROW", "ABSENT"):
         result["status"] = "VALID"
 
     return result
