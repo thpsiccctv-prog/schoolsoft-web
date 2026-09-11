@@ -125,10 +125,23 @@ def check_subject_pass(exam_test, th_obt, pr_obt, tot_obt, is_absent=False):
     return is_pass, reasons
 
 
-def validate_and_reconcile_row(student, exam_test, raw_th, raw_pr, raw_tot, is_absent=False, remarks=""):
+def validate_and_reconcile_row(student, exam_test, raw_th, raw_pr, raw_tot, is_absent=False, remarks="", confidence=None):
     """
     Validates extracted marks for a single student row against exam_test rules.
     Performs the golden arithmetic self-check: Theory + Practical == Total.
+
+    Status & Gate Taxonomy:
+    - VALID (Green): Passed all bounds; arithmetic matches or pure theory valid. COMMITS to DB.
+    - ABSENT (Gray/Blue): Student absent, grade AB. COMMITS to DB.
+    - REVIEW (Amber): Practical subject with Total left blank; sum auto-calculated.
+      Non-blocking: COMMITS to DB with audit remark flag so reviewers can spot it.
+    - NEEDS_REVIEW (Red): Low OCR confidence (< 0.75), digit reading ambiguous.
+      HARD-BLOCKED: Does NOT commit to DB; routed to exceptions CSV for human verification.
+    - ARITHMETIC_MISMATCH (Red): Written Total != Theory + Practical. HARD-BLOCKED.
+    - EXCEEDS_MAX (Red): Mark exceeds maximum allowed. HARD-BLOCKED.
+    - INVALID_DIGIT (Red): Non-numerical corrupted entry. HARD-BLOCKED.
+    - UNMATCHED_STUDENT (Red): Student not found in roster. HARD-BLOCKED.
+    - BLANK_ROW: No marks entered, skipped.
     """
     theory_max = exam_test.theory_max_marks or Decimal("100.00")
     practical_max = exam_test.practical_max_marks or Decimal("0.00")
@@ -151,6 +164,7 @@ def validate_and_reconcile_row(student, exam_test, raw_th, raw_pr, raw_tot, is_a
         "total_marks": None,
         "percentage": None,
         "grade": "",
+        "confidence": None,
         "status": "VALID",
         "flags": [],
         "remarks": remarks,
@@ -178,7 +192,21 @@ def validate_and_reconcile_row(student, exam_test, raw_th, raw_pr, raw_tot, is_a
         result["is_pass"] = False
         return result
 
-    # 3. Parse Numerical Values
+    # 3. Check OCR Confidence (if provided from scan / OCR engine)
+    if confidence is not None and str(confidence).strip() != "":
+        try:
+            conf_val = float(confidence)
+            if conf_val > 1.0:
+                conf_val = conf_val / 100.0
+            result["confidence"] = round(conf_val, 3)
+            if conf_val < 0.75:
+                # Low confidence is a high risk: HARD-BLOCKED to prevent corrupted marks entering DB
+                result["status"] = "NEEDS_REVIEW"
+                result["flags"].append(f"Low OCR confidence ({conf_val:.1%}) — digit ambiguous, manual verification required")
+        except ValueError:
+            pass
+
+    # 4. Parse Numerical Values
     try:
         th_val = Decimal(th_str) if th_str else Decimal("0.00")
     except InvalidOperation:
@@ -200,7 +228,7 @@ def validate_and_reconcile_row(student, exam_test, raw_th, raw_pr, raw_tot, is_a
         result["flags"].append(f"Invalid total digits: '{tot_str}'")
         return result
 
-    # 4. Check Maximum Bounds
+    # 5. Check Maximum Bounds
     if th_val < Decimal("0.00") or th_val > theory_max:
         result["status"] = "EXCEEDS_MAX"
         result["flags"].append(f"Theory {th_val} exceeds max {theory_max}")
@@ -212,18 +240,28 @@ def validate_and_reconcile_row(student, exam_test, raw_th, raw_pr, raw_tot, is_a
 
     calculated_tot = th_val + pr_val
 
-    # 5. Golden Arithmetic Self-Check: Theory + Practical == Total
-    if tot_val is not None:
-        if tot_val != calculated_tot:
-            result["status"] = "ARITHMETIC_MISMATCH"
-            result["flags"].append(f"Mismatch: Th({th_val}) + Pr({pr_val}) = {calculated_tot} != Written Total({tot_val})")
-            # Keep calculated_tot as the primary candidate but flag it for review
-            final_tot = calculated_tot
-        else:
-            final_tot = tot_val
+    # 6. Golden Arithmetic Self-Check & Total Reconciliation
+    if not has_practical:
+        # Pure Theory Subject (e.g. Hindi Max 100, Practical 0):
+        # Theory is the sole component (Theory == Total). Cross-check is fundamentally not applicable.
+        # Suppress any "Total blank" flag and keep status clean VALID!
+        final_tot = th_val
     else:
-        final_tot = calculated_tot
-        result["flags"].append("Total blank: auto-calculated sum (no cross-check — manually verify)")
+        # Practical Subject (e.g. Science 70/30):
+        if tot_val is not None:
+            if tot_val != calculated_tot:
+                result["status"] = "ARITHMETIC_MISMATCH"
+                result["flags"].append(f"Mismatch: Th({th_val}) + Pr({pr_val}) = {calculated_tot} != Written Total({tot_val})")
+                final_tot = calculated_tot
+            else:
+                final_tot = tot_val
+        else:
+            # Total was left blank on practical sheet:
+            # Auto-calculate sum; mark as amber REVIEW (non-blocking commit) with audit flag
+            final_tot = calculated_tot
+            if result["status"] not in ("ARITHMETIC_MISMATCH", "EXCEEDS_MAX", "INVALID_DIGIT", "NEEDS_REVIEW"):
+                result["status"] = "REVIEW"
+            result["flags"].append("Total blank: auto-calculated sum (no cross-check — manually verify)")
 
     if final_tot > total_max:
         result["status"] = "EXCEEDS_MAX"
@@ -246,7 +284,7 @@ def validate_and_reconcile_row(student, exam_test, raw_th, raw_pr, raw_tot, is_a
     if not subj_pass:
         result["fail_reasons"] = fail_reasons
 
-    if result["status"] not in ("ARITHMETIC_MISMATCH", "EXCEEDS_MAX", "INVALID_DIGIT", "BLANK_ROW", "ABSENT"):
+    if result["status"] not in ("ARITHMETIC_MISMATCH", "EXCEEDS_MAX", "INVALID_DIGIT", "UNMATCHED_STUDENT", "NEEDS_REVIEW", "REVIEW", "BLANK_ROW", "ABSENT"):
         result["status"] = "VALID"
 
     return result
@@ -255,6 +293,7 @@ def validate_and_reconcile_row(student, exam_test, raw_th, raw_pr, raw_tot, is_a
 def export_preview_csv(sheet_token, verified_rows, out_dir):
     """
     Saves the extracted marks preview to a clean CSV audit file.
+    Includes STATUS (VALID, REVIEW, NEEDS_REVIEW, ARITHMETIC_MISMATCH, etc.) and CONFIDENCE.
     """
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -264,7 +303,7 @@ def export_preview_csv(sheet_token, verified_rows, out_dir):
         "S_NO", "ROLL_NO", "SID", "ADMISSION_NO", "STUDENT_NAME", "FATHER_NAME",
         "RAW_THEORY", "RAW_PRACTICAL", "RAW_TOTAL", "IS_ABSENT",
         "FINAL_THEORY", "FINAL_PRACTICAL", "FINAL_TOTAL", "PERCENTAGE", "GRADE",
-        "PASS_STATUS", "STATUS", "FLAGS"
+        "PASS_STATUS", "STATUS", "CONFIDENCE", "FLAGS"
     ]
 
     with open(csv_file, "w", newline="", encoding="utf-8-sig") as f:
@@ -272,6 +311,7 @@ def export_preview_csv(sheet_token, verified_rows, out_dir):
         writer.writerow(headers)
         for idx, row in enumerate(verified_rows):
             pass_status_str = "PASS" if row.get("is_pass") else ("AB" if row.get("is_absent") else "FAIL")
+            conf_str = f"{row['confidence']:.2f}" if row.get("confidence") is not None else ""
             writer.writerow([
                 idx + 1,
                 row.get("roll_no") or "",
@@ -290,6 +330,7 @@ def export_preview_csv(sheet_token, verified_rows, out_dir):
                 row.get("grade") or "",
                 pass_status_str,
                 row.get("status") or "",
+                conf_str,
                 "; ".join(row.get("flags") or []),
             ])
 
@@ -298,7 +339,7 @@ def export_preview_csv(sheet_token, verified_rows, out_dir):
 
 def export_exceptions_csv(sheet_token, flagged_rows, out_dir):
     """
-    Saves blocked/flagged rows (arithmetic mismatches, exceeds max, invalid digits, unmatched)
+    Saves blocked/flagged rows (arithmetic mismatches, exceeds max, invalid digits, unmatched, needs_review)
     to a dedicated exceptions CSV audit file: MARKS_EXCEPTIONS_<SHEET_TOKEN>.csv.
     Returns Path to the file, or None if no flagged rows.
     """
@@ -311,13 +352,14 @@ def export_exceptions_csv(sheet_token, flagged_rows, out_dir):
     headers = [
         "S_NO", "ROLL_NO", "SID", "ADMISSION_NO", "STUDENT_NAME", "FATHER_NAME",
         "RAW_THEORY", "RAW_PRACTICAL", "RAW_TOTAL", "IS_ABSENT",
-        "FINAL_THEORY", "FINAL_PRACTICAL", "FINAL_TOTAL", "STATUS", "FLAGS", "REMARKS"
+        "FINAL_THEORY", "FINAL_PRACTICAL", "FINAL_TOTAL", "STATUS", "CONFIDENCE", "FLAGS", "REMARKS"
     ]
 
     with open(csv_file, "w", newline="", encoding="utf-8-sig") as f:
         writer = csv.writer(f)
         writer.writerow(headers)
         for idx, row in enumerate(flagged_rows, 1):
+            conf_str = f"{row['confidence']:.2f}" if row.get("confidence") is not None else ""
             writer.writerow([
                 idx,
                 row.get("roll_no") or "",
@@ -333,6 +375,7 @@ def export_exceptions_csv(sheet_token, flagged_rows, out_dir):
                 row.get("practical_marks") if row.get("practical_marks") is not None else "",
                 row.get("total_marks") if row.get("total_marks") is not None else "",
                 row.get("status") or "",
+                conf_str,
                 "; ".join(row.get("flags") or []),
                 row.get("remarks") or "",
             ])
@@ -342,18 +385,30 @@ def export_exceptions_csv(sheet_token, flagged_rows, out_dir):
 def commit_award_sheet_marks(exam_test, verified_rows, dry_run=False, force_commit_flagged=False):
     """
     Commits verified rows into the live database (ExamMark) inside an atomic transaction.
-    HARD COMMIT GATE:
-    - Only rows with status in ('VALID', 'ABSENT') are committed.
-    - BLANK_ROW is skipped.
-    - ARITHMETIC_MISMATCH, EXCEEDS_MAX, INVALID_DIGIT, UNMATCHED_STUDENT, etc. are STRICTLY BLOCKED
-      and collected in summary['flagged_rows'] unless force_commit_flagged is True.
-    Returns summary dict including flagged_blocked_count and flagged_rows.
+
+    HARD COMMIT GATE & TAXONOMY:
+    - VALID (Green): Commits to ExamMark.
+    - ABSENT (Gray/Blue): Commits to ExamMark (marks=None, is_absent=True, grade="AB").
+    - REVIEW (Amber): Commits to ExamMark (practical total auto-summed, remarks recorded).
+    - BLANK_ROW: Skipped (no entry).
+    - RED / BLOCKED STATUSES:
+      * ARITHMETIC_MISMATCH (written total mismatch)
+      * EXCEEDS_MAX (marks exceed max bounds)
+      * INVALID_DIGIT (non-numeric text)
+      * UNMATCHED_STUDENT (student not found in class/section)
+      * NEEDS_REVIEW (low OCR confidence, digit reading ambiguous)
+      STRICTLY BLOCKED from the database and collected in summary['flagged_rows']
+      unless force_commit_flagged is True with a mandatory administrative force_reason.
+
+    Returns summary dict including review_rows, needs_review_rows, flagged_blocked_count, and flagged_rows.
     """
     summary = {
         "total_rows": len(verified_rows),
         "valid_rows": 0,
+        "review_rows": 0,
         "absent_rows": 0,
         "mismatch_rows": 0,
+        "needs_review_rows": 0,
         "blank_rows": 0,
         "flagged_blocked_count": 0,
         "flagged_rows": [],
@@ -370,14 +425,18 @@ def commit_award_sheet_marks(exam_test, verified_rows, dry_run=False, force_comm
                 summary["absent_rows"] += 1
             elif status == "VALID":
                 summary["valid_rows"] += 1
+            elif status == "REVIEW":
+                summary["review_rows"] += 1
             elif status == "BLANK_ROW":
                 summary["blank_rows"] += 1
                 summary["skipped_count"] += 1
                 continue
             else:
-                # Flagged status: ARITHMETIC_MISMATCH, EXCEEDS_MAX, INVALID_DIGIT, UNMATCHED_STUDENT, etc.
+                # RED / BLOCKED status
                 if status == "ARITHMETIC_MISMATCH":
                     summary["mismatch_rows"] += 1
+                elif status == "NEEDS_REVIEW":
+                    summary["needs_review_rows"] += 1
                 summary["flagged_rows"].append(row)
                 if not force_commit_flagged:
                     # HARD GATE: strictly block this row from touching the database!

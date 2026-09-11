@@ -6038,6 +6038,7 @@ def marks_entry_import_excel(request):
         ws = wb.active
 
         updated_count = 0
+        review_count = 0
         skipped_count = 0
         flagged_errors = []
 
@@ -6075,7 +6076,9 @@ def marks_entry_import_excel(request):
                 if reconciled["status"] == "BLANK_ROW":
                     skipped_count += 1
                     continue
-                elif reconciled["status"] in ("VALID", "ABSENT"):
+                elif reconciled["status"] in ("VALID", "REVIEW", "ABSENT"):
+                    if reconciled["status"] == "REVIEW":
+                        review_count += 1
                     ExamMark.objects.update_or_create(
                         exam_test=test,
                         student=student,
@@ -6090,7 +6093,7 @@ def marks_entry_import_excel(request):
                     )
                     updated_count += 1
                 else:
-                    # Flagged / blocked row (e.g. EXCEEDS_MAX, INVALID_DIGIT)
+                    # Flagged / blocked row (e.g. EXCEEDS_MAX, INVALID_DIGIT, NEEDS_REVIEW, ARITHMETIC_MISMATCH)
                     err_msg = f"{student.full_name} (Adm: {student.admission_no or student.legacy_sid}): {'; '.join(reconciled['flags'])}"
                     flagged_errors.append(err_msg)
 
@@ -6098,9 +6101,12 @@ def marks_entry_import_excel(request):
             err_preview = " | ".join(flagged_errors[:3])
             if len(flagged_errors) > 3:
                 err_preview += f" ... (+{len(flagged_errors) - 3} more)"
-            messages.warning(request, f"Updated {updated_count} students. {len(flagged_errors)} invalid rows were BLOCKED from DB: {err_preview}")
+            messages.warning(request, f"Updated {updated_count} students. {len(flagged_errors)} invalid/blocked rows were NOT saved to DB: {err_preview}")
         else:
-            messages.success(request, f"Successfully imported and updated marks for {updated_count} students!")
+            msg = f"Successfully imported and updated marks for {updated_count} students!"
+            if review_count > 0:
+                msg += f" ({review_count} practical rows had blank total and were auto-summed as REVIEW)."
+            messages.success(request, msg)
     except Exception as exc:
         messages.error(request, f"Error processing Excel file: {exc}")
 

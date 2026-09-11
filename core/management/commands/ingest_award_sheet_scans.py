@@ -138,7 +138,9 @@ class Command(BaseCommand):
 
         total_processed = 0
         total_valid = 0
+        total_review = 0
         total_absent = 0
+        total_needs_review = 0
         total_created = 0
         total_updated = 0
         total_skipped = 0
@@ -180,6 +182,15 @@ class Command(BaseCommand):
                 ab_val = str(r.get("ABSENT") or r.get("IS_ABSENT") or "").strip().upper()
                 is_ab = ab_val in ("Y", "YES", "TRUE", "1", "AB", "ABSENT")
                 remarks = r.get("REMARKS") or ""
+
+                # Confidence parsing for scanned OCR sheets
+                raw_conf = r.get("CONFIDENCE") or r.get("OCR_CONFIDENCE")
+                conf_val = None
+                if raw_conf not in (None, ""):
+                    try:
+                        conf_val = float(raw_conf)
+                    except (ValueError, TypeError):
+                        conf_val = None
 
                 student = None
                 # 1. Primary match: Admission Number or Legacy SID
@@ -237,6 +248,7 @@ class Command(BaseCommand):
                         "percentage": None,
                         "grade": "",
                         "status": "UNMATCHED_STUDENT",
+                        "confidence": conf_val,
                         "flags": [f"Unmatched student in {test.school_class.name} ({sec_display}) for Adm='{adm_or_sid}', Roll='{roll_val}'"],
                         "remarks": remarks,
                         "is_pass": False,
@@ -248,7 +260,9 @@ class Command(BaseCommand):
                     ))
                     continue
 
-                v_row = validate_and_reconcile_row(student, test, raw_th, raw_pr, raw_tot, is_absent=is_ab, remarks=remarks)
+                v_row = validate_and_reconcile_row(
+                    student, test, raw_th, raw_pr, raw_tot, is_absent=is_ab, remarks=remarks, confidence=conf_val
+                )
                 verified_rows.append(v_row)
 
                 if v_row["status"] == "ARITHMETIC_MISMATCH":
@@ -261,6 +275,15 @@ class Command(BaseCommand):
                     self.stdout.write(self.style.ERROR(
                         f"  [EXCEEDS MAX] {student.full_name}: {'; '.join(v_row['flags'])}"
                     ))
+                elif v_row["status"] == "NEEDS_REVIEW":
+                    conf_display = f"{conf_val:.2f}" if conf_val is not None else "N/A"
+                    self.stdout.write(self.style.ERROR(
+                        f"  🚨 [NEEDS REVIEW - BLOCKED] {student.full_name}: Low OCR confidence ({conf_display} < 0.75)"
+                    ))
+                elif v_row["status"] == "REVIEW":
+                    self.stdout.write(self.style.WARNING(
+                        f"  [REVIEW] {student.full_name}: Practical total blank, auto-summed ({v_row['total_marks']})"
+                    ))
 
             # Export preview CSV into run_dir
             preview_csv = export_preview_csv(token, verified_rows, run_dir)
@@ -271,7 +294,9 @@ class Command(BaseCommand):
             summary = commit_award_sheet_marks(test, verified_rows, dry_run=dry_run, force_commit_flagged=force_flagged)
             total_processed += summary["total_rows"]
             total_valid += summary["valid_rows"]
+            total_review += summary.get("review_rows", 0)
             total_absent += summary["absent_rows"]
+            total_needs_review += summary.get("needs_review_rows", 0)
             total_created += summary["created_count"]
             total_updated += summary["updated_count"]
             total_skipped += summary["skipped_count"]
@@ -297,7 +322,9 @@ class Command(BaseCommand):
                 "subject": test.subject.name,
                 "total_rows": summary["total_rows"],
                 "valid_rows": summary["valid_rows"],
+                "review_rows": summary.get("review_rows", 0),
                 "absent_rows": summary["absent_rows"],
+                "needs_review_rows": summary.get("needs_review_rows", 0),
                 "mismatch_rows": summary["mismatch_rows"],
                 "blocked_rows": summary["flagged_blocked_count"],
                 "created_records": summary["created_count"],
@@ -308,8 +335,9 @@ class Command(BaseCommand):
             })
 
             self.stdout.write(
-                f"  Summary: Total={summary['total_rows']}, Valid={summary['valid_rows']}, "
-                f"Absent={summary['absent_rows']}, Blocked/Flagged={summary['flagged_blocked_count']}, "
+                f"  Summary: Total={summary['total_rows']}, Valid(Green)={summary['valid_rows']}, "
+                f"Review(Amber)={summary.get('review_rows', 0)}, Absent={summary['absent_rows']}, "
+                f"NeedsReview(OCR)={summary.get('needs_review_rows', 0)}, Blocked={summary['flagged_blocked_count']}, "
                 f"Created={summary['created_count']}, Updated={summary['updated_count']}, Skipped={summary['skipped_count']}\n"
             )
 
@@ -337,7 +365,9 @@ class Command(BaseCommand):
                 "total_sheets": len(grouped),
                 "total_processed": total_processed,
                 "valid_rows": total_valid,
+                "review_rows": total_review,
                 "absent_rows": total_absent,
+                "needs_review_rows": total_needs_review,
                 "mismatch_rows": total_mismatches,
                 "blocked_flagged_rows": total_blocked,
                 "created_records": total_created,
@@ -377,10 +407,14 @@ class Command(BaseCommand):
             f"Mode: {'DRY RUN' if dry_run else 'COMMITTED'}\n"
             f"Sheets Processed: {len(grouped)}\n"
             f"Total Processed Rows: {total_processed}\n"
+            f"Valid Rows (Green, Committed): {total_valid}\n"
+            f"Review Rows (Amber, Committed): {total_review}\n"
+            f"Absent Rows (AB, Committed): {total_absent}\n"
+            f"Needs Review (OCR < 0.75, Blocked): {total_needs_review}\n"
+            f"Arithmetic Mismatches: {total_mismatches}\n"
+            f"Total Blocked Rows (Red): {total_blocked}\n"
             f"Created DB Records: {total_created}\n"
             f"Updated DB Records: {total_updated}\n"
-            f"Arithmetic Mismatches: {total_mismatches}\n"
-            f"Blocked Flagged Rows: {total_blocked}\n"
             f"Audit Seal: {audit_seal}\n"
             f"Manifest: {manifest_path}\n"
             f"Global Pointer: {out_dir / 'LATEST_RUN.json'}\n"

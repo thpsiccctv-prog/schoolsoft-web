@@ -401,13 +401,23 @@ def build_award_sheet_pdf(exam_test, section=None, students=None):
         ]))
         story.append(ftr_table)
 
-        # Instructions note
-        instr_text = (
-            "<b>Important Instructions:</b> "
-            "1. Write one digit per box clearly in blue/black ballpoint pen. "
-            "2. In absent cases, leave digit boxes empty and tick [ &#10003; ] in the [ AB ] column. "
-            "3. Do not overwrite; if correction is needed, strike out neatly and sign beside it."
-        )
+        # Instructions note (Dynamically customized for practical vs pure theory)
+        if has_practical:
+            instr_text = (
+                "<b>Important Instructions:</b> "
+                "1. Write one digit per box clearly in blue/black ballpoint pen. "
+                "2. Total column optional: if entered, system verifies Theory + Practical == Total (योग वैकल्पिक: भरेंगे तो सिस्टम स्वतः मिलान की जाँच करेगा)। "
+                "3. In absent cases, leave digit boxes empty and tick [ &#10003; ] in [ AB ]. "
+                "4. Do not overwrite; strike out neatly and sign beside it."
+            )
+        else:
+            instr_text = (
+                "<b>Important Instructions:</b> "
+                "1. Write one digit per box clearly in blue/black ballpoint pen. "
+                "2. Write theory marks in the digit boxes provided. "
+                "3. In absent cases, leave digit boxes empty and tick [ &#10003; ] in [ AB ]. "
+                "4. Do not overwrite; strike out neatly and sign beside it."
+            )
         story.append(Spacer(1, 1 * mm))
         story.append(Paragraph(f"<font size=5.5 color='#475569'>{instr_text}</font>", ParagraphStyle("Ins", fontName="Helvetica", leading=7)))
 
