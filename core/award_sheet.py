@@ -30,8 +30,8 @@ from core.pdf import _devanagari_flowable, LOGO_PATH
 PAGE_WIDTH, PAGE_HEIGHT = A4
 LEFT_MARGIN = 8 * mm   # ~22.68 pt
 RIGHT_MARGIN = 8 * mm
-TOP_MARGIN = 6 * mm
-BOTTOM_MARGIN = 6 * mm
+TOP_MARGIN = 9 * mm
+BOTTOM_MARGIN = 11 * mm
 USABLE_WIDTH = PAGE_WIDTH - LEFT_MARGIN - RIGHT_MARGIN  # ~550 pt
 
 STUDENTS_PER_PAGE = 22  # Generous row height (~24 pt) for handwriting without page overflow
@@ -159,27 +159,29 @@ def _draw_sheet_fiducials_and_decorations(canvas, doc, sheet_token):
     canvas.setFillColor(colors.HexColor("#0F172A"))
     canvas.setLineWidth(1.2)
 
-    # 4 Corner Fiducial crosses [+] inset 5mm from edges
-    inset = 5 * mm
-    cross_len = 4 * mm
+    # 4 Corner Fiducial crosses [+] inset 6.5mm from edges (safely within printer printable zone)
+    inset_x = 6.5 * mm
+    inset_y = 6.5 * mm
+    cross_len = 2.2 * mm
+    circle_r = 1.0 * mm
 
     corners = [
-        (inset, PAGE_HEIGHT - inset),                     # Top-Left
-        (PAGE_WIDTH - inset, PAGE_HEIGHT - inset),         # Top-Right
-        (inset, inset),                                   # Bottom-Left
-        (PAGE_WIDTH - inset, inset),                      # Bottom-Right
+        (inset_x, PAGE_HEIGHT - inset_y),                 # Top-Left
+        (PAGE_WIDTH - inset_x, PAGE_HEIGHT - inset_y),     # Top-Right
+        (inset_x, inset_y),                               # Bottom-Left
+        (PAGE_WIDTH - inset_x, inset_y),                  # Bottom-Right
     ]
 
     for cx, cy in corners:
         canvas.line(cx - cross_len, cy, cx + cross_len, cy)
         canvas.line(cx, cy - cross_len, cx, cy + cross_len)
-        canvas.circle(cx, cy, 1.2 * mm, stroke=1, fill=0)
+        canvas.circle(cx, cy, circle_r, stroke=1, fill=0)
 
-    # Bottom machine token line
+    # Bottom machine token line - indented 12mm so it never collides with corner crosshairs
     canvas.setFont("Helvetica-Bold", 6.5)
     canvas.setFillColor(colors.HexColor("#475569"))
-    canvas.drawString(LEFT_MARGIN, 3.5 * mm, f"{sheet_token} | THPS INTERMEDIATE COLLEGE | COMPUTER GENERATED AWARD LIST")
-    canvas.drawRightString(PAGE_WIDTH - RIGHT_MARGIN, 3.5 * mm, timezone.now().strftime("PRINTED: %d-%b-%Y %H:%M"))
+    canvas.drawString(12 * mm, 5.8 * mm, f"{sheet_token} | THPS INTERMEDIATE COLLEGE | COMPUTER GENERATED AWARD LIST")
+    canvas.drawRightString(PAGE_WIDTH - 12 * mm, 5.8 * mm, timezone.now().strftime("PRINTED: %d-%b-%Y %H:%M"))
 
     canvas.restoreState()
 
@@ -403,23 +405,30 @@ def build_award_sheet_pdf(exam_test, section=None, students=None):
 
         # Instructions note (Dynamically customized for practical vs pure theory)
         if has_practical:
-            instr_text = (
+            instr_en = (
                 "<b>Important Instructions:</b> "
-                "1. Write one digit per box clearly in blue/black ballpoint pen. "
-                "2. Total column optional: if entered, system verifies Theory + Practical == Total (योग वैकल्पिक: भरेंगे तो सिस्टम स्वतः मिलान की जाँच करेगा)। "
+                "1. Write one numeral per box clearly in blue/black ballpoint pen. "
+                "2. Total column optional: if entered, system strictly cross-checks Theory + Practical == Total. "
                 "3. In absent cases, leave digit boxes empty and tick [ &#10003; ] in [ AB ]. "
-                "4. Do not overwrite; strike out neatly and sign beside it."
+                "4. Do not overwrite; strike out neatly, rewrite cleanly and sign beside it."
             )
+            instr_hi = "निर्देश: प्रत्येक खाने में केवल एक अंक लिखें। कुल योग वैकल्पिक है (भरने पर सिस्टम स्वतः मिलान जाँचेगा)। अनुपस्थित छात्र हेतु [ AB ] में टिक करें। काट-छाँट न करें।"
         else:
-            instr_text = (
+            instr_en = (
                 "<b>Important Instructions:</b> "
-                "1. Write one digit per box clearly in blue/black ballpoint pen. "
+                "1. Write one numeral per box clearly in blue/black ballpoint pen. "
                 "2. Write theory marks in the digit boxes provided. "
                 "3. In absent cases, leave digit boxes empty and tick [ &#10003; ] in [ AB ]. "
-                "4. Do not overwrite; strike out neatly and sign beside it."
+                "4. Do not overwrite; strike out neatly, rewrite cleanly and sign beside it."
             )
-        story.append(Spacer(1, 1 * mm))
-        story.append(Paragraph(f"<font size=5.5 color='#475569'>{instr_text}</font>", ParagraphStyle("Ins", fontName="Helvetica", leading=7)))
+            instr_hi = "निर्देश: प्रत्येक खाने में केवल एक अंक लिखें। लिखित अंक निर्धारित खानों में भरें। अनुपस्थित छात्र हेतु [ AB ] में टिक करें। काट-छाँट न करें।"
+
+        story.append(Spacer(1, 1.2 * mm))
+        story.append(Paragraph(f"<font size=5.5 color='#475569'>{instr_en}</font>", ParagraphStyle("InsEn", fontName="Helvetica", leading=7)))
+        hi_instr_flow = _devanagari_flowable(instr_hi, 5.2, color=(71, 85, 105, 255))
+        if hi_instr_flow:
+            story.append(Spacer(1, 0.4 * mm))
+            story.append(hi_instr_flow)
 
         if page_idx < total_pages - 1:
             story.append(PageBreak())
