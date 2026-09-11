@@ -22,6 +22,7 @@ from reportlab.lib.units import mm
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Table, TableStyle, Spacer, PageBreak
 
 from core.models import ExamTerm, ExamTest, ExamMark, SchoolClass, Section, Student, grade_for_percentage, division_for_percentage
+from core.award_sheet_processor import check_subject_pass
 
 
 def build_tabulation_data(school_class, section=None, term=None):
@@ -103,7 +104,7 @@ def build_tabulation_data(school_class, section=None, term=None):
                     th = m.theory_marks_obtained
                     pr = m.practical_marks_obtained
                     grd = m.grade or grade_for_percentage((obt / tot_max * 100) if tot_max else 0)
-                    is_pass = (obt >= (t.pass_marks or Decimal("33.00")))
+                    is_pass, fail_reasons = check_subject_pass(t, th, pr, obt, is_absent=False)
                     if not is_pass:
                         s_res["has_failed"] = True
 
@@ -116,6 +117,7 @@ def build_tabulation_data(school_class, section=None, term=None):
                         "grade": grd,
                         "is_absent": False,
                         "is_pass": is_pass,
+                        "fail_reasons": fail_reasons,
                     })
             else:
                 # No mark entry yet

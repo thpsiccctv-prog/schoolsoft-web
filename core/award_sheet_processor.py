@@ -77,6 +77,54 @@ def get_expected_page_roster(exam_test, section=None, page_no=1):
     return roster, total_students
 
 
+def check_subject_pass(exam_test, th_obt, pr_obt, tot_obt, is_absent=False):
+    """
+    Determines if a student has passed a subject according to UP Board rules:
+    - For subjects with Practical (e.g. 70/30): Theory and Practical must be passed separately.
+      Theory >= 23/70, Practical >= 10/30.
+    - For pure Theory subjects (e.g. 100/0): Theory >= 33/100.
+    - Total marks must meet or exceed pass_marks (typically 33%).
+    - Absent in subject is a direct fail.
+    Returns: (is_pass: bool, fail_reasons: list[str])
+    """
+    if is_absent:
+        return False, ["ABSENT"]
+    if tot_obt is None:
+        return False, ["NO_MARKS"]
+
+    th_max = exam_test.theory_max_marks or Decimal("100.00")
+    pr_max = exam_test.practical_max_marks or Decimal("0.00")
+    tot_pass = exam_test.pass_marks or Decimal("33.00")
+
+    # Component pass thresholds
+    if th_max == Decimal("70.00"):
+        th_pass = Decimal("23.00")
+    elif th_max > Decimal("0.00"):
+        th_pass = Decimal(str(math.ceil(float(th_max) * 0.33)))
+    else:
+        th_pass = Decimal("0.00")
+
+    if pr_max == Decimal("30.00"):
+        pr_pass = Decimal("10.00")
+    elif pr_max > Decimal("0.00"):
+        pr_pass = Decimal(str(math.ceil(float(pr_max) * 0.33)))
+    else:
+        pr_pass = Decimal("0.00")
+
+    reasons = []
+    if th_max > Decimal("0.00") and (th_obt is None or th_obt < th_pass):
+        reasons.append(f"Theory {th_obt or 0} < min {th_pass}")
+
+    if pr_max > Decimal("0.00") and (pr_obt is None or pr_obt < pr_pass):
+        reasons.append(f"Practical {pr_obt or 0} < min {pr_pass}")
+
+    if tot_obt < tot_pass:
+        reasons.append(f"Total {tot_obt} < min {tot_pass}")
+
+    is_pass = (len(reasons) == 0)
+    return is_pass, reasons
+
+
 def validate_and_reconcile_row(student, exam_test, raw_th, raw_pr, raw_tot, is_absent=False, remarks=""):
     """
     Validates extracted marks for a single student row against exam_test rules.
@@ -106,6 +154,8 @@ def validate_and_reconcile_row(student, exam_test, raw_th, raw_pr, raw_tot, is_a
         "status": "VALID",
         "flags": [],
         "remarks": remarks,
+        "is_pass": False,
+        "fail_reasons": [],
     }
 
     # 1. Check Absent
@@ -113,6 +163,8 @@ def validate_and_reconcile_row(student, exam_test, raw_th, raw_pr, raw_tot, is_a
         result["is_absent"] = True
         result["grade"] = "AB"
         result["status"] = "ABSENT"
+        result["is_pass"] = False
+        result["fail_reasons"] = ["ABSENT"]
         return result
 
     # 2. Check Blank / Unentered
@@ -123,6 +175,7 @@ def validate_and_reconcile_row(student, exam_test, raw_th, raw_pr, raw_tot, is_a
     if not th_str and not pr_str and not tot_str:
         result["status"] = "BLANK_ROW"
         result["flags"].append("No marks entered")
+        result["is_pass"] = False
         return result
 
     # 3. Parse Numerical Values
@@ -185,6 +238,14 @@ def validate_and_reconcile_row(student, exam_test, raw_th, raw_pr, raw_tot, is_a
     result["percentage"] = round(pct, 2)
     result["grade"] = grd
 
+    # Separate Theory/Practical Pass Check
+    subj_pass, fail_reasons = check_subject_pass(
+        exam_test, th_val, pr_val if has_practical else Decimal("0.00"), final_tot, is_absent=False
+    )
+    result["is_pass"] = subj_pass
+    if not subj_pass:
+        result["fail_reasons"] = fail_reasons
+
     if not result["flags"]:
         result["status"] = "VALID"
 
@@ -203,40 +264,90 @@ def export_preview_csv(sheet_token, verified_rows, out_dir):
         "S_NO", "ROLL_NO", "SID", "ADMISSION_NO", "STUDENT_NAME", "FATHER_NAME",
         "RAW_THEORY", "RAW_PRACTICAL", "RAW_TOTAL", "IS_ABSENT",
         "FINAL_THEORY", "FINAL_PRACTICAL", "FINAL_TOTAL", "PERCENTAGE", "GRADE",
-        "STATUS", "FLAGS"
+        "PASS_STATUS", "STATUS", "FLAGS"
     ]
 
     with open(csv_file, "w", newline="", encoding="utf-8-sig") as f:
         writer = csv.writer(f)
         writer.writerow(headers)
         for idx, row in enumerate(verified_rows):
+            pass_status_str = "PASS" if row.get("is_pass") else ("AB" if row.get("is_absent") else "FAIL")
             writer.writerow([
                 idx + 1,
-                row["roll_no"] or "",
-                row["legacy_sid"] or "",
-                row["admission_no"] or "",
-                row["student_name"],
-                row["father_name"],
-                row["raw_theory"],
-                row["raw_practical"],
-                row["raw_total"],
-                "YES" if row["is_absent"] else "NO",
-                row["theory_marks"] if row["theory_marks"] is not None else "",
-                row["practical_marks"] if row["practical_marks"] is not None else "",
-                row["total_marks"] if row["total_marks"] is not None else "",
-                f"{row['percentage']:.2f}" if row["percentage"] is not None else "",
-                row["grade"],
-                row["status"],
-                "; ".join(row["flags"]),
+                row.get("roll_no") or "",
+                row.get("legacy_sid") or "",
+                row.get("admission_no") or "",
+                row.get("student_name") or "",
+                row.get("father_name") or "",
+                row.get("raw_theory") or "",
+                row.get("raw_practical") or "",
+                row.get("raw_total") or "",
+                "YES" if row.get("is_absent") else "NO",
+                row.get("theory_marks") if row.get("theory_marks") is not None else "",
+                row.get("practical_marks") if row.get("practical_marks") is not None else "",
+                row.get("total_marks") if row.get("total_marks") is not None else "",
+                f"{row['percentage']:.2f}" if row.get("percentage") is not None else "",
+                row.get("grade") or "",
+                pass_status_str,
+                row.get("status") or "",
+                "; ".join(row.get("flags") or []),
             ])
 
     return csv_file
 
 
-def commit_award_sheet_marks(exam_test, verified_rows, dry_run=False):
+def export_exceptions_csv(sheet_token, flagged_rows, out_dir):
+    """
+    Saves blocked/flagged rows (arithmetic mismatches, exceeds max, invalid digits, unmatched)
+    to a dedicated exceptions CSV audit file: MARKS_EXCEPTIONS_<SHEET_TOKEN>.csv.
+    Returns Path to the file, or None if no flagged rows.
+    """
+    if not flagged_rows:
+        return None
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    csv_file = out_dir / f"MARKS_EXCEPTIONS_{sheet_token}.csv"
+
+    headers = [
+        "S_NO", "ROLL_NO", "SID", "ADMISSION_NO", "STUDENT_NAME", "FATHER_NAME",
+        "RAW_THEORY", "RAW_PRACTICAL", "RAW_TOTAL", "IS_ABSENT",
+        "FINAL_THEORY", "FINAL_PRACTICAL", "FINAL_TOTAL", "STATUS", "FLAGS", "REMARKS"
+    ]
+
+    with open(csv_file, "w", newline="", encoding="utf-8-sig") as f:
+        writer = csv.writer(f)
+        writer.writerow(headers)
+        for idx, row in enumerate(flagged_rows, 1):
+            writer.writerow([
+                idx,
+                row.get("roll_no") or "",
+                row.get("legacy_sid") or "",
+                row.get("admission_no") or "",
+                row.get("student_name") or "",
+                row.get("father_name") or "",
+                row.get("raw_theory") or "",
+                row.get("raw_practical") or "",
+                row.get("raw_total") or "",
+                "YES" if row.get("is_absent") else "NO",
+                row.get("theory_marks") if row.get("theory_marks") is not None else "",
+                row.get("practical_marks") if row.get("practical_marks") is not None else "",
+                row.get("total_marks") if row.get("total_marks") is not None else "",
+                row.get("status") or "",
+                "; ".join(row.get("flags") or []),
+                row.get("remarks") or "",
+            ])
+    return csv_file
+
+
+def commit_award_sheet_marks(exam_test, verified_rows, dry_run=False, force_commit_flagged=False):
     """
     Commits verified rows into the live database (ExamMark) inside an atomic transaction.
-    Returns counts of created and updated records.
+    HARD COMMIT GATE:
+    - Only rows with status in ('VALID', 'ABSENT') are committed.
+    - BLANK_ROW is skipped.
+    - ARITHMETIC_MISMATCH, EXCEEDS_MAX, INVALID_DIGIT, UNMATCHED_STUDENT, etc. are STRICTLY BLOCKED
+      and collected in summary['flagged_rows'] unless force_commit_flagged is True.
+    Returns summary dict including flagged_blocked_count and flagged_rows.
     """
     summary = {
         "total_rows": len(verified_rows),
@@ -244,6 +355,8 @@ def commit_award_sheet_marks(exam_test, verified_rows, dry_run=False):
         "absent_rows": 0,
         "mismatch_rows": 0,
         "blank_rows": 0,
+        "flagged_blocked_count": 0,
+        "flagged_rows": [],
         "created_count": 0,
         "updated_count": 0,
         "skipped_count": 0,
@@ -252,20 +365,34 @@ def commit_award_sheet_marks(exam_test, verified_rows, dry_run=False):
 
     with transaction.atomic():
         for row in verified_rows:
-            status = row["status"]
+            status = row.get("status")
             if status == "ABSENT":
                 summary["absent_rows"] += 1
             elif status == "VALID":
                 summary["valid_rows"] += 1
-            elif status == "ARITHMETIC_MISMATCH":
-                summary["mismatch_rows"] += 1
             elif status == "BLANK_ROW":
                 summary["blank_rows"] += 1
                 summary["skipped_count"] += 1
                 continue
+            else:
+                # Flagged status: ARITHMETIC_MISMATCH, EXCEEDS_MAX, INVALID_DIGIT, UNMATCHED_STUDENT, etc.
+                if status == "ARITHMETIC_MISMATCH":
+                    summary["mismatch_rows"] += 1
+                summary["flagged_rows"].append(row)
+                if not force_commit_flagged:
+                    # HARD GATE: strictly block this row from touching the database!
+                    summary["flagged_blocked_count"] += 1
+                    summary["skipped_count"] += 1
+                    continue
 
-            # Don't commit unentered blank rows
-            student_id = row["student_id"]
+            # Student must exist
+            student_id = row.get("student_id")
+            if not student_id:
+                summary["skipped_count"] += 1
+                if row not in summary["flagged_rows"]:
+                    summary["flagged_rows"].append(row)
+                continue
+
             student = Student.objects.get(pk=student_id)
 
             if dry_run:
@@ -276,17 +403,17 @@ def commit_award_sheet_marks(exam_test, verified_rows, dry_run=False):
                 else:
                     summary["created_count"] += 1
             else:
-                is_ab = row["is_absent"]
+                is_ab = row.get("is_absent", False)
                 obj, created = ExamMark.objects.update_or_create(
                     exam_test=exam_test,
                     student=student,
                     defaults={
                         "is_absent": is_ab,
-                        "theory_marks_obtained": None if is_ab else row["theory_marks"],
-                        "practical_marks_obtained": None if is_ab else row["practical_marks"],
-                        "marks_obtained": None if is_ab else row["total_marks"],
-                        "grade": row["grade"],
-                        "remarks": "; ".join(row["flags"]) if row["flags"] else "",
+                        "theory_marks_obtained": None if is_ab else row.get("theory_marks"),
+                        "practical_marks_obtained": None if is_ab else row.get("practical_marks"),
+                        "marks_obtained": None if is_ab else row.get("total_marks"),
+                        "grade": row.get("grade", ""),
+                        "remarks": "; ".join(row.get("flags", [])) if row.get("flags") else "",
                     }
                 )
                 if created:

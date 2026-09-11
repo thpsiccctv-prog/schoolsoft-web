@@ -2756,6 +2756,7 @@ def _draw_marksheet_background(canvas, doc, logo_path=None):
 
 def render_v1_marksheet_story(story, student, term, exam_marks, school_profile=None):
     from core.models import grade_for_percentage, division_for_percentage
+    from core.award_sheet_processor import check_subject_pass
     total_w = 188 * mm
 
     # --- 1. HEADER ---
@@ -3003,7 +3004,13 @@ def render_v1_marksheet_story(story, student, term, exam_marks, school_profile=N
         pr_o = mark.practical_marks_obtained
         tot_o = mark.marks_obtained
 
-        is_pass = (tot_o is not None and tot_o >= pass_m and not mark.is_absent)
+        is_pass, fail_reasons = check_subject_pass(
+            mark.exam_test,
+            th_o,
+            pr_o,
+            tot_o,
+            is_absent=mark.is_absent
+        )
         if not is_pass:
             has_fail = True
 
@@ -3109,14 +3116,18 @@ def render_v1_marksheet_story(story, student, term, exam_marks, school_profile=N
         ]))
         return ct
 
-    div_en = "FIRST" if overall_pct >= 60 else ("SECOND" if overall_pct >= 45 else ("THIRD" if overall_pct >= 33 else "FAIL"))
-    div_hi = "प्रथम श्रेणी" if overall_pct >= 60 else ("द्वितीय श्रेणी" if overall_pct >= 45 else ("तृतीय श्रेणी" if overall_pct >= 33 else "अनुत्तीर्ण"))
+    if not final_pass:
+        div_en = "FAIL"
+        div_hi = "अनुत्तीर्ण"
+    else:
+        div_en = "FIRST" if overall_pct >= 60 else ("SECOND" if overall_pct >= 45 else ("THIRD" if overall_pct >= 33 else "FAIL"))
+        div_hi = "प्रथम श्रेणी" if overall_pct >= 60 else ("द्वितीय श्रेणी" if overall_pct >= 45 else ("तृतीय श्रेणी" if overall_pct >= 33 else "अनुत्तीर्ण"))
     res_en = "PASS" if final_pass else "FAIL"
     res_hi = "उत्तीर्ण" if final_pass else "अनुत्तीर्ण"
 
     card1 = _card("TOTAL MARKS", f"{total_obt:.0f}", f"/ {total_max:.0f}")
     card2 = _card("PERCENTAGE", f"{overall_pct:.1f}%")
-    card3 = _card("श्रेणी / DIVISION", div_en, div_hi, is_gold=True)
+    card3 = _card("श्रेणी / DIVISION", div_en, div_hi, is_gold=(final_pass and overall_pct >= 60), is_pass=final_pass)
     card4 = _card("परिणाम / RESULT", res_en, res_hi, is_pass=final_pass)
 
     cards_row = Table([[card1, card2, card3, card4]], colWidths=[47 * mm, 47 * mm, 47 * mm, 47 * mm])

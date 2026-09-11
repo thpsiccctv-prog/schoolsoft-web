@@ -6115,6 +6115,7 @@ def marksheet_view(request, pk, term_id):
     """
     from decimal import Decimal
     from core.models import Student, ExamTerm, ExamMark, division_for_percentage, grade_for_percentage
+    from core.award_sheet_processor import check_subject_pass
 
     student = get_object_or_404(Student.objects.select_related("current_class", "current_section"), pk=pk)
     term = get_object_or_404(ExamTerm.objects.select_related("session"), pk=term_id)
@@ -6135,7 +6136,13 @@ def marksheet_view(request, pk, term_id):
         pass_m = mark.exam_test.pass_marks or Decimal("33.00")
 
         obt = mark.marks_obtained
-        is_pass = (obt is not None and obt >= pass_m and not mark.is_absent)
+        is_pass, fail_reasons = check_subject_pass(
+            mark.exam_test,
+            mark.theory_marks_obtained,
+            mark.practical_marks_obtained,
+            obt,
+            is_absent=mark.is_absent
+        )
         if not is_pass:
             has_fail = True
 
@@ -6154,6 +6161,7 @@ def marksheet_view(request, pk, term_id):
             "is_absent": mark.is_absent,
             "grade": mark.grade,
             "is_pass": is_pass,
+            "fail_reasons": fail_reasons,
         })
 
     overall_pct = (total_obtained / total_max * Decimal("100")) if total_max else Decimal("0.00")
