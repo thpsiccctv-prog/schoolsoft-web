@@ -55,6 +55,12 @@ class Command(BaseCommand):
             help="Mandatory administrative justification when using --force-flagged (e.g. Principal approval reference).",
         )
         parser.add_argument(
+            "--reviewer",
+            type=str,
+            default="",
+            help="Name or designation of examiner/incharge reviewing and verifying the ingestion (e.g. 'Dr. R. K. Singh').",
+        )
+        parser.add_argument(
             "--out-dir",
             default=r"E:\THPSIC-INTER-COLLEGE\05-reports\quarterly-exam-2026\ingestion-audits",
             help="Output folder for preview CSVs, exception reports, and audit manifests.",
@@ -71,6 +77,7 @@ class Command(BaseCommand):
         dry_run = not options.get("apply")
         force_flagged = bool(options.get("force_flagged", False))
         force_reason = str(options.get("force_reason") or "").strip()
+        reviewer = str(options.get("reviewer") or "").strip()
         out_dir = Path(options.get("out_dir"))
         out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -112,16 +119,18 @@ class Command(BaseCommand):
         if source_path.suffix.lower() == ".csv":
             self.process_csv_source(
                 source_path, dry_run, run_dir, out_dir, run_id, start_time, source_sha256,
-                force_flagged=force_flagged, force_reason=force_reason
+                force_flagged=force_flagged, force_reason=force_reason, reviewer=reviewer
             )
         else:
             raise CommandError(f"Unsupported file format '{source_path.suffix}'. Please provide an extracted CSV or manifest.")
 
-    def process_csv_source(self, csv_path, dry_run, run_dir, out_dir, run_id, start_time, source_sha256, force_flagged=False, force_reason=""):
+    def process_csv_source(self, csv_path, dry_run, run_dir, out_dir, run_id, start_time, source_sha256, force_flagged=False, force_reason="", reviewer=""):
         """
         Parses a CSV file with columns:
         SHEET_ID, ROLL_NO, ADM_NO/SID, THEORY, PRACTICAL, TOTAL, ABSENT, REMARKS
         """
+        if reviewer:
+            self.stdout.write(f"Reviewer / Incharge: {reviewer}")
         with open(csv_path, "r", encoding="utf-8-sig") as f:
             reader = csv.DictReader(f)
             rows = list(reader)
@@ -358,6 +367,9 @@ class Command(BaseCommand):
             },
             "security_audit": {
                 "hard_commit_gate_enforced": True,
+                "reviewer": reviewer if reviewer else "System / Unspecified Reviewer",
+                "review_timestamp": end_time.isoformat(),
+                "review_count": total_review,
                 "force_flagged_override": force_flagged,
                 "force_reason": force_reason if force_flagged else None,
             },
@@ -395,6 +407,9 @@ class Command(BaseCommand):
             "timestamp": end_time.isoformat(),
             "source_file": csv_path.name,
             "source_sha256": source_sha256,
+            "reviewer": reviewer if reviewer else "System / Unspecified Reviewer",
+            "review_timestamp": end_time.isoformat(),
+            "review_count": total_review,
             "manifest_file": str(manifest_path.resolve()),
             "summary": manifest["summary"],
             "audit_seal": audit_seal,
@@ -415,6 +430,7 @@ class Command(BaseCommand):
             f"Total Blocked Rows (Red): {total_blocked}\n"
             f"Created DB Records: {total_created}\n"
             f"Updated DB Records: {total_updated}\n"
+            f"Reviewer: {reviewer if reviewer else 'N/A'}\n"
             f"Audit Seal: {audit_seal}\n"
             f"Manifest: {manifest_path}\n"
             f"Global Pointer: {out_dir / 'LATEST_RUN.json'}\n"
