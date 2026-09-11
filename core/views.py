@@ -1016,6 +1016,31 @@ def marks_report(request):
     )
 
 
+@login_required
+def tabulation_register_excel_view(request):
+    """
+    Exports the complete Class Tabulation Register (Broad Sheet) in formatted Excel.
+    """
+    from core.models import SchoolClass, Section, ExamTerm
+    from core.tabulation_register import generate_tabulation_register_excel
+
+    term_id = request.GET.get("term_id") or request.GET.get("term")
+    class_id = request.GET.get("class_id") or request.GET.get("class")
+    section_id = request.GET.get("section_id")
+
+    school_class = get_object_or_404(SchoolClass, pk=class_id)
+    section = Section.objects.filter(pk=section_id).first() if section_id else None
+    term = ExamTerm.objects.filter(pk=term_id).first() if term_id else None
+
+    excel_bytes = generate_tabulation_register_excel(school_class, section=section, term=term)
+    sec_label = f"_{section.name}" if section else ""
+    filename = f"Tabulation_Register_{school_class.name.replace(' ', '_')}{sec_label}.xlsx"
+
+    response = HttpResponse(excel_bytes, content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
+
+
 def receipt_list(request):
     query = request.GET.get("q", "").strip()
     class_id = request.GET.get("class", "").strip()
@@ -5960,6 +5985,31 @@ def marks_entry_export_excel(request):
     response = HttpResponse(content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     response["Content-Disposition"] = f'attachment; filename="{filename}"'
     wb.save(response)
+    return response
+
+
+@login_required
+def award_sheet_pdf_view(request):
+    """
+    Generates and serves the printable Teacher Award Sheet (PDF)
+    for the selected ExamTest and Section.
+    """
+    from core.models import ExamTest, Section
+    from core.award_sheet import build_award_sheet_pdf
+
+    test_id = request.GET.get("test_id")
+    section_id = request.GET.get("section_id")
+
+    test = get_object_or_404(ExamTest.objects.select_related("term", "school_class", "subject"), pk=test_id)
+    section = Section.objects.filter(pk=section_id).first() if section_id else None
+
+    pdf_bytes = build_award_sheet_pdf(test, section=section)
+    sec_label = f"_{section.name}" if section else ""
+    sub_clean = test.subject.name.split("(")[0].strip().replace(" ", "_").replace("/", "-")
+    filename = f"Award_Sheet_{test.school_class.name}{sec_label}_{sub_clean}.pdf"
+
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
+    response["Content-Disposition"] = f'inline; filename="{filename}"'
     return response
 
 

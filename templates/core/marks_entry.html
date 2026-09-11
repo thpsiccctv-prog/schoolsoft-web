@@ -11,6 +11,9 @@
         </div>
         <div class="action-row" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
             {% if selected_test %}
+            <a class="button" style="background: #1E3A8A; color: white;" href="{% url 'core:award_sheet_pdf' %}?test_id={{ selected_test.pk }}&section_id={{ selected_section.pk|default:'' }}" target="_blank" title="Print Blank Teacher Award Sheet (अंक प्रविष्टि पत्रक PDF)">
+                🖨️ Print Award Sheet (PDF)
+            </a>
             <a class="button secondary" href="{% url 'core:marks_entry_export_excel' %}?test_id={{ selected_test.pk }}&section_id={{ selected_section.pk|default:'' }}" title="Download blank Excel for offline entry">
                 📥 Export Blank Excel
             </a>

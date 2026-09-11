@@ -14,6 +14,9 @@
                 📝 Marks Entry (अंक दर्ज करें)
             </a>
             {% if selected_term and selected_class_id %}
+            <a class="button secondary" href="{% url 'core:tabulation_register_excel' %}?term_id={{ selected_term.id }}&class_id={{ selected_class_id }}" title="Download Class Broad Sheet (Excel)">
+                📊 Tabulation Register (Excel)
+            </a>
             <a class="button secondary" href="{% url 'core:marksheet_batch_pdf' %}?term_id={{ selected_term.id }}&class_id={{ selected_class_id }}" target="_blank">
                 🖨️ Batch Print Marksheets (PDF)
             </a>
